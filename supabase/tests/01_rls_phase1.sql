@@ -25,7 +25,10 @@
 --   - throws_ok dipakai bentuk 4 argumen (sql, kode SQLSTATE, pola pesan
 --     error, deskripsi) — v2 memakai 3 argumen dan GAGAL 3 tes karena pgTAP
 --     yang terpasang memperlakukan argumen ke-3 sebagai pola pesan error,
---     bukan deskripsi (diperbaiki v2.1, 2026-11-19).
+--     bukan deskripsi (diperbaiki v2.1, 2026-11-19). v2.1 masih gagal 3 tes
+--     karena pola hanya awalan pesan, sedangkan pgTAP mencocokkan dengan
+--     SELURUH pesan error (v2.2: pola = pesan lengkap, termasuk akhiran
+--     'for table ...' dan nama constraint, 2026-11-19).
 --   - T3/T4b diganti asersi jumlah baris terpengaruh (CTE UPDATE/DELETE +
 --     is(count, 0)) — UPDATE/DELETE di bawah RLS tidak melempar exception;
 --     policy memfilter baris → 0 baris terpengaruh.
@@ -160,7 +163,7 @@ select throws_ok(
   format($f$insert into public.workspace_members (workspace_id, user_id, workspace_role)
      values ('b0000000-0000-0000-0000-000000000001', %L, 'owner')$f$, :'user_b'),
   '42501',
-  'new row violates row-level security policy',
+  'new row violates row-level security policy for table "workspace_members"',
   'T3b DENY: user B tidak bisa menyisipkan diri sebagai owner workspace A'
 );
 
@@ -174,7 +177,7 @@ select throws_ok(
   format($f$insert into public.resource_shares (workspace_id, resource_type, resource_id, shared_with_user_id, shared_by)
      values ('b0000000-0000-0000-0000-000000000001', 'content_item', 'd0000000-0000-0000-0000-000000000002', %L, %L)$f$, :'user_b', :'user_b'),
   '42501',
-  'new row violates row-level security policy',
+  'new row violates row-level security policy for table "resource_shares"',
   'T4 DENY: penerima share (bukan member workspace) tidak bisa membuat share'
 );
 with del as (
@@ -245,7 +248,7 @@ select throws_ok(
   format($f$insert into public.resource_shares (workspace_id, resource_type, resource_id, shared_with_user_id, shared_by)
      values ('b0000000-0000-0000-0000-000000000001', 'content_item', 'd0000000-0000-0000-0000-000000000001', %L, %L)$f$, :'user_b', :'user_a'),
   '23505',
-  'duplicate key value violates unique constraint',
+  'duplicate key value violates unique constraint "resource_shares_resource_type_resource_id_shared_with_user__key"',
   'T8 DENY: share duplikat (resource + klien sama) ditolak unique constraint'
 );
 
