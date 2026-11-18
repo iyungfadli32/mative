@@ -22,7 +22,7 @@ function migrationFiles(): Array<{ name: string; sql: string }> {
 }
 
 describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
-  it("memiliki 5 migrasi berversi berurutan 0001–0005", () => {
+  it("memiliki 6 migrasi berversi berurutan 0001–0006", () => {
     const files = migrationFiles();
     expect(files.map((f) => f.name)).toEqual([
       "0001_profiles.sql",
@@ -30,11 +30,18 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
       "0003_workspaces.sql",
       "0004_activity_logs.sql",
       "0005_resource_shares.sql",
+      "0006_rls_recursion_fix.sql",
     ]);
   });
 
-  it("setiap migrasi mengaktifkan RLS untuk tabelnya", () => {
+  it("setiap migrasi yang membuat tabel mengaktifkan RLS untuk tabelnya", () => {
     for (const { name, sql } of migrationFiles()) {
+      // 0006 hanya menulis ulang policy (DROP/CREATE POLICY), tidak membuat
+      // tabel baru — RLS tabelnya sudah aktif sejak 0001–0005.
+      if (!/create table/i.test(sql)) {
+        expect(sql, `${name} harus menulis ulang policy`).toMatch(/create policy/i);
+        continue;
+      }
       expect(sql, `${name} harus berisi ENABLE ROW LEVEL SECURITY`).toMatch(
         /enable row level security/i,
       );
@@ -79,11 +86,14 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
   });
 
   it("tidak ada tabel content/approval/publishing/analytics di Phase 1 (vertical slice)", () => {
-    const all = migrationFiles()
+    // Hanya migrasi Phase 1 (0001–0006) yang diperiksa — migrasi Phase 2
+    // (0007+) memang membuat tabel content (mis. brands, content_items).
+    const phase1 = migrationFiles()
+      .filter((f) => /^000[1-6]_/.test(f.name))
       .map((f) => f.sql)
       .join("\n");
     for (const table of ["content_items", "approval_requests", "publishing_jobs", "brands"]) {
-      expect(all, `tabel ${table} TIDAK BOLEH dibuat di Phase 1`).not.toContain(
+      expect(phase1, `tabel ${table} TIDAK BOLEH dibuat di Phase 1`).not.toContain(
         `create table if not exists public.${table}`,
       );
     }
