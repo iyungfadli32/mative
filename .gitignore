@@ -36,3 +36,6 @@ playwright/.cache/
 
 # Supabase CLI local state (bukan migrasi — migrasi di supabase/migrations/ WAJIB di-commit)
 /supabase/.temp/
+
+# TypeScript build info (artefak build lokal)
+tsconfig.tsbuildinfo
