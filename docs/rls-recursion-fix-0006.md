@@ -24,23 +24,23 @@
 
 Metode: ekstrak semua `CREATE POLICY`, cari scan tabel nyata di dalam ekspresi policy (`FROM`/`JOIN public.<tabel>` — **bukan** referensi kolom berkualifikasi seperti `workspace_members.workspace_id` yang merujuk ke baris yang sedang dievaluasi), bangun graf dependensi, deteksi siklus. Skrip: `supabase/tests/rls_audit.py`. Hasil:
 
-| # | Siklus | Policy yang terlibat |
-|---|--------|----------------------|
-| A | `workspace_members` → `workspace_members` (self-loop) | `ws_members_select_member`, `ws_members_insert_owner_admin_or_self`, `ws_members_update_owner_admin`, `ws_members_delete_owner` |
-| B | `organization_members` → `organization_members` (self-loop) | `org_members_select_member`, `org_members_insert_owner_or_admin`, `org_members_update_owner_or_admin`, `org_members_delete_owner` |
-| C | `organization_members` → `organizations` → `organization_members` | `org_members_insert_owner_or_admin` (subquery `organizations`) + `organizations_select_member` (subquery `organization_members`) |
-| D | `workspace_members` → `workspaces` → `workspace_members` | `ws_members_insert_owner_admin_or_self` (subquery `workspaces`) + `workspaces_select_member` / `workspaces_update_owner_admin` (subquery `workspace_members`) |
+| #   | Siklus                                                            | Policy yang terlibat                                                                                                                                          |
+| --- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A   | `workspace_members` → `workspace_members` (self-loop)             | `ws_members_select_member`, `ws_members_insert_owner_admin_or_self`, `ws_members_update_owner_admin`, `ws_members_delete_owner`                               |
+| B   | `organization_members` → `organization_members` (self-loop)       | `org_members_select_member`, `org_members_insert_owner_or_admin`, `org_members_update_owner_or_admin`, `org_members_delete_owner`                             |
+| C   | `organization_members` → `organizations` → `organization_members` | `org_members_insert_owner_or_admin` (subquery `organizations`) + `organizations_select_member` (subquery `organization_members`)                              |
+| D   | `workspace_members` → `workspaces` → `workspace_members`          | `ws_members_insert_owner_admin_or_self` (subquery `workspaces`) + `workspaces_select_member` / `workspaces_update_owner_admin` (subquery `workspace_members`) |
 
 **Jalur pemicu lain (bukan siklus sendiri, tapi memicu siklus di atas):**
 
-| Policy | Merujuk | Memicu siklus |
-|---|---|---|
-| `workspaces_select_member`, `workspaces_update_owner_admin` | `workspace_members` | A — **inilah jalur T1 yang meledak** |
-| `workspaces_insert_org_member` | `organization_members` | B |
-| `profiles_select_own_or_same_workspace` | `workspace_members` (self-join) | A |
-| `ws_settings_*` (4 policy), `ws_invitations_*` (3 policy) | `workspace_members` | A |
-| `activity_select_member`, `activity_insert_member_as_actor` | `workspace_members` + `organization_members` | A + B |
-| `shares_*` (3 policy) | `workspace_members` | A |
+| Policy                                                      | Merujuk                                      | Memicu siklus                        |
+| ----------------------------------------------------------- | -------------------------------------------- | ------------------------------------ |
+| `workspaces_select_member`, `workspaces_update_owner_admin` | `workspace_members`                          | A — **inilah jalur T1 yang meledak** |
+| `workspaces_insert_org_member`                              | `organization_members`                       | B                                    |
+| `profiles_select_own_or_same_workspace`                     | `workspace_members` (self-join)              | A                                    |
+| `ws_settings_*` (4 policy), `ws_invitations_*` (3 policy)   | `workspace_members`                          | A                                    |
+| `activity_select_member`, `activity_insert_member_as_actor` | `workspace_members` + `organization_members` | A + B                                |
+| `shares_*` (3 policy)                                       | `workspace_members`                          | A                                    |
 
 Mekanisme ledakan T1: `SELECT FROM workspaces` → policy `workspaces_select_member` menjalankan subquery ke `workspace_members` → RLS `workspace_members` mengevaluasi `ws_members_select_member` → subquery-nya membaca `workspace_members` lagi → policy dievaluasi lagi, tanpa henti → PostgreSQL menghentikan dengan 42P17.
 
@@ -52,15 +52,16 @@ Pola standar Supabase: fungsi `SECURITY DEFINER` **tidak pernah di-inline** oleh
 
 ### 3.1 Helper yang dibuat (Bagian 1 migrasi 0006)
 
-| Helper | Membaca | Menggantikan |
-|---|---|---|
-| `is_org_member(p_org_id uuid, p_roles text[] default null)` | `organization_members` | `exists (... om.organization_id = <org> and om.user_id = auth.uid() and om.membership_status = 'active' [and om.organization_role in (...)])` |
-| `is_org_owner(p_org_id uuid)` | `organizations` | `exists (... o.id = <org> and o.owner_user_id = auth.uid())` |
-| `is_ws_member(p_ws_id uuid, p_roles text[] default null)` | `workspace_members` | `exists (... wm.workspace_id = <ws> and wm.user_id = auth.uid() and wm.membership_status = 'active' [and wm.workspace_role in (...)])` |
-| `is_org_member_of_workspace(p_ws_id uuid)` | `workspaces` + `organization_members` | join `workspaces`/`organization_members` (member aktif organisasi induk workspace) |
-| `shares_workspace_with(p_other_user uuid)` | `workspace_members` (self-join) | self-join `wm_self`/`wm_other` (berbagi workspace aktif) |
+| Helper                                                      | Membaca                               | Menggantikan                                                                                                                                  |
+| ----------------------------------------------------------- | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `is_org_member(p_org_id uuid, p_roles text[] default null)` | `organization_members`                | `exists (... om.organization_id = <org> and om.user_id = auth.uid() and om.membership_status = 'active' [and om.organization_role in (...)])` |
+| `is_org_owner(p_org_id uuid)`                               | `organizations`                       | `exists (... o.id = <org> and o.owner_user_id = auth.uid())`                                                                                  |
+| `is_ws_member(p_ws_id uuid, p_roles text[] default null)`   | `workspace_members`                   | `exists (... wm.workspace_id = <ws> and wm.user_id = auth.uid() and wm.membership_status = 'active' [and wm.workspace_role in (...)])`        |
+| `is_org_member_of_workspace(p_ws_id uuid)`                  | `workspaces` + `organization_members` | join `workspaces`/`organization_members` (member aktif organisasi induk workspace)                                                            |
+| `shares_workspace_with(p_other_user uuid)`                  | `workspace_members` (self-join)       | self-join `wm_self`/`wm_other` (berbagi workspace aktif)                                                                                      |
 
 Pengaman helper (semuanya, jangan dilonggarkan):
+
 - `LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp`; semua objek di-qualify skema; `auth.uid()` dibaca dari JWT sesi — berfungsi di dalam SECURITY DEFINER.
 - Helper hanya mengembalikan **BOOLEAN tentang keanggotaan pemanggil sendiri** — tidak pernah mengembalikan baris atau data pengguna lain; tanpa dynamic SQL.
 - `REVOKE ALL ... FROM public` + `GRANT EXECUTE ... TO authenticated` untuk kelima helper.
@@ -70,33 +71,33 @@ Pengaman helper (semuanya, jangan dilonggarkan):
 
 Setiap policy lama di-`DROP POLICY IF EXISTS` dulu, lalu `CREATE POLICY` dengan nama, tabel, dan perintah yang sama — migrasi idempotent, aman diterapkan di atas 0001–0005.
 
-| Policy | Helper pengganti | Alasan |
-|---|---|---|
-| `organizations_select_member` | `is_org_member(organizations.id)` | Subquery `organization_members` memicu siklus B/C |
-| `org_members_select_member` | `is_org_member(organization_members.organization_id)` | SELF-LOOP (B) |
-| `org_members_insert_owner_or_admin` | `is_org_owner(...)` + `is_org_member(..., array['owner','admin'])` | SELF-LOOP (B) + subquery `organizations` memicu siklus C |
-| `org_members_update_owner_or_admin` | `is_org_member(..., array['owner','admin'])` (USING + WITH CHECK) | SELF-LOOP (B) |
-| `org_members_delete_owner` | `is_org_member(..., array['owner'])` | SELF-LOOP (B) |
-| `workspaces_select_member` | `is_ws_member(workspaces.id)` | Memicu siklus A — jalur T1 |
-| `workspaces_insert_org_member` | `is_org_member(workspaces.organization_id)` | Memicu siklus B |
-| `workspaces_update_owner_admin` | `is_ws_member(..., array['owner','admin'])` (USING + WITH CHECK) | Memicu siklus A |
-| `ws_members_select_member` | `is_ws_member(workspace_members.workspace_id)` | SELF-LOOP (A) |
-| `ws_members_insert_owner_admin_or_self` | `is_org_member_of_workspace(...)` + `is_ws_member(..., array['owner','admin'])` | SELF-LOOP (A) + siklus D + siklus B |
-| `ws_members_update_owner_admin` | `is_ws_member(..., array['owner','admin'])` (USING + WITH CHECK) | SELF-LOOP (A); anti-tampering tetap |
-| `ws_members_delete_owner` | `is_ws_member(..., array['owner'])` | SELF-LOOP (A) |
-| `profiles_select_own_or_same_workspace` | `shares_workspace_with(profiles.id)` | Self-join `workspace_members` memicu siklus A |
-| `ws_settings_select_member` | `is_ws_member(...)` | Memicu siklus A |
-| `ws_settings_write_owner_admin` | `is_ws_member(..., array['owner','admin'])` | Memicu siklus A |
-| `ws_settings_update_owner_admin` | `is_ws_member(..., array['owner','admin'])` | Memicu siklus A |
-| `ws_settings_delete_owner_admin` | `is_ws_member(..., array['owner','admin'])` | Memicu siklus A |
-| `ws_invitations_select_owner_admin` | `is_ws_member(..., array['owner','admin'])` | Memicu siklus A |
-| `ws_invitations_insert_owner_admin` | `is_ws_member(..., array['owner','admin'])` | Memicu siklus A |
-| `ws_invitations_update_owner_admin` | `is_ws_member(..., array['owner','admin'])` | Memicu siklus A |
-| `activity_select_member` | `is_ws_member(...)` + `is_org_member(...)` | Memicu siklus A + B |
-| `activity_insert_member_as_actor` | `is_ws_member(...)` + `is_org_member(...)` | Memicu siklus A + B |
-| `shares_select_recipient_or_member` | `is_ws_member(...)` | Memicu siklus A |
-| `shares_insert_owner_admin_manager` | `is_ws_member(..., array['owner','admin','manager'])` | Memicu siklus A |
-| `shares_delete_owner_admin_manager` | `is_ws_member(..., array['owner','admin','manager'])` | Memicu siklus A |
+| Policy                                  | Helper pengganti                                                                | Alasan                                                   |
+| --------------------------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `organizations_select_member`           | `is_org_member(organizations.id)`                                               | Subquery `organization_members` memicu siklus B/C        |
+| `org_members_select_member`             | `is_org_member(organization_members.organization_id)`                           | SELF-LOOP (B)                                            |
+| `org_members_insert_owner_or_admin`     | `is_org_owner(...)` + `is_org_member(..., array['owner','admin'])`              | SELF-LOOP (B) + subquery `organizations` memicu siklus C |
+| `org_members_update_owner_or_admin`     | `is_org_member(..., array['owner','admin'])` (USING + WITH CHECK)               | SELF-LOOP (B)                                            |
+| `org_members_delete_owner`              | `is_org_member(..., array['owner'])`                                            | SELF-LOOP (B)                                            |
+| `workspaces_select_member`              | `is_ws_member(workspaces.id)`                                                   | Memicu siklus A — jalur T1                               |
+| `workspaces_insert_org_member`          | `is_org_member(workspaces.organization_id)`                                     | Memicu siklus B                                          |
+| `workspaces_update_owner_admin`         | `is_ws_member(..., array['owner','admin'])` (USING + WITH CHECK)                | Memicu siklus A                                          |
+| `ws_members_select_member`              | `is_ws_member(workspace_members.workspace_id)`                                  | SELF-LOOP (A)                                            |
+| `ws_members_insert_owner_admin_or_self` | `is_org_member_of_workspace(...)` + `is_ws_member(..., array['owner','admin'])` | SELF-LOOP (A) + siklus D + siklus B                      |
+| `ws_members_update_owner_admin`         | `is_ws_member(..., array['owner','admin'])` (USING + WITH CHECK)                | SELF-LOOP (A); anti-tampering tetap                      |
+| `ws_members_delete_owner`               | `is_ws_member(..., array['owner'])`                                             | SELF-LOOP (A)                                            |
+| `profiles_select_own_or_same_workspace` | `shares_workspace_with(profiles.id)`                                            | Self-join `workspace_members` memicu siklus A            |
+| `ws_settings_select_member`             | `is_ws_member(...)`                                                             | Memicu siklus A                                          |
+| `ws_settings_write_owner_admin`         | `is_ws_member(..., array['owner','admin'])`                                     | Memicu siklus A                                          |
+| `ws_settings_update_owner_admin`        | `is_ws_member(..., array['owner','admin'])`                                     | Memicu siklus A                                          |
+| `ws_settings_delete_owner_admin`        | `is_ws_member(..., array['owner','admin'])`                                     | Memicu siklus A                                          |
+| `ws_invitations_select_owner_admin`     | `is_ws_member(..., array['owner','admin'])`                                     | Memicu siklus A                                          |
+| `ws_invitations_insert_owner_admin`     | `is_ws_member(..., array['owner','admin'])`                                     | Memicu siklus A                                          |
+| `ws_invitations_update_owner_admin`     | `is_ws_member(..., array['owner','admin'])`                                     | Memicu siklus A                                          |
+| `activity_select_member`                | `is_ws_member(...)` + `is_org_member(...)`                                      | Memicu siklus A + B                                      |
+| `activity_insert_member_as_actor`       | `is_ws_member(...)` + `is_org_member(...)`                                      | Memicu siklus A + B                                      |
+| `shares_select_recipient_or_member`     | `is_ws_member(...)`                                                             | Memicu siklus A                                          |
+| `shares_insert_owner_admin_manager`     | `is_ws_member(..., array['owner','admin','manager'])`                           | Memicu siklus A                                          |
+| `shares_delete_owner_admin_manager`     | `is_ws_member(..., array['owner','admin','manager'])`                           | Memicu siklus A                                          |
 
 ### 3.3 Yang TIDAK diubah
 
@@ -120,7 +121,7 @@ Perintah: `/tmp/pglast-venv/bin/python supabase/tests/rls_verify_0006.py` (dari 
 4. **Helper:** tepat 5; semuanya SECURITY DEFINER + `search_path = public, pg_temp` + STABLE + `returns boolean`; grant EXECUTE hanya ke `authenticated`; revoke dari `public`; tidak ada grant lain; setiap helper hanya membaca tabel yang diizinkan; tanpa dynamic SQL.
 5. **Semantik:** 9 pengecekan langsung dipertahankan; himpunan role identik dengan policy lama; 0006 tidak membuat/mengubah tabel, tidak menyentuh `accept_invitation()` maupun trigger audit.
 
-**Catatan koreksi selama verifikasi (jujur):** dua pemeriksaan awal skrip sempat FAIL karena model pemeriksanya yang salah, bukan karena migrasi: (a) graf pertama menggabungkan policy lama + baru tanpa memperhitungkan DROP — setelah diperbaiki ke graf *efektif* pasca-0006, hasilnya 0 siklus; (b) pembanding role pertama hanya mengenali sintaks `IN (...)` dan melewatkan kesamaan tunggal `= 'owner'` pada dua policy DELETE — setelah diperbaiki, himpunan role identik. Kedua perbaikan ada di skrip final yang tersimpan di repo.
+**Catatan koreksi selama verifikasi (jujur):** dua pemeriksaan awal skrip sempat FAIL karena model pemeriksanya yang salah, bukan karena migrasi: (a) graf pertama menggabungkan policy lama + baru tanpa memperhitungkan DROP — setelah diperbaiki ke graf _efektif_ pasca-0006, hasilnya 0 siklus; (b) pembanding role pertama hanya mengenali sintaks `IN (...)` dan melewatkan kesamaan tunggal `= 'owner'` pada dua policy DELETE — setelah diperbaiki, himpunan role identik. Kedua perbaikan ada di skrip final yang tersimpan di repo.
 
 ---
 

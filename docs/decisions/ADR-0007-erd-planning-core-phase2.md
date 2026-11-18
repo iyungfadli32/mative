@@ -55,15 +55,15 @@
 
 CHECK tidak bisa memeriksa tabel lain. Karena itu semua aturan "workspace yang cocok" ditegakkan oleh 7 trigger `BEFORE INSERT OR UPDATE` (fungsi `SECURITY DEFINER`, `search_path` dikunci, hanya membaca kolom scope dan melempar `P0001` bila tidak cocok — ditinjau seperti helper 0006):
 
-| Trigger | Aturan |
-|---|---|
-| `validate_content_pillar_scope` | `content_pillars.brand_id` (bila diisi) harus milik `workspace_id` yang sama |
-| `validate_campaign_scope` | `campaigns.audience_id` (bila diisi) harus milik workspace yang sama |
-| `validate_campaign_brand_scope` | `campaign_brands` — campaign dan brand harus satu workspace |
-| `validate_idea_scope` | `ideas.brand_id` (bila diisi) harus milik workspace yang sama |
-| `validate_content_item_scope` | `content_items.brand_id` harus milik `workspace_id` yang sama; begitu pula `campaign_id`, `pillar_id`, `audience_id`, `origin_idea_id` (bila diisi) |
+| Trigger                            | Aturan                                                                                                                                                                                                                                  |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `validate_content_pillar_scope`    | `content_pillars.brand_id` (bila diisi) harus milik `workspace_id` yang sama                                                                                                                                                            |
+| `validate_campaign_scope`          | `campaigns.audience_id` (bila diisi) harus milik workspace yang sama                                                                                                                                                                    |
+| `validate_campaign_brand_scope`    | `campaign_brands` — campaign dan brand harus satu workspace                                                                                                                                                                             |
+| `validate_idea_scope`              | `ideas.brand_id` (bila diisi) harus milik workspace yang sama                                                                                                                                                                           |
+| `validate_content_item_scope`      | `content_items.brand_id` harus milik `workspace_id` yang sama; begitu pula `campaign_id`, `pillar_id`, `audience_id`, `origin_idea_id` (bila diisi)                                                                                     |
 | `validate_content_placement_scope` | placement HANYA ke channel yang `brand_id`-nya = `content_items.brand_id` (otomatis satu workspace). Reuse channel lintas-brand yang diotorisasi + diaudit BELUM ADA mekanismenya di fase ini, jadi ditolak — bukan diizinkan diam-diam |
-| `validate_content_tag_scope` | `content_tags` — tag harus milik workspace yang sama dengan content item |
+| `validate_content_tag_scope`       | `content_tags` — tag harus milik workspace yang sama dengan content item                                                                                                                                                                |
 
 Trigger adalah backstop untuk SEMUA penulis (termasuk service role yang melewati RLS). RLS tetap menjadi penegak membership/role untuk pengguna aplikasi.
 

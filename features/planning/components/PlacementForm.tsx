@@ -1,0 +1,123 @@
+"use client";
+
+import { useActionState } from "react";
+import { Input } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
+import type { PlanningActionResult } from "../actions";
+import type { ContentPlacement, SocialChannel } from "../types";
+import { PLATFORM_FORMAT_LABELS, PLATFORM_LABELS } from "../constants";
+
+/**
+ * Form tambah/edit placement (P2-10). Jadwal + status distribusi TIDAK
+ * diubah di sini — jadwal lewat reschedule (kalender), status distribusi
+ * lewat TransitionForm. remote_post_id/published_url tidak pernah diisi.
+ */
+export function PlacementForm({
+  workspaceId,
+  contentItemId,
+  channels,
+  initial,
+  action,
+  submitLabel,
+}: {
+  workspaceId: string;
+  contentItemId: string;
+  channels: SocialChannel[];
+  initial: ContentPlacement | null;
+  action: (prev: PlanningActionResult, formData: FormData) => Promise<PlanningActionResult>;
+  submitLabel: string;
+}) {
+  const [state, formAction, pending] = useActionState(action, {
+    ok: false,
+    message: "",
+  });
+  return (
+    <form action={formAction} className="flex flex-col gap-4">
+      <input type="hidden" name="workspaceId" value={workspaceId} />
+      <input type="hidden" name="contentItemId" value={contentItemId} />
+      {initial ? <input type="hidden" name="placementId" value={initial.id} /> : null}
+      {/* Edit tidak mengubah jadwal/distribusi — kirim nilai lama apa adanya. */}
+      {initial ? (
+        <>
+          <input type="hidden" name="scheduledAt" value={initial.scheduled_at ?? ""} />
+          <input type="hidden" name="distributionStatus" value={initial.distribution_status} />
+        </>
+      ) : null}
+      <label className="flex flex-col gap-1.5 text-sm font-medium">
+        Channel <span className="text-[var(--mt-rose-500)]">*</span>
+        <select
+          name="socialChannelId"
+          defaultValue={initial?.social_channel_id ?? ""}
+          required
+          disabled={Boolean(initial)}
+          className="h-10 rounded-[10px] border border-[var(--mt-border)] bg-[var(--mt-surface)] px-3 text-sm font-normal"
+        >
+          <option value="">— Pilih channel —</option>
+          {channels.map((c) => (
+            <option key={c.id} value={c.id}>
+              {PLATFORM_LABELS[c.platform as keyof typeof PLATFORM_LABELS] ?? c.platform}
+              {c.account_name ? ` — ${c.account_name}` : ""}
+              {c.handle ? ` (${c.handle})` : ""} · belum terhubung
+            </option>
+          ))}
+        </select>
+        <span className="text-[13px] font-normal text-[var(--mt-text-muted)]">
+          Channel di fase ini hanya metadata — statusnya “belum terhubung”. Belum ada publish.
+        </span>
+      </label>
+      <label className="flex flex-col gap-1.5 text-sm font-medium">
+        Format platform
+        <select
+          name="platformFormat"
+          defaultValue={initial?.platform_format ?? ""}
+          className="h-10 rounded-[10px] border border-[var(--mt-border)] bg-[var(--mt-surface)] px-3 text-sm font-normal"
+        >
+          <option value="">— Tanpa format —</option>
+          {Object.entries(PLATFORM_FORMAT_LABELS).map(([v, l]) => (
+            <option key={v} value={v}>
+              {l}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="flex flex-col gap-1.5 text-sm font-medium">
+        Caption per channel
+        <textarea
+          name="platformCaption"
+          defaultValue={initial?.platform_caption ?? ""}
+          rows={3}
+          className="rounded-[10px] border border-[var(--mt-border)] bg-[var(--mt-surface)] px-3 py-2 text-sm font-normal"
+        />
+      </label>
+      <Input
+        id="placement-hashtags"
+        name="platformHashtags"
+        label="Hashtag (pisahkan dengan koma, tanpa #)"
+        defaultValue={(initial?.platform_hashtags ?? []).join(", ")}
+        hint="Contoh: mative, konten, perencanaan"
+      />
+      {!initial ? (
+        <Input
+          id="placement-scheduledAt"
+          name="scheduledAt"
+          type="datetime-local"
+          label="Jadwal tayang (opsional — kosong = backlog)"
+          defaultValue=""
+        />
+      ) : (
+        <p className="text-sm text-[var(--mt-text-muted)]">
+          Jadwal saat ini: {initial.scheduled_at ?? "belum terjadwal"} — ubah lewat kalender.
+        </p>
+      )}
+      <input type="hidden" name="timezone" value={initial?.timezone ?? "Asia/Jakarta"} />
+      {state.message ? (
+        <p role={state.ok ? "status" : "alert"} className="text-sm">
+          {state.message}
+        </p>
+      ) : null}
+      <Button type="submit" loading={pending}>
+        {submitLabel}
+      </Button>
+    </form>
+  );
+}

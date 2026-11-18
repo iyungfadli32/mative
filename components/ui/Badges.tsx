@@ -38,7 +38,9 @@ export function StatusBadge({
   );
 }
 
-/** Pemetaan sementara status produksi → badge (Dok 03 §7, warna sementara). */
+/** Pemetaan sementara status produksi → badge (Dok 03 §7, warna sementara).
+ * `client_review` TIDAK ADA di sini — bukan production_status (ADR-0007 §2,
+ * Keputusan #8); status tak dikenal tampil sebagai label mentah. */
 export function ProductionStatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; tone: StatusTone; icon: string }> = {
     idea: { label: "Ide", tone: "neutral", icon: "💡" },
@@ -48,12 +50,28 @@ export function ProductionStatusBadge({ status }: { status: string }) {
     in_production: { label: "Dalam Produksi", tone: "warning", icon: "🎬" },
     editing: { label: "Editing", tone: "progress", icon: "✂️" },
     internal_review: { label: "Review Internal", tone: "progress", icon: "👀" },
-    client_review: { label: "Review Klien", tone: "progress", icon: "🧑‍💼" },
     approved: { label: "Disetujui", tone: "success", icon: "✔️" },
     changes_requested: { label: "Minta Revisi", tone: "danger", icon: "↩️" },
     blocked: { label: "Terblokir", tone: "danger", icon: "⛔" },
     cancelled: { label: "Dibatalkan", tone: "neutral", icon: "✕" },
     archived: { label: "Diarsipkan", tone: "neutral", icon: "🗄️" },
+  };
+  const entry = map[status] ?? { label: status, tone: "neutral" as StatusTone, icon: "•" };
+  return <StatusBadge label={entry.label} tone={entry.tone} icon={entry.icon} />;
+}
+
+/** Badge status distribusi placement (terpisah dari status produksi, R2-02). */
+export function DistributionStatusBadge({ status }: { status: string }) {
+  const map: Record<string, { label: string; tone: StatusTone; icon: string }> = {
+    draft: { label: "Draf", tone: "neutral", icon: "📝" },
+    ready: { label: "Siap Dijadwalkan", tone: "info", icon: "✅" },
+    scheduled_locally: { label: "Terjadwal (Lokal)", tone: "info", icon: "📅" },
+    sending: { label: "Mengirim", tone: "progress", icon: "📤" },
+    uploaded_or_draft_created: { label: "Terunggah / Draf Dibuat", tone: "progress", icon: "☁️" },
+    published: { label: "Terbit", tone: "success", icon: "🌐" },
+    failed: { label: "Gagal", tone: "danger", icon: "⚠️" },
+    needs_manual_action: { label: "Perlu Tindakan Manual", tone: "warning", icon: "✋" },
+    cancelled: { label: "Dibatalkan", tone: "neutral", icon: "✕" },
   };
   const entry = map[status] ?? { label: status, tone: "neutral" as StatusTone, icon: "•" };
   return <StatusBadge label={entry.label} tone={entry.tone} icon={entry.icon} />;

@@ -25,32 +25,25 @@ export const NAV_SECTIONS: Array<{ title: string; items: NavItem[] }> = [
     title: "Utama",
     items: [
       { href: "/dashboard", label: "Command Center", icon: "🏠", available: true },
-      {
-        href: "/kalender",
-        label: "Kalender",
-        icon: "📅",
-        available: false,
-        unavailableReason: "Belum tersedia di fase ini (Phase 2).",
-      },
-      {
-        href: "/board",
-        label: "Board Produksi",
-        icon: "🗂️",
-        available: false,
-        unavailableReason: "Belum tersedia di fase ini (Phase 2).",
-      },
+      { href: "/kalender", label: "Kalender", icon: "📅", available: true },
+      { href: "/board", label: "Board Produksi", icon: "🗂️", available: true },
+      { href: "/cari", label: "Pencarian", icon: "🔍", available: true },
+    ],
+  },
+  {
+    title: "Perencanaan",
+    items: [
+      { href: "/merek", label: "Merek", icon: "🏷️", available: true },
+      { href: "/channel", label: "Channel", icon: "📣", available: true },
+      { href: "/pilar", label: "Pilar & Audiens", icon: "🧱", available: true },
+      { href: "/kampanye", label: "Campaign", icon: "🎯", available: true },
+      { href: "/konten", label: "Konten", icon: "📝", available: true },
+      { href: "/ide", label: "Ide", icon: "💡", available: true },
     ],
   },
   {
     title: "Produksi",
     items: [
-      {
-        href: "/ide",
-        label: "Ide",
-        icon: "💡",
-        available: false,
-        unavailableReason: "Belum tersedia di fase ini (Phase 2–3).",
-      },
       {
         href: "/tugas",
         label: "Tugas Saya",
@@ -208,7 +201,7 @@ export function AppSidebar({
         ))}
       </nav>
       <p className="px-4 py-3 text-[11px] text-white/40">
-        {collapsed ? "v0.1" : "MaTive v0.1.0 — Phase 1 (DRAF)"}
+        {collapsed ? "v0.2" : "MaTive v0.2.0 — Phase 2 (DRAF)"}
       </p>
     </aside>
   );

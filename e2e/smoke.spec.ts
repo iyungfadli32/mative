@@ -58,10 +58,17 @@ test.describe("smoke — dashboard shell (belum masuk)", () => {
     await expect(page.getByRole("heading", { name: "Anda belum masuk" })).toBeVisible();
   });
 
-  test("tombol modul fase berikut disabled dengan alasan", async ({ page }) => {
+  test("tombol modul fase berikut disabled dengan alasan; modul Phase 2 aktif", async ({
+    page,
+  }) => {
     await page.goto("/dashboard");
-    // Sidebar: Kalender/Board/Persetujuan berstatus disabled.
-    const kalender = page.getByTitle("Belum tersedia di fase ini (Phase 2).");
-    await expect(kalender.first()).toBeVisible();
+    // Kalender/Board/Ide/Konten kini aktif (Phase 2) — bukan lagi disabled.
+    await expect(page.getByRole("link", { name: "Kalender", exact: true }).first()).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Board Produksi", exact: true }).first(),
+    ).toBeVisible();
+    // Modul Phase 3+ masih disabled dengan alasan.
+    const tugas = page.getByTitle("Belum tersedia di fase ini (Phase 3).");
+    await expect(tugas.first()).toBeVisible();
   });
 });

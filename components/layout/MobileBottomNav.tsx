@@ -13,7 +13,7 @@ export function MobileBottomNav({ onQuickCreate }: { onQuickCreate: () => void }
   const pathname = usePathname();
   const items = [
     { href: "/dashboard", label: "Home", icon: "🏠", available: true },
-    { href: "/kalender", label: "Kalender", icon: "📅", available: false },
+    { href: "/kalender", label: "Kalender", icon: "📅", available: true },
     { href: null, label: "Buat", icon: "＋", available: true, action: true },
     { href: "/persetujuan", label: "Approval", icon: "✔️", available: false },
     { href: "/lainnya", label: "Lainnya", icon: "⋯", available: true },

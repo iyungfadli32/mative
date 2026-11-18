@@ -31,16 +31,19 @@ export function Topbar({
         <p className="truncate text-sm font-semibold text-[var(--mt-text)] md:hidden">
           {workspaceName}
         </p>
-        <label htmlFor="global-search" className="sr-only">
-          Cari di MaTive
-        </label>
-        <input
-          id="global-search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Cari konten, campaign, tugas… (pencarian global hadir di Phase 2)"
-          className="hidden h-10 w-full max-w-md rounded-[10px] border border-[var(--mt-border)] bg-[var(--mt-canvas)] px-3 text-sm md:block"
-        />
+        <form method="get" action="/cari" className="hidden md:block">
+          <label htmlFor="global-search" className="sr-only">
+            Cari di MaTive
+          </label>
+          <input
+            id="global-search"
+            name="q"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Cari konten, campaign, ide, brand…"
+            className="h-10 w-full max-w-md rounded-[10px] border border-[var(--mt-border)] bg-[var(--mt-canvas)] px-3 text-sm"
+          />
+        </form>
       </div>
 
       {!envStatus.supabaseConfigured && (

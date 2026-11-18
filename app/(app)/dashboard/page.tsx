@@ -1,10 +1,11 @@
-import { getCurrentUser } from "@/lib/supabase/server";
+import { getCurrentUser, getSupabaseServerClient } from "@/lib/supabase/server";
 import { listMyWorkspaces } from "@/features/tenancy/actions";
 import { signOutAction } from "@/features/identity/auth";
 import { AppShell } from "@/components/layout/AppShell";
 import { KPIStatCard } from "@/components/ui/KPIStatCard";
 import { EmptyState } from "@/components/ui/States";
 import { EMPTY_KPIS } from "@/features/dashboard/kpis";
+import { getDashboardKpis } from "@/features/planning/queries";
 import { formatDateOnly, timezoneLabel } from "@/lib/time";
 import { envStatus, SUPABASE_NOT_CONFIGURED_ID } from "@/lib/env";
 import Link from "next/link";
@@ -12,14 +13,19 @@ import { Button } from "@/components/ui/Button";
 
 /**
  * Dashboard / Command Center shell — P1-13 (Dok 02 §3).
- * KPI dari record nyata SAJA; di Phase 1 belum ada tabel content → 0 + empty state.
+ * KPI dari record nyata SAJA; Phase 2: dihitung dari content_items +
+ * placements nyata (0 + empty state bila belum ada data).
  * Panel tugas/antrean persetujuan/milestone campaign: empty state dengan aksi berikutnya.
  */
 export default async function DashboardPage() {
   const user = await getCurrentUser();
   const workspaces = await listMyWorkspaces();
   const workspaceName = workspaces[0]?.workspace.name ?? "Belum ada workspace";
-  const kpis = EMPTY_KPIS;
+  let kpis = EMPTY_KPIS;
+  const supabase = await getSupabaseServerClient();
+  if (supabase && workspaces[0]) {
+    kpis = await getDashboardKpis(supabase, workspaces[0].workspace.id);
+  }
 
   return (
     <AppShell
@@ -38,6 +44,12 @@ export default async function DashboardPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Link href="/konten/baru">
+            <Button variant="secondary">＋ Buat konten</Button>
+          </Link>
+          <Link href="/kalender">
+            <Button variant="secondary">📅 Kalender</Button>
+          </Link>
           <Link href="/pengaturan/organisasi">
             <Button variant="secondary">＋ Buat workspace</Button>
           </Link>
@@ -115,9 +127,14 @@ export default async function DashboardPage() {
           <div className="mt-3">
             <EmptyState
               title="Belum ada campaign"
-              description="Campaign dasar hadir di Phase 2. Setelah ada campaign, milestone-nya tampil di sini."
+              description="Campaign dasar hadir di Phase 2. Buat campaign pertama, lalu milestone-nya tampil di sini."
               icon="🎯"
             />
+            <p className="mt-2 text-center text-sm">
+              <Link href="/kampanye" className="font-medium text-[var(--mt-teal-700)] underline">
+                Ke halaman campaign →
+              </Link>
+            </p>
           </div>
         </div>
       </section>

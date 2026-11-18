@@ -10,6 +10,15 @@ export default async function LainnyaPage() {
   const workspaces = await listMyWorkspaces();
   const links = [
     { href: "/dashboard", label: "Command Center", desc: "KPI operasional + panel kerja." },
+    { href: "/kalender", label: "Kalender", desc: "Placement terjadwal + backlog." },
+    { href: "/board", label: "Board Produksi", desc: "Kanban stage produksi." },
+    { href: "/konten", label: "Konten", desc: "Content item kanonis + versi." },
+    { href: "/ide", label: "Ide", desc: "Tangkap ide + konversi ke konten." },
+    { href: "/merek", label: "Merek", desc: "Brand per workspace." },
+    { href: "/channel", label: "Channel", desc: "Registry channel (metadata saja)." },
+    { href: "/pilar", label: "Pilar & Audiens", desc: "Pilar konten + audiens dasar." },
+    { href: "/kampanye", label: "Campaign", desc: "Campaign dasar + brand." },
+    { href: "/cari", label: "Pencarian", desc: "Cari konten, campaign, ide, brand." },
     { href: "/portal", label: "Portal Klien", desc: "Konten yang dibagikan ke klien." },
     {
       href: "/pengaturan/organisasi",
@@ -28,7 +37,7 @@ export default async function LainnyaPage() {
     >
       <h1 className="text-2xl font-bold">Lainnya</h1>
       <p className="mt-1 text-sm text-[var(--mt-text-muted)]">
-        Semua halaman yang tersedia di Phase 1.
+        Semua halaman yang tersedia di Phase 2.
       </p>
       <div className="mt-6 flex flex-col gap-3">
         {links.map((l) => (

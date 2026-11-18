@@ -2,6 +2,27 @@
 
 Format: [Versi] — tanggal (WIB) — ringkasan.
 
+## [0.2.0] — 2026-11-19 — Phase 2: Planning Core (DRAF)
+
+### Ditambahkan
+
+- ERD Planning Core (ADR-0007): migrasi `0007_planning_core.sql` — 14 tabel + 56 policy RLS + trigger audit (0 siklus), pgTAP `02_rls_phase2.sql` (20 asersi, verifikasi statis 21/21).
+- Migrasi `0008_planning_transactions.sql` — 6 fungsi RPC `SECURITY DEFINER` (buat/edit konten + versi, transisi status, konversi ide, reschedule placement, ubah distribusi) sebagai satu transaksi; grant EXECUTE hanya ke `authenticated`.
+- Kode aplikasi Planning Core (ADR-0008): domain `features/planning/` (constants, transisi, kalender/timezone, search, queries, server actions Zod + RLS) + 11 halaman: Merek, Channel, Pilar & Audiens, Campaign, Ide, Konten (daftar/buat/detail + riwayat status), Kalender Month + Agenda, Board Kanban, Pencarian global.
+- Drag/drop HTML5 native (tanpa dnd-kit) + alternatif tombol untuk sentuh/keyboard; collision placement → dialog tetap/geser 1 jam/batal.
+- Board Kanban 10 kolom (8 tahap + Terkendala + Diarsipkan), WIP tanpa batas; kalender + board membaca record kanonis yang sama.
+- Pencarian ter-scope tenant + filter di URL; deep link lintas workspace → 404.
+- Tes: unit 84/84 (10 file), Playwright chromium 28 lolos + 3 skip (@needs-db), visual QA kalender/board/konten di 1440/1024/390.
+- Dokumen: ADR-0007 + ADR-0008, laporan fase 2 (P2-01 s.d. P2-15), `docs/apply-migrations.md` (langkah apply 0007 + 0008).
+
+### Diketahui belum selesai / blocker
+
+- Migrasi 0007 + 0008 BELUM diterapkan ke database live (butuh DATABASE_URL — dipegang koordinator). Lihat `docs/phase-2-report.md` §12 + `docs/apply-migrations.md`.
+- pgTAP 02 (20 asersi) + spek penerimaan e2e Phase 2 BELUM bisa dijalankan (menunggu migrasi live + akun uji).
+- Proyek Playwright mobile (WebKit) BLOCKED oleh 3 lib sistem (`libmanette-0.2-0`, `libenchant-2-2`, `libsecret-1-0`); persetujuan apt kedaluwarsa dan tidak diulang. Visual 390px terbukti lewat viewport Chromium.
+- Kalender Week/Day/List + List/Timeline view board ditunda (ADR-0008 §6–§7).
+- Dashboard KPI memakai workspace pertama pengguna; filter kalender/board memakai query tunggal limit 200 item.
+
 ## [0.1.0] — 2026-11-19 — Phase 1: Foundation & Design System (DRAF)
 
 ### Ditambahkan

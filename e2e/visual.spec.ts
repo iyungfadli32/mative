@@ -36,4 +36,25 @@ for (const vp of VIEWPORTS) {
     ).toBeVisible();
     await page.screenshot({ path: `docs/visual-qa/portal-${vp.name}.png`, fullPage: true });
   });
+
+  test(`visual — kalender (belum masuk) @ ${vp.name}`, async ({ page }) => {
+    await page.setViewportSize({ width: vp.width, height: vp.height });
+    await page.goto("/kalender");
+    await expect(page.getByRole("heading", { name: "Kalender" })).toBeVisible();
+    await page.screenshot({ path: `docs/visual-qa/kalender-${vp.name}.png`, fullPage: true });
+  });
+
+  test(`visual — board (belum masuk) @ ${vp.name}`, async ({ page }) => {
+    await page.setViewportSize({ width: vp.width, height: vp.height });
+    await page.goto("/board");
+    await expect(page.getByRole("heading", { name: "Board Produksi" })).toBeVisible();
+    await page.screenshot({ path: `docs/visual-qa/board-${vp.name}.png`, fullPage: true });
+  });
+
+  test(`visual — konten (belum masuk) @ ${vp.name}`, async ({ page }) => {
+    await page.setViewportSize({ width: vp.width, height: vp.height });
+    await page.goto("/konten");
+    await expect(page.getByRole("heading", { name: "Konten" })).toBeVisible();
+    await page.screenshot({ path: `docs/visual-qa/konten-${vp.name}.png`, fullPage: true });
+  });
 }

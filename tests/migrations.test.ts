@@ -22,7 +22,7 @@ function migrationFiles(): Array<{ name: string; sql: string }> {
 }
 
 describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
-  it("memiliki 6 migrasi berversi berurutan 0001–0006", () => {
+  it("memiliki 8 migrasi berversi berurutan 0001–0008", () => {
     const files = migrationFiles();
     expect(files.map((f) => f.name)).toEqual([
       "0001_profiles.sql",
@@ -31,6 +31,8 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
       "0004_activity_logs.sql",
       "0005_resource_shares.sql",
       "0006_rls_recursion_fix.sql",
+      "0007_planning_core.sql",
+      "0008_planning_transactions.sql",
     ]);
   });
 
@@ -38,6 +40,12 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
     for (const { name, sql } of migrationFiles()) {
       // 0006 hanya menulis ulang policy (DROP/CREATE POLICY), tidak membuat
       // tabel baru — RLS tabelnya sudah aktif sejak 0001–0005.
+      // 0008 hanya berisi fungsi RPC transaksional (tanpa tabel/policy baru).
+      if (name === "0008_planning_transactions.sql") {
+        expect(sql, `${name} tidak boleh membuat tabel`).not.toMatch(/create table/i);
+        expect(sql, `${name} harus berisi fungsi RPC`).toMatch(/create or replace function/i);
+        continue;
+      }
       if (!/create table/i.test(sql)) {
         expect(sql, `${name} harus menulis ulang policy`).toMatch(/create policy/i);
         continue;
@@ -104,6 +112,25 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
     expect(m3).toMatch(/security definer/i);
     expect(m3).toMatch(/accept_invitation/);
     expect(m3).toMatch(/search_path = public, pg_temp/);
+  });
+
+  it("migrasi 0008 berisi 6 RPC transaksional Phase 2 (SECURITY DEFINER, search_path terkunci)", () => {
+    const m8 = migrationFiles().find((f) => f.name === "0008_planning_transactions.sql")?.sql ?? "";
+    for (const fn of [
+      "create_content_item_with_version",
+      "update_content_item_with_version",
+      "transition_content_item_status",
+      "convert_idea_to_content",
+      "reschedule_placement",
+      "change_placement_distribution",
+    ]) {
+      expect(m8, `0008 harus berisi fungsi ${fn}`).toContain(fn);
+    }
+    expect(m8).toMatch(/security definer/i);
+    expect(m8).toMatch(/search_path = public, pg_temp/);
+    expect(m8).toMatch(/grant execute on function[\s\S]*to authenticated/i);
+    expect(m8).not.toMatch(/remote_post_id\s*=/i);
+    expect(m8).not.toMatch(/published_url\s*=/i);
   });
 
   it("token undangan disimpan sebagai hash, bukan token mentah", () => {

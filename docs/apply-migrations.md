@@ -21,7 +21,7 @@ Dari dalam folder repo (`mative/`):
 npx supabase login
 npx supabase link --project-ref kwyqtlxglhlvtghfrnhr
 
-# 2. Terapkan SEMUA migrasi 0001–0005 ke database live
+# 2. Terapkan SEMUA migrasi 0001–0008 ke database live
 npx supabase db push
 
 # 3. Verifikasi tabel + RLS aktif
@@ -41,10 +41,21 @@ for f in supabase/migrations/0001_profiles.sql \
          supabase/migrations/0002_organizations.sql \
          supabase/migrations/0003_workspaces.sql \
          supabase/migrations/0004_activity_logs.sql \
-         supabase/migrations/0005_resource_shares.sql; do
+         supabase/migrations/0005_resource_shares.sql \
+         supabase/migrations/0006_rls_recursion_fix.sql \
+         supabase/migrations/0007_planning_core.sql \
+         supabase/migrations/0008_planning_transactions.sql; do
   echo "== $f =="
   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"
 done
+```
+
+**Urutan wajib: 0007 dulu, lalu 0008** (0008 memanggil tabel + helper RLS dari 0007).
+
+Verifikasi fungsi RPC Phase 2 (ekspektasi: 6 baris):
+
+```bash
+psql "$DATABASE_URL" -c "select proname from pg_proc where proname in ('create_content_item_with_version','update_content_item_with_version','transition_content_item_status','convert_idea_to_content','reschedule_placement','change_placement_distribution');"
 ```
 
 Semua file idempotent (`create table if not exists`, `create policy` akan gagal
@@ -64,6 +75,20 @@ sekali saja di database bersih).
 psql "$DATABASE_URL" \
   -v user_a='<UUID-USER-A>' -v user_b='<UUID-USER-B>' \
   -f supabase/tests/01_rls_phase1.sql
+```
+
+## RLS policy tests Phase 2 (pgTAP) — setelah migrasi 0007 + 0008
+
+```bash
+# Jalankan tes Phase 2 (20 tes; ekspektasi: semua ok, tidak ada "not ok"):
+psql "$DATABASE_URL" \
+  -v user_a='<UUID-USER-A>' -v user_b='<UUID-USER-B>' \
+  -f supabase/tests/02_rls_phase2.sql
+
+# Lalu jalankan spek penerimaan Phase 2 (e2e live, butuh akun uji):
+E2E_TEST_EMAIL='<email-akun-uji>' E2E_TEST_PASSWORD='<password-akun-uji>' \
+  npx playwright test --project=chromium e2e/planning.spec.ts
+# Ekspektasi: semua tes lolos (tidak lagi skip).
 ```
 
 ## Seed demo (local/preview SAJA — JANGAN di database produksi)

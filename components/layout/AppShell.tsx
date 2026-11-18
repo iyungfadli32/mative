@@ -49,17 +49,21 @@ export function AppShell({
         description="Hanya aksi yang tersedia di fase ini yang bisa dipakai."
       >
         <div className="flex flex-col gap-2">
+          <Link href="/konten/baru" onClick={() => setQuickCreateOpen(false)}>
+            <Button variant="secondary" className="w-full justify-start">
+              📝 Buat konten
+            </Button>
+          </Link>
+          <Link href="/ide" onClick={() => setQuickCreateOpen(false)}>
+            <Button variant="secondary" className="w-full justify-start">
+              💡 Tangkap ide
+            </Button>
+          </Link>
           <Link href="/pengaturan/organisasi" onClick={() => setQuickCreateOpen(false)}>
             <Button variant="secondary" className="w-full justify-start">
               🏢 Buat organisasi / workspace
             </Button>
           </Link>
-          <Button variant="secondary" className="w-full justify-start" disabled>
-            📝 Buat konten — belum tersedia di fase ini
-          </Button>
-          <Button variant="secondary" className="w-full justify-start" disabled>
-            💡 Tangkap ide — belum tersedia di fase ini
-          </Button>
         </div>
       </Dialog>
     </div>

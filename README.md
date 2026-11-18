@@ -3,7 +3,7 @@
 **Satu workspace untuk merencanakan, membuat, menyetujui, mempublikasikan, mengukur, dan meningkatkan konten.**
 Siklus: PLAN → CREATE → COLLABORATE → APPROVE → PUBLISH → ANALYZE → OPTIMIZE.
 
-> Status: **Phase 1 — Foundation & Design System (DRAF, v0.1.0)**.
+> Status: **Phase 2 — Planning Core (DRAF, v0.2.0)**.
 > Rencana kanonis: `../plan/Rencana-MaTive-Lengkap-v2.md` (PLAN-MATIVE-001).
 > MaTive independen — bukan bagian OSL; jangan bawa branding/produk/logo OSL.
 
@@ -21,9 +21,17 @@ Siklus: PLAN → CREATE → COLLABORATE → APPROVE → PUBLISH → ANALYZE → 
 - Dashboard/Command Center shell — KPI dari record nyata saja (0/empty state bila belum ada data).
 - Client portal dasar (P1-16): login portal untuk `viewer_client`, hanya resource yang dibagikan eksplisit.
 
+## Yang sudah ada di Phase 2 (P2-01 s.d. P2-15 — kode tertulis, BELUM diterapkan ke live)
+
+- ERD Planning Core: 14 tabel (brands, social_channels, content_pillars, audiences, campaigns, campaign_brands, ideas, content_items, content_placements, content_versions, placement_versions, content_status_events, tags, content_tags) + 56 policy RLS — migrasi `0007_planning_core.sql` + pgTAP `02_rls_phase2.sql` (20 asersi).
+- 6 fungsi RPC transaksional — migrasi `0008_planning_transactions.sql` (buat/edit konten + versi, transisi status, konversi ide, reschedule, ubah distribusi — masing-masing satu transaksi).
+- Halaman perencanaan: Merek, Channel (registry metadata — selalu "belum terhubung", tanpa OAuth), Pilar & Audiens, Campaign, Ide (tangkap minimal + konversi), Konten (daftar/buat/detail + riwayat status), Kalender Month + Agenda (drag/drop HTML5 + collision), Board Kanban (10 kolom, WIP tanpa batas), Pencarian global.
+- Pencarian ter-scope tenant; filter tercermin di URL; deep link lintas workspace → 404.
+- ADR-0007 (ERD) + ADR-0008 (kode aplikasi: drag/drop, enum terkunci, tabel transisi, JSONB, daftar polimorfik Phase 3).
+
 ## Yang BELUM ada (sengaja ditunda — tombolnya disabled dengan alasan, bukan palsu)
 
-Konten, kalender, board, brief, task, aset, komentar, approval, publishing, analytics, AI, billing — masing-masing di fasenya (Phase 2–9).
+Kalender Week/Day/List, brief editor, task, aset, komentar, version compare/restore, approval, publishing, analytics, AI, billing — masing-masing di fasenya (Phase 3–9). Channel TIDAK terhubung ke platform mana pun (metadata saja) sampai fase integrasi.
 
 ## Mulai (lokal)
 
@@ -48,11 +56,11 @@ Tanpa `.env.local`, aplikasi tetap bisa di-build dan menampilkan halaman publik 
 
 ## Database (migrasi — dijalankan koordinator)
 
-Migrasi ada di `supabase/migrations/` (0001–0005). Belum diterapkan ke database live
+Migrasi ada di `supabase/migrations/` (0001–0008). Belum diterapkan ke database live
 sampai koordinator menjalankannya — lihat **`docs/apply-migrations.md`** untuk
 perintah persis + urutan + verifikasi. RLS tests: `supabase/tests/01_rls_phase1.sql`
-(pgTAP, butuh DATABASE_URL + ekstensi pgtap). Seed demo: `supabase/seed.sql`
-(local/preview saja, JANGAN di produksi).
+dan `supabase/tests/02_rls_phase2.sql` (pgTAP, butuh DATABASE_URL + ekstensi pgtap).
+Seed demo: `supabase/seed.sql` (local/preview saja, JANGAN di produksi).
 
 ## Environment
 
@@ -64,5 +72,6 @@ log, atau chat; hanya dipegang koordinator/pemilik proyek.
 
 - `docs/decisions/ADR-*.md` — keputusan arsitektur material.
 - `docs/phase-1-report.md` — laporan fase + hasil gate + known limitations.
+- `docs/phase-2-report.md` — laporan Phase 2 (ERD + kode aplikasi + gate lokal + gate yang menunggu koordinator).
 - `docs/apply-migrations.md` — perintah migrasi/RLS test untuk koordinator.
 - `CHANGELOG.md` — riwayat perubahan per versi.
