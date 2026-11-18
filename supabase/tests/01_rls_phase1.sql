@@ -22,9 +22,10 @@
 --   - Setup T7 (INSERT undangan) dipindah ke setup postgres — sebelumnya
 --     dijalankan sebagai authenticated B ke workspace A → 42501, transaksi
 --     abort sebelum finish().
---   - throws_ok dipakai bentuk 3 argumen dengan kode SQLSTATE ('42501' /
---     '23505') — bentuk 2 argumen pgTAP memperlakukan argumen ke-2 sebagai
---     pola pesan error yang diharapkan, bukan deskripsi.
+--   - throws_ok dipakai bentuk 4 argumen (sql, kode SQLSTATE, pola pesan
+--     error, deskripsi) — v2 memakai 3 argumen dan GAGAL 3 tes karena pgTAP
+--     yang terpasang memperlakukan argumen ke-3 sebagai pola pesan error,
+--     bukan deskripsi (diperbaiki v2.1, 2026-11-19).
 --   - T3/T4b diganti asersi jumlah baris terpengaruh (CTE UPDATE/DELETE +
 --     is(count, 0)) — UPDATE/DELETE di bawah RLS tidak melempar exception;
 --     policy memfilter baris → 0 baris terpengaruh.
@@ -159,6 +160,7 @@ select throws_ok(
   format($f$insert into public.workspace_members (workspace_id, user_id, workspace_role)
      values ('b0000000-0000-0000-0000-000000000001', %L, 'owner')$f$, :'user_b'),
   '42501',
+  'new row violates row-level security policy',
   'T3b DENY: user B tidak bisa menyisipkan diri sebagai owner workspace A'
 );
 
@@ -172,6 +174,7 @@ select throws_ok(
   format($f$insert into public.resource_shares (workspace_id, resource_type, resource_id, shared_with_user_id, shared_by)
      values ('b0000000-0000-0000-0000-000000000001', 'content_item', 'd0000000-0000-0000-0000-000000000002', %L, %L)$f$, :'user_b', :'user_b'),
   '42501',
+  'new row violates row-level security policy',
   'T4 DENY: penerima share (bukan member workspace) tidak bisa membuat share'
 );
 with del as (
@@ -242,6 +245,7 @@ select throws_ok(
   format($f$insert into public.resource_shares (workspace_id, resource_type, resource_id, shared_with_user_id, shared_by)
      values ('b0000000-0000-0000-0000-000000000001', 'content_item', 'd0000000-0000-0000-0000-000000000001', %L, %L)$f$, :'user_b', :'user_a'),
   '23505',
+  'duplicate key value violates unique constraint',
   'T8 DENY: share duplikat (resource + klien sama) ditolak unique constraint'
 );
 
