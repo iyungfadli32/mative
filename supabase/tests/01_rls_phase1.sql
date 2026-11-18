@@ -1,7 +1,8 @@
--- MaTive Phase 1 — RLS policy tests (pgTAP)
+-- MaTive Phase 1 — RLS policy tests (pgTAP) — v2
 -- ============================================================================
 -- CARA MENJALANKAN (oleh koordinator — butuh DATABASE_URL / service role):
---   1. Terapkan migrasi 0001–0005 ke database BERSIH (lihat docs/apply-migrations.md).
+--   1. Terapkan migrasi 0001–0006 ke database BERSIH (lihat docs/apply-migrations.md).
+--      Migrasi 0006 WAJIB: tanpa 0006, policy rekursif dan T1 gagal 42P17.
 --   2. Aktifkan ekstensi pgTAP di proyek Supabase (Dashboard → Database →
 --      Extensions → pgtap), atau jalankan:  create extension if not exists pgtap;
 --   3. Buat 2 pengguna auth uji (mis. lewat Dashboard → Authentication →
@@ -9,9 +10,30 @@
 --   4. Jalankan:  psql "$DATABASE_URL" -v user_a='<UUID-A>' -v user_b='<UUID-B>'
 --        -f supabase/tests/01_rls_phase1.sql
 --   Hasil yang diharapkan: semua tes ok (tidak ada "not ok").
+--   DI SQL EDITOR (tanpa psql): hapus kedua baris \set, ganti setiap :'user_a'
+--   dengan literal UUID-A dan setiap :'user_b' dengan literal UUID-B, lalu
+--   jalankan seluruh file sebagai satu query (begin ... rollback di akhir
+--   membersihkan data uji; GRANT untuk T9 ikut rollback).
 -- CATATAN: tes ini TIDAK BOLEH dijalankan di database produksi berisi data
 -- nyata — hanya database bersih/preview. Tes memakai JWT claims palsu lewat
 -- set_config('request.jwt.claims') untuk mensimulasikan tiap pengguna.
+--
+-- RIWAYAT PERBAIKAN (v2, 2026-11-19 — lihat docs/rls-test-fix.md):
+--   - Setup T7 (INSERT undangan) dipindah ke setup postgres — sebelumnya
+--     dijalankan sebagai authenticated B ke workspace A → 42501, transaksi
+--     abort sebelum finish().
+--   - throws_ok dipakai bentuk 3 argumen dengan kode SQLSTATE ('42501' /
+--     '23505') — bentuk 2 argumen pgTAP memperlakukan argumen ke-2 sebagai
+--     pola pesan error yang diharapkan, bukan deskripsi.
+--   - T3/T4b diganti asersi jumlah baris terpengaruh (CTE UPDATE/DELETE +
+--     is(count, 0)) — UPDATE/DELETE di bawah RLS tidak melempar exception;
+--     policy memfilter baris → 0 baris terpengaruh.
+--   - T8 memakai UUID uji nyata (placeholder :'user_a'/:'user_b') — UUID
+--     palsu 1111.../2222... ditolak foreign key (23503) sebelum unique
+--     constraint sempat diperiksa.
+--   - T9: GRANT SELECT ke anon di dalam transaksi (ikut rollback).
+--   - plan(14) kini benar: 14 asersi (T3 punya 2 asersi — 0 baris terpengaruh
+--     + role tetap 'owner').
 -- ============================================================================
 
 begin;
@@ -30,11 +52,14 @@ $$;
 
 -- Pengguna uji (GANTI dengan UUID auth user nyata dari database uji).
 -- User A = owner Workspace A. User B = member Workspace B (bukan member A).
+-- Nilai di bawah HANYA placeholder psql — jalankan dengan -v user_a/user_b
+-- (atau ganti literal di SQL Editor); tanpa itu setup gagal di foreign key.
 \set user_a '11111111-1111-1111-1111-111111111111'
 \set user_b '22222222-2222-2222-2222-222222222222'
 
 -- ---------------------------------------------------------------------------
--- Setup: organisasi + workspace + member (sebagai postgres, bypass RLS).
+-- Setup: organisasi + workspace + member + undangan T7
+-- (sebagai postgres, bypass RLS).
 -- ---------------------------------------------------------------------------
 insert into public.organizations (id, name, slug, owner_user_id)
 values ('a0000000-0000-0000-0000-000000000001', 'Org A (sample test)', 'org-a-test', :'user_a'),
@@ -60,6 +85,16 @@ on conflict (workspace_id, user_id) do nothing;
 insert into public.resource_shares (id, workspace_id, resource_type, resource_id, shared_with_user_id, shared_by)
 values ('c0000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000001', 'content_item', 'd0000000-0000-0000-0000-000000000001', :'user_b', :'user_a')
 on conflict (resource_type, resource_id, shared_with_user_id) do nothing;
+
+-- Undangan kedaluwarsa untuk T7 — WAJIB di setup postgres: policy INSERT
+-- workspace_invitations hanya mengizinkan owner/admin workspace; user B
+-- bukan member workspace A, jadi INSERT ini sebagai authenticated B selalu
+-- ditolak 42501 dan menggugurkan seluruh transaksi (cacat v1).
+insert into public.workspace_invitations (workspace_id, email, role, token_hash, status, expires_at, invited_by)
+values ('b0000000-0000-0000-0000-000000000001', 'b@example.com', 'creator',
+        'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef', 'pending',
+        now() - interval '1 day', :'user_a')
+on conflict (token_hash) do nothing;
 
 -- Simulasikan peran authenticated untuk semua pemeriksaan RLS di bawah.
 set local role authenticated;
@@ -90,39 +125,69 @@ select isnt_empty(
 -- ============================================================================
 -- TES 3 (Dok 06 §8 tes 2): role tampering — DENY.
 -- User B (admin di B, BUKAN member A) mencoba mengubah role user A di workspace A.
+-- UPDATE di bawah RLS TIDAK melempar exception: policy memfilter baris
+-- (0 baris terpengaruh). Karena itu T3 memakai 2 asersi jumlah/nilai:
+--   (a) UPDATE oleh B tidak mengubah baris apa pun (count = 0);
+--   (b) role user A tetap 'owner' (dibaca sebagai A sendiri).
+-- Targetnya user A NYATA (barisnya ada) — menarget UUID yang tidak ada
+-- akan lolos sepele tanpa menguji policy.
 -- ============================================================================
 select _set_user(:'user_b');
-select throws_ok(
-  $$ update public.workspace_members set workspace_role = 'viewer_client'
-     where workspace_id = 'b0000000-0000-0000-0000-000000000001' and user_id = '11111111-1111-1111-1111-111111111111' $$,
-  'T3 DENY: user B tidak bisa mengubah role member workspace A'
+with upd as (
+  update public.workspace_members set workspace_role = 'viewer_client'
+  where workspace_id = 'b0000000-0000-0000-0000-000000000001' and user_id = :'user_a'
+  returning 1
+)
+select is(
+  (select count(*) from upd)::int,
+  0,
+  'T3 DENY: user B tidak bisa mengubah role member workspace A (0 baris terpengaruh)'
+);
+select _set_user(:'user_a');
+select is(
+  (select workspace_role from public.workspace_members
+   where workspace_id = 'b0000000-0000-0000-0000-000000000001' and user_id = :'user_a'),
+  'owner',
+  'T3 DENY: role user A di workspace A tetap owner setelah percobaan ubah oleh B'
 );
 -- User B juga tidak bisa mengubah role-nya SENDIRI menjadi owner di workspace A.
+-- INSERT yang ditolak WITH CHECK melempar 42501 → throws_ok 3 argumen.
+-- SQL dibangun lewat format() agar placeholder :'user_b' tersubstitusi psql
+-- (interpolasi psql TIDAK terjadi di dalam string $$...$$).
+select _set_user(:'user_b');
 select throws_ok(
-  $$ insert into public.workspace_members (workspace_id, user_id, workspace_role)
-     values ('b0000000-0000-0000-0000-000000000001', '22222222-2222-2222-2222-222222222222', 'owner') $$,
+  format($f$insert into public.workspace_members (workspace_id, user_id, workspace_role)
+     values ('b0000000-0000-0000-0000-000000000001', %L, 'owner')$f$, :'user_b'),
+  '42501',
   'T3b DENY: user B tidak bisa menyisipkan diri sebagai owner workspace A'
 );
 
 -- ============================================================================
 -- TES 4 (Dok 06 §8 tes 4): viewer_client tidak bisa mutasi.
--- User B sebagai PENERIMA share (bukan member workspace A) mencoba INSERT share.
+-- User B sebagai PENERIMA share (bukan member workspace A) mencoba INSERT share
+-- (ditolak WITH CHECK → 42501) dan DELETE share (difilter RLS → 0 baris).
 -- ============================================================================
 select _set_user(:'user_b');
 select throws_ok(
-  $$ insert into public.resource_shares (workspace_id, resource_type, resource_id, shared_with_user_id, shared_by)
-     values ('b0000000-0000-0000-0000-000000000001', 'content_item', 'd0000000-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222222', '22222222-2222-2222-2222-222222222222') $$,
+  format($f$insert into public.resource_shares (workspace_id, resource_type, resource_id, shared_with_user_id, shared_by)
+     values ('b0000000-0000-0000-0000-000000000001', 'content_item', 'd0000000-0000-0000-0000-000000000002', %L, %L)$f$, :'user_b', :'user_b'),
+  '42501',
   'T4 DENY: penerima share (bukan member workspace) tidak bisa membuat share'
 );
-select throws_ok(
-  $$ delete from public.resource_shares where id = 'c0000000-0000-0000-0000-000000000001' $$,
-  'T4b DENY: penerima share tidak bisa mencabut share'
+with del as (
+  delete from public.resource_shares where id = 'c0000000-0000-0000-0000-000000000001' returning 1
+)
+select is(
+  (select count(*) from del)::int,
+  0,
+  'T4b DENY: penerima share tidak bisa mencabut share (0 baris terhapus)'
 );
 
 -- ============================================================================
 -- TES 5 (Dok 06 §8 tes 4/portal): portal allow + deny.
 -- ALLOW: user B (penerima) bisa membaca share-nya. DENY: user B TIDAK bisa
 -- membaca share yang TIDAK dibagikan ke dia (UUID guessing di portal).
+-- T5 sekaligus membuktikan share c0000000... masih ada setelah percobaan T4b.
 -- ============================================================================
 select isnt_empty(
   $$ select 1 from public.resource_shares where id = 'c0000000-0000-0000-0000-000000000001' $$,
@@ -154,13 +219,10 @@ set local role authenticated;
 
 -- ============================================================================
 -- TES 7: undangan kedaluwarsa tidak bisa dipakai (fungsi accept_invitation).
+-- Baris undangan sudah dibuat di setup postgres (lihat atas); di sini hanya
+-- asersinya. Email JWT harus cocok dengan email undangan ('b@example.com').
 -- ============================================================================
 select _set_user(:'user_b', 'b@example.com');
-insert into public.workspace_invitations (workspace_id, email, role, token_hash, status, expires_at, invited_by)
-values ('b0000000-0000-0000-0000-000000000001', 'b@example.com', 'creator',
-        'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef', 'pending',
-        now() - interval '1 day', :'user_a')
-on conflict (token_hash) do nothing;
 select is(
   (select accept_invitation('deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef') ->> 'ok'),
   'false',
@@ -169,17 +231,29 @@ select is(
 
 -- ============================================================================
 -- TES 8: duplikasi share ditolak (unique constraint — idempotency dasar).
+-- Dijalankan sebagai postgres (bypass RLS) agar yang diuji murni unique
+-- constraint. shared_with/shared_by memakai UUID uji NYATA (placeholder):
+-- UUID palsu ditolak foreign key (23503) sebelum unique constraint diperiksa.
+-- SQL dibangun lewat format() agar placeholder tersubstitusi psql
+-- (interpolasi psql TIDAK terjadi di dalam string $$...$$).
 -- ============================================================================
 reset role;
 select throws_ok(
-  $$ insert into public.resource_shares (workspace_id, resource_type, resource_id, shared_with_user_id, shared_by)
-     values ('b0000000-0000-0000-0000-000000000001', 'content_item', 'd0000000-0000-0000-0000-000000000001', '22222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111') $$,
+  format($f$insert into public.resource_shares (workspace_id, resource_type, resource_id, shared_with_user_id, shared_by)
+     values ('b0000000-0000-0000-0000-000000000001', 'content_item', 'd0000000-0000-0000-0000-000000000001', %L, %L)$f$, :'user_b', :'user_a'),
+  '23505',
   'T8 DENY: share duplikat (resource + klien sama) ditolak unique constraint'
 );
 
 -- ============================================================================
 -- TES 9: anon (belum login) tidak bisa membaca apa pun.
+-- GRANT SELECT ke anon diperlukan agar query is_empty bisa dieksekusi
+-- (tanpa grant, error 42501 permission denied, bukan hasil RLS).
+-- Grant ini DI DALAM transaksi file (ikut rollback di akhir) — tidak
+-- mengubah database secara permanen. Policy RLS 'to authenticated' tetap
+-- yang menolak anon: query jalan, hasilnya 0 baris.
 -- ============================================================================
+grant select on public.workspaces to anon;
 set local role anon;
 select _as_anon();
 select is_empty(
