@@ -280,7 +280,14 @@ set local role authenticated;
 -- GRANT SELECT ke anon diperlukan agar query is_empty bisa dieksekusi
 -- (tanpa grant, error 42501 permission denied, bukan hasil RLS).
 -- Grant ini DI DALAM transaksi file (ikut rollback di akhir).
+-- PERBAIKAN v1.1 (2026-11-19): GRANT WAJIB sebagai postgres — tambahkan
+-- `reset role;` sebelumnya. Tanpa itu GRANT jalan sebagai authenticated
+-- (role diset di akhir pembersihan T6) dan anon tetap ditolak 42501 saat
+-- is_empty — pola yang sama dengan T9 file 01 yang lolos (GRANT setelah
+-- `reset role;`). Cacat file tes, bukan policy: T1–T6/T10 sudah dieksekusi
+-- tanpa exception sebelum abort di T7.
 -- ============================================================================
+reset role;
 grant select on public.brands to anon;
 set local role anon;
 select _as_anon();
