@@ -1,0 +1,45 @@
+{
+  "dependencies": {
+    "@supabase/ssr": "0.12.7",
+    "@supabase/supabase-js": "2.119.1",
+    "next": "16.4.6",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "react-hook-form": "7.92.0",
+    "zod": "4.6.7"
+  },
+  "description": "MaTive — Creative Content Operations Platform (PLAN → CREATE → COLLABORATE → APPROVE → PUBLISH → ANALYZE → OPTIMIZE)",
+  "devDependencies": {
+    "@playwright/test": "1.65.1",
+    "@tailwindcss/postcss": "4.3.5",
+    "@types/node": "26.6.6",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "eslint": "10.15.0",
+    "eslint-config-next": "16.4.6",
+    "prettier": "3.10.1",
+    "tailwindcss": "4.3.5",
+    "typescript": "5.9.3",
+    "vitest": "5.1.1"
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "name": "mative",
+  "private": true,
+  "scripts": {
+    "build": "next build",
+    "dev": "next dev",
+    "format": "prettier --check .",
+    "format:write": "prettier --write .",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "start": "next start",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "version": "0.1.0"
+}

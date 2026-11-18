@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+/*
+ * MaTive design tokens — Dok 03 §3 (13 token, SEMENTARA yang dikunci, Keputusan #14).
+ * SEMUA warna dipakai lewat CSS variables ini; komponen DILARANG hardcode hex.
+ * Status SELALU teks + ikon, bukan warna saja (pemetaan status → warna belum lengkap).
+ */
+:root {
+  --mt-navy-950: #08232d;
+  --mt-navy-900: #0d303b;
+  --mt-teal-700: #087f76;
+  --mt-teal-600: #0b9b8c;
+  --mt-mint-100: #ddf7f0;
+  --mt-indigo-600: #6659e8;
+  --mt-amber-500: #f2a12b;
+  --mt-rose-500: #e8798d;
+  --mt-surface: #ffffff;
+  --mt-canvas: #f4f7f9;
+  --mt-border: #e4eaef;
+  --mt-text: #17232c;
+  --mt-text-muted: #65737d;
+
+  /* Alias semantik (menunjuk ke token di atas — ganti token, seluruh UI ikut). */
+  --mt-primary: var(--mt-teal-700);
+  --mt-primary-hover: var(--mt-teal-600);
+  --mt-accent-secondary: var(--mt-indigo-600);
+  --mt-attention: var(--mt-amber-500);
+  --mt-danger: var(--mt-rose-500);
+}
+
+@theme inline {
+  --color-mt-navy-950: var(--mt-navy-950);
+  --color-mt-navy-900: var(--mt-navy-900);
+  --color-mt-teal-700: var(--mt-teal-700);
+  --color-mt-teal-600: var(--mt-teal-600);
+  --color-mt-mint-100: var(--mt-mint-100);
+  --color-mt-indigo-600: var(--mt-indigo-600);
+  --color-mt-amber-500: var(--mt-amber-500);
+  --color-mt-rose-500: var(--mt-rose-500);
+  --color-mt-surface: var(--mt-surface);
+  --color-mt-canvas: var(--mt-canvas);
+  --color-mt-border: var(--mt-border);
+  --color-mt-text: var(--mt-text);
+  --color-mt-text-muted: var(--mt-text-muted);
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--mt-canvas);
+  color: var(--mt-text);
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Focus terlihat — syarat aksesibilitas Dok 03 §6. */
+:focus-visible {
+  outline: 2px solid var(--mt-teal-700);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Target sentuh minimum mobile 44px (Dok 03 §8) untuk tombol di bottom nav. */
+@media (max-width: 768px) {
+  .mt-touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}

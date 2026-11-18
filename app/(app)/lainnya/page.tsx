@@ -1,0 +1,47 @@
+import { getCurrentUser } from "@/lib/supabase/server";
+import { listMyWorkspaces } from "@/features/tenancy/actions";
+import { signOutAction } from "@/features/identity/auth";
+import { AppShell } from "@/components/layout/AppShell";
+import Link from "next/link";
+
+/** Halaman "Lainnya" mobile — tautan ke semua halaman yang tersedia di fase ini. */
+export default async function LainnyaPage() {
+  const user = await getCurrentUser();
+  const workspaces = await listMyWorkspaces();
+  const links = [
+    { href: "/dashboard", label: "Command Center", desc: "KPI operasional + panel kerja." },
+    { href: "/portal", label: "Portal Klien", desc: "Konten yang dibagikan ke klien." },
+    {
+      href: "/pengaturan/organisasi",
+      label: "Organisasi & Workspace",
+      desc: "Buat organisasi dan workspace.",
+    },
+    { href: "/pengaturan/anggota", label: "Tim & Peran", desc: "Undang anggota, cabut undangan." },
+    { href: "/profil", label: "Profil saya", desc: "Nama tampilan, locale, timezone." },
+    { href: "/pengaturan", label: "Pengaturan", desc: "Semua pengaturan." },
+  ];
+  return (
+    <AppShell
+      workspaceName={workspaces[0]?.workspace.name ?? "Belum ada workspace"}
+      userEmail={user?.email ?? null}
+      onSignOut={signOutAction}
+    >
+      <h1 className="text-2xl font-bold">Lainnya</h1>
+      <p className="mt-1 text-sm text-[var(--mt-text-muted)]">
+        Semua halaman yang tersedia di Phase 1.
+      </p>
+      <div className="mt-6 flex flex-col gap-3">
+        {links.map((l) => (
+          <Link
+            key={l.href}
+            href={l.href}
+            className="rounded-2xl border border-[var(--mt-border)] bg-[var(--mt-surface)] p-4"
+          >
+            <span className="font-semibold">{l.label}</span>
+            <span className="block text-sm text-[var(--mt-text-muted)]">{l.desc}</span>
+          </Link>
+        ))}
+      </div>
+    </AppShell>
+  );
+}
