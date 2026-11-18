@@ -11,36 +11,36 @@
 
 ## 1. Ringkasan hasil
 
-| Langkah | Status |
-|---|---|
-| P1-01 Repo GitHub `iyungfadli32/mative` | ⚠️ BLOCKED — GitHub App belum terinstal (403, 2×). Repo lokal siap (2 commit) di `~/workspace/mative/app` |
-| P1-02 Verifikasi stack + kunci versi | ✅ SELESAI — ADR-0001 |
-| P1-03 Toolchain + CI | ✅ SELESAI — lint/typecheck/test/build + secret scan + smoke di CI |
-| P1-04 Design tokens (13 token) | ✅ SELESAI — CSS variables, ADR-0003 |
-| P1-05 Komponen primitif (11) | ✅ SELESAI |
-| P1-06 App shell responsif | ✅ SELESAI — screenshot 3 viewport |
-| P1-07 Auth + profil | ✅ KODE SELESAI — bukti end-to-end menunggu migrasi + akun uji |
-| P1-08 Org + workspace + undangan | ✅ KODE SELESAI — bukti end-to-end menunggu migrasi + akun uji |
-| P1-09 RBAC 9 role | ✅ SELESAI (matriks + unit test) — penegakan DB menunggu migrasi |
-| P1-10 Migrasi + RLS | ✅ TERTULIS (0001–0005) — ⚠️ BELUM DITERAPKAN ke DB live |
-| P1-11 RLS policy tests (pgTAP, 14 tes) | ✅ TERTULIS — ⚠️ BELUM DIJALANKAN (butuh DB live) |
-| P1-12 Seed demo sample | ✅ SELESAI (file) — belum dijalankan (butuh DB + UUID user uji) |
-| P1-13 Dashboard shell (KPI record nyata) | ✅ SELESAI — 0/empty state, tanpa angka karangan |
-| P1-14 Dokumen | ✅ SELESAI — README, .env.example, 6 ADR, CHANGELOG, laporan ini |
-| P1-15 Quality gate Dok 11 | ⏳ 7/10 LOLOS (lihat §3); 3 BLOCKED |
-| P1-16 Client portal dasar | ✅ KODE SELESAI — uji allow/deny menunggu migrasi (pgTAP T4/T5) |
+| Langkah                                  | Status                                                                                                    |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| P1-01 Repo GitHub `iyungfadli32/mative`  | ⚠️ BLOCKED — GitHub App belum terinstal (403, 2×). Repo lokal siap (2 commit) di `~/workspace/mative/app` |
+| P1-02 Verifikasi stack + kunci versi     | ✅ SELESAI — ADR-0001                                                                                     |
+| P1-03 Toolchain + CI                     | ✅ SELESAI — lint/typecheck/test/build + secret scan + smoke di CI                                        |
+| P1-04 Design tokens (13 token)           | ✅ SELESAI — CSS variables, ADR-0003                                                                      |
+| P1-05 Komponen primitif (11)             | ✅ SELESAI                                                                                                |
+| P1-06 App shell responsif                | ✅ SELESAI — screenshot 3 viewport                                                                        |
+| P1-07 Auth + profil                      | ✅ KODE SELESAI — bukti end-to-end menunggu migrasi + akun uji                                            |
+| P1-08 Org + workspace + undangan         | ✅ KODE SELESAI — bukti end-to-end menunggu migrasi + akun uji                                            |
+| P1-09 RBAC 9 role                        | ✅ SELESAI (matriks + unit test) — penegakan DB menunggu migrasi                                          |
+| P1-10 Migrasi + RLS                      | ✅ TERTULIS (0001–0005) — ⚠️ BELUM DITERAPKAN ke DB live                                                  |
+| P1-11 RLS policy tests (pgTAP, 14 tes)   | ✅ TERTULIS — ⚠️ BELUM DIJALANKAN (butuh DB live)                                                         |
+| P1-12 Seed demo sample                   | ✅ SELESAI (file) — belum dijalankan (butuh DB + UUID user uji)                                           |
+| P1-13 Dashboard shell (KPI record nyata) | ✅ SELESAI — 0/empty state, tanpa angka karangan                                                          |
+| P1-14 Dokumen                            | ✅ SELESAI — README, .env.example, 6 ADR, CHANGELOG, laporan ini                                          |
+| P1-15 Quality gate Dok 11                | ⏳ 7/10 LOLOS (lihat §3); 3 BLOCKED                                                                       |
+| P1-16 Client portal dasar                | ✅ KODE SELESAI — uji allow/deny menunggu migrasi (pgTAP T4/T5)                                           |
 
 ### Milestone M1
 
-| Milestone | Status |
-|---|---|
-| M1.1 Sign up/in/out + profil di browser | ⏳ Kode selesai; bukti browser menunggu migrasi + akun uji |
-| M1.2 Buat org/workspace, beralih workspace, undang anggota | ⏳ Kode selesai; bukti browser menunggu migrasi + akun uji |
-| M1.3 Uji RLS (cross-tenant UUID guessing) | ⏳ pgTAP tertulis (14 tes); belum dijalankan — menunggu migrasi |
-| M1.4 App shell 1440/1024/390 | ✅ LOLOS — 9 screenshot di `docs/visual-qa/` |
-| M1.5 CI hijau | ✅ LOLOS lokal (lint/typecheck/test/build); CI GitHub belum bisa jalan (repo belum ada) |
-| M1.6 Dokumen lengkap | ✅ LOLOS |
-| M1.7 Portal klien (M1.7 baru, v2) | ⏳ Kode + RLS tertulis; uji allow/deny menunggu migrasi |
+| Milestone                                                  | Status                                                                                  |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| M1.1 Sign up/in/out + profil di browser                    | ⏳ Kode selesai; bukti browser menunggu migrasi + akun uji                              |
+| M1.2 Buat org/workspace, beralih workspace, undang anggota | ⏳ Kode selesai; bukti browser menunggu migrasi + akun uji                              |
+| M1.3 Uji RLS (cross-tenant UUID guessing)                  | ⏳ pgTAP tertulis (14 tes); belum dijalankan — menunggu migrasi                         |
+| M1.4 App shell 1440/1024/390                               | ✅ LOLOS — 9 screenshot di `docs/visual-qa/`                                            |
+| M1.5 CI hijau                                              | ✅ LOLOS lokal (lint/typecheck/test/build); CI GitHub belum bisa jalan (repo belum ada) |
+| M1.6 Dokumen lengkap                                       | ✅ LOLOS                                                                                |
+| M1.7 Portal klien (M1.7 baru, v2)                          | ⏳ Kode + RLS tertulis; uji allow/deny menunggu migrasi                                 |
 
 ## 2. Supabase live — verifikasi konektivitas (anon/publishable key)
 
@@ -55,33 +55,33 @@
 
 ## 3. Quality gate Dok 11 — perintah + output aktual
 
-| # | Gate | Perintah | Hasil |
-|---|---|---|---|
-| 1 | Migrasi di DB bersih | `supabase db push` / psql (lihat `docs/apply-migrations.md`) | ⏳ **BLOCKED** — butuh DATABASE_URL (koordinator) |
-| 2 | Lint lolos | `npm run lint` | ✅ **LOLOS** — 0 error, 0 warning |
-| 3 | Typecheck lolos | `npm run typecheck` (`tsc --noEmit`) | ✅ **LOLOS** — 0 error |
-| 4 | Unit test lolos | `npm test` (Vitest) | ✅ **LOLOS** — 6 file, **35/35 tes lolos** |
-| 5 | Integration/database test | pgTAP `supabase/tests/01_rls_phase1.sql` | ⏳ **BLOCKED** — butuh DB live + ekstensi pgtap |
-| 6 | Browser test critical flow | `npx playwright test e2e/auth.spec.ts` | ⏳ **BLOCKED** — butuh migrasi + akun uji (tes auto-skip tanpa `E2E_TEST_EMAIL/PASSWORD`) |
-| 6a | Browser smoke (halaman publik) | `npx playwright test e2e/smoke.spec.ts --project=chromium` | ✅ **LOLOS** — **7/7** (production server) |
-| 7 | Production build | `npm run build` | ✅ **LOLOS** — compiled 29 dtk, 13/13 halaman, semua route ada (`/`, `/masuk`, `/daftar`, `/dashboard`, `/portal`, `/portal/[shareId]`, `/pengaturan`, `/pengaturan/anggota`, `/pengaturan/organisasi`, `/profil`, `/lainnya`, `/undangan/[token]`, `/api/health`) |
-| 8 | Responsive visual review | `npx playwright test e2e/visual.spec.ts --project=chromium` | ✅ **LOLOS** — **9/9**, 9 screenshot di `docs/visual-qa/` (landing/dashboard/portal × 1440/1024/390). Temuan: Low — nama workspace mobile terpotong ("Belum ada wor…"); sidebar tablet tampil penuh (collapse manual tersedia, auto-collapse belum). Bukan defect High/Critical. |
-| 9 | Security/permission test | pgTAP 14 tes + secret scan repo | ⏳ **pgTAP BLOCKED** (menunggu DB); ✅ **secret scan BERSIH** (grep pola kunci asli di semua file repo kecuali `tests/`, `node_modules/`, `.next/`, `.env.local`) |
-| 10 | Docs + known limitations | README, `.env.example`, ADR, CHANGELOG, laporan ini | ✅ **LOLOS** |
+| #   | Gate                           | Perintah                                                     | Hasil                                                                                                                                                                                                                                                                            |
+| --- | ------------------------------ | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Migrasi di DB bersih           | `supabase db push` / psql (lihat `docs/apply-migrations.md`) | ⏳ **BLOCKED** — butuh DATABASE_URL (koordinator)                                                                                                                                                                                                                                |
+| 2   | Lint lolos                     | `npm run lint`                                               | ✅ **LOLOS** — 0 error, 0 warning                                                                                                                                                                                                                                                |
+| 3   | Typecheck lolos                | `npm run typecheck` (`tsc --noEmit`)                         | ✅ **LOLOS** — 0 error                                                                                                                                                                                                                                                           |
+| 4   | Unit test lolos                | `npm test` (Vitest)                                          | ✅ **LOLOS** — 6 file, **35/35 tes lolos**                                                                                                                                                                                                                                       |
+| 5   | Integration/database test      | pgTAP `supabase/tests/01_rls_phase1.sql`                     | ⏳ **BLOCKED** — butuh DB live + ekstensi pgtap                                                                                                                                                                                                                                  |
+| 6   | Browser test critical flow     | `npx playwright test e2e/auth.spec.ts`                       | ⏳ **BLOCKED** — butuh migrasi + akun uji (tes auto-skip tanpa `E2E_TEST_EMAIL/PASSWORD`)                                                                                                                                                                                        |
+| 6a  | Browser smoke (halaman publik) | `npx playwright test e2e/smoke.spec.ts --project=chromium`   | ✅ **LOLOS** — **7/7** (production server)                                                                                                                                                                                                                                       |
+| 7   | Production build               | `npm run build`                                              | ✅ **LOLOS** — compiled 29 dtk, 13/13 halaman, semua route ada (`/`, `/masuk`, `/daftar`, `/dashboard`, `/portal`, `/portal/[shareId]`, `/pengaturan`, `/pengaturan/anggota`, `/pengaturan/organisasi`, `/profil`, `/lainnya`, `/undangan/[token]`, `/api/health`)               |
+| 8   | Responsive visual review       | `npx playwright test e2e/visual.spec.ts --project=chromium`  | ✅ **LOLOS** — **9/9**, 9 screenshot di `docs/visual-qa/` (landing/dashboard/portal × 1440/1024/390). Temuan: Low — nama workspace mobile terpotong ("Belum ada wor…"); sidebar tablet tampil penuh (collapse manual tersedia, auto-collapse belum). Bukan defect High/Critical. |
+| 9   | Security/permission test       | pgTAP 14 tes + secret scan repo                              | ⏳ **pgTAP BLOCKED** (menunggu DB); ✅ **secret scan BERSIH** (grep pola kunci asli di semua file repo kecuali `tests/`, `node_modules/`, `.next/`, `.env.local`)                                                                                                                |
+| 10  | Docs + known limitations       | README, `.env.example`, ADR, CHANGELOG, laporan ini          | ✅ **LOLOS**                                                                                                                                                                                                                                                                     |
 
 Perintah format: `npm run format` → **LOLOS** (semua file sesuai Prettier setelah `format:write`).
 
 ## 4. Defect yang ditemukan + diperbaiki (semua sudah habis)
 
-| # | Defect | Severity | Perbaikan |
-|---|---|---|---|
-| D1 | Dashboard HTTP 500: "Event handlers cannot be passed to Client Component props" — `EmptyState` menerima `onAction` dari Server Component | **High** | `Button` diberi `"use client"`; `onAction` dihapus dari dashboard (tautan "Ke halaman masuk" sudah ada di bawahnya). Terverifikasi: dashboard HTTP 200 + smoke 7/7 |
-| D2 | `useActionState` menolak server action ber-signature `(formData)` | High | Semua form action diubah ke signature `(prevState, formData)` (React 19). Typecheck 0 error |
-| D3 | `profile` menyempit ke `never` (supabase-js 2.119 tanpa generic Database) | Medium | Tipe bernama eksplisit `ProfileRow` + cast lewat `unknown` |
-| D4 | 3 unit test gagal: UUID uji tidak valid menurut Zod v4 (versi/varian) | Medium | UUID uji diganti ke UUID v4 valid (`...-4111-8111-...` dst). 35/35 lolos |
-| D5 | 4 warning ESLint (import tak terpakai, anonymous default export) | Low | Dibersihkan; lint 0 warning |
-| D6 | Next 16: `middleware.ts` deprecated → `proxy.ts` | Low | File diganti nama ke `proxy.ts` (fungsi `proxy`); build tanpa peringatan |
-| D7 | Dev server lambat (kompilasi pertama /dashboard ~27 dtk di CPU shared) membuat smoke timeout | Low | Playwright memakai production server (`npm run start`, butuh `npm run build` dulu); smoke 12 dtk |
+| #   | Defect                                                                                                                                   | Severity | Perbaikan                                                                                                                                                          |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| D1  | Dashboard HTTP 500: "Event handlers cannot be passed to Client Component props" — `EmptyState` menerima `onAction` dari Server Component | **High** | `Button` diberi `"use client"`; `onAction` dihapus dari dashboard (tautan "Ke halaman masuk" sudah ada di bawahnya). Terverifikasi: dashboard HTTP 200 + smoke 7/7 |
+| D2  | `useActionState` menolak server action ber-signature `(formData)`                                                                        | High     | Semua form action diubah ke signature `(prevState, formData)` (React 19). Typecheck 0 error                                                                        |
+| D3  | `profile` menyempit ke `never` (supabase-js 2.119 tanpa generic Database)                                                                | Medium   | Tipe bernama eksplisit `ProfileRow` + cast lewat `unknown`                                                                                                         |
+| D4  | 3 unit test gagal: UUID uji tidak valid menurut Zod v4 (versi/varian)                                                                    | Medium   | UUID uji diganti ke UUID v4 valid (`...-4111-8111-...` dst). 35/35 lolos                                                                                           |
+| D5  | 4 warning ESLint (import tak terpakai, anonymous default export)                                                                         | Low      | Dibersihkan; lint 0 warning                                                                                                                                        |
+| D6  | Next 16: `middleware.ts` deprecated → `proxy.ts`                                                                                         | Low      | File diganti nama ke `proxy.ts` (fungsi `proxy`); build tanpa peringatan                                                                                           |
+| D7  | Dev server lambat (kompilasi pertama /dashboard ~27 dtk di CPU shared) membuat smoke timeout                                             | Low      | Playwright memakai production server (`npm run start`, butuh `npm run build` dulu); smoke 12 dtk                                                                   |
 
 Tidak ada defect Critical/High yang tersisa.
 
@@ -89,12 +89,12 @@ Tidak ada defect Critical/High yang tersisa.
 
 1. **Repo GitHub `iyungfadli32/mative` belum dibuat (P1-01).**
    Bukti: `create_repository` 2× (02:09 dan 02:47 WIB) → `403 Resource not
-   accessible by integration`. Penyebab: GitHub App Meta Muse AI belum
+accessible by integration`. Penyebab: GitHub App Meta Muse AI belum
    terinstal di akun `iyungfadli32`. Tindakan: buka
    https://github.com/apps/meta-muse-ai/installations/new dan instal App ke
    akun, ATAU buat repo kosong manual bernama `mative`. Setelah repo ada,
    push dari repo lokal: `cd ~/workspace/mative/app && git remote add origin
-   https://github.com/iyungfadli32/mative.git && git push -u origin main`
+https://github.com/iyungfadli32/mative.git && git push -u origin main`
    (2 commit lokal: `72212d7`, `1f75311`). CI + deploy preview Vercel
    menunggu repo ini.
 2. **Migrasi 0001–0005 BELUM diterapkan ke Supabase live.**
