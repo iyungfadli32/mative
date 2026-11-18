@@ -215,6 +215,34 @@ create policy "ws_members_delete_owner"
     )
   );
 
+-- ============================================================================
+-- profiles SELECT — MELENGKAPI 0001_profiles.sql (perbaikan 2026-11-19).
+-- Policy ini semula ditulis di 0001, tetapi ekspresinya merujuk ke
+-- public.workspace_members (baru dibuat di file ini), sehingga 0001 GAGAL
+-- dengan ERROR 42P01 saat diterapkan berurutan. Dipindah ke sini, tepat
+-- setelah workspace_members dibuat — SATU-SATUNYA definisi policy ini,
+-- tanpa DROP/CREATE ulang. Semantik IDENTIK dengan versi 0001: profil
+-- sendiri, atau profil pengguna yang berbagi workspace aktif dengan
+-- pemanggil. Nama policy dipertahankan agar tes/dokumen yang merujuk
+-- namanya tetap berlaku.
+-- ============================================================================
+create policy "profiles_select_own_or_same_workspace"
+  on public.profiles for select
+  to authenticated
+  using (
+    id = auth.uid()
+    or exists (
+      select 1
+      from public.workspace_members wm_self
+      join public.workspace_members wm_other
+        on wm_other.workspace_id = wm_self.workspace_id
+      where wm_self.user_id = auth.uid()
+        and wm_self.membership_status = 'active'
+        and wm_other.user_id = profiles.id
+        and wm_other.membership_status = 'active'
+    )
+  );
+
 -- workspace_settings: baca oleh member; tulis hanya owner/admin.
 create policy "ws_settings_select_member"
   on public.workspace_settings for select

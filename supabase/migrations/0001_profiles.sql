@@ -2,6 +2,8 @@
 -- Dok 05 §3: profiles (id = auth user id, display_name, avatar, locale, timezone).
 -- Timestamp disimpan UTC (timestamptz). Timezone default Asia/Jakarta (Keputusan #13).
 -- RLS: default deny. Kebijakan eksplisit per operasi (Dok 06 §5).
+-- CATATAN URUTAN (perbaikan 2026-11-19): policy SELECT profiles dibuat di
+-- 0003_workspaces.sql, bukan di sini — ekspresinya butuh workspace_members.
 -- TIDAK ADA security-definer function di file ini.
 
 create table if not exists public.profiles (
@@ -24,23 +26,17 @@ alter table public.profiles enable row level security;
 revoke all on public.profiles from anon, authenticated;
 grant select, insert, update on public.profiles to authenticated;
 
--- SELECT: profil sendiri, atau profil pengguna yang berbagi workspace dengan pemanggil.
-create policy "profiles_select_own_or_same_workspace"
-  on public.profiles for select
-  to authenticated
-  using (
-    id = auth.uid()
-    or exists (
-      select 1
-      from public.workspace_members wm_self
-      join public.workspace_members wm_other
-        on wm_other.workspace_id = wm_self.workspace_id
-      where wm_self.user_id = auth.uid()
-        and wm_self.membership_status = 'active'
-        and wm_other.user_id = profiles.id
-        and wm_other.membership_status = 'active'
-    )
-  );
+-- SELECT: policy ini TIDAK dibuat di sini — lihat 0003_workspaces.sql.
+-- Alasan: ekspresi policy merujuk ke public.workspace_members, tabel yang
+-- baru dibuat di 0003. PostgreSQL memvalidasi semua relasi dalam ekspresi
+-- policy saat CREATE POLICY dijalankan, sehingga policy ini GAGAL di 0001
+-- dengan ERROR 42P01 (relation "public.workspace_members" does not exist).
+-- Sampai 0003 dijalankan, SELECT pada profiles ditolak untuk semua orang
+-- (RLS aktif tanpa policy SELECT = default deny) — aman selama migrasi
+-- karena belum ada data maupun trafik aplikasi. Setelah 0003, policy
+-- "profiles_select_own_or_same_workspace" berlaku dengan semantik yang
+-- identik dengan yang semula ditulis di sini (profil sendiri, atau profil
+-- pengguna yang berbagi workspace aktif dengan pemanggil).
 
 -- INSERT: hanya profil sendiri (id harus = auth.uid()).
 create policy "profiles_insert_own"

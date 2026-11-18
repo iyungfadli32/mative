@@ -104,6 +104,23 @@ https://github.com/iyungfadli32/mative.git && git push -u origin main`
    Setelah diterapkan, jalankan pgTAP (`supabase/tests/01_rls_phase1.sql`,
    14 tes) + seed (opsional, preview saja) + e2e critical flow dengan akun
    uji. Baru setelah itu gate 1/5/6/9 bisa dinyatakan LOLOS.
+   - **PERBAIKAN URUTAN 2026-11-19 (fixer migrasi):** saat penerapan pertama
+     di SQL editor (03:22 WIB), `0001_profiles.sql` GAGAL dengan
+     `ERROR 42P01: relation "public.workspace_members" does not exist` —
+     policy `profiles_select_own_or_same_workspace` merujuk tabel yang baru
+     dibuat di 0003. Perbaikan (file lokal, belum di-commit): policy
+     dipindah UTUH ke `0003_workspaces.sql` tepat setelah `workspace_members`
+     dibuat — satu-satunya definisi, tanpa DROP/CREATE ulang, teks policy
+     identik byte-per-byte (diff terverifikasi) sehingga semantik RLS tetap
+     identik. File 0001–0005 sudah diperiksa ulang: tidak ada
+     forward-reference lain (0004 memakai workspaces/organizations dari
+     0002–0003; trigger 0005 memakai activity_logs dari 0004).
+     Verifikasi: parse pglast semua file LOLOS + pemeriksa dependensi
+     statis (urutan numerik) LOLOS pada file perbaikan DAN terbukti
+     mendeteksi defect pada file asli (exit 1, menunjuk 0001). BATAS JUJUR:
+     belum ada uji terap ke database (PostgreSQL lokal/Docker tidak tersedia
+     di VM; database live TIDAK disentuh dari sini) — bukti terap + pgTAP
+     tetap menunggu penerapan ke Supabase live oleh koordinator.
 3. **Deploy preview Vercel BELUM ada.** Menunggu repo (blocker 1) + env var
    preview (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`,
    `NEXT_PUBLIC_APP_URL`). Tanpa repo, tidak ada URL preview yang bisa
