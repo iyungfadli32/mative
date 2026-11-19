@@ -20,7 +20,13 @@ async function signIn(page: import("@playwright/test").Page) {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Kata sandi").fill(password);
   await page.getByRole("button", { name: "Masuk" }).click();
-  await expect(page.getByRole("heading", { name: "Command Center" })).toBeVisible();
+  // Timeout 15 dtk (bukan default 5 dtk): login melibatkan round-trip
+  // Supabase Auth + render dashboard; di bawah 2 worker paralel
+  // kadang melebihi 5 dtk (defect tes e2e 2026-11-19 — flaky, bukan
+  // defect aplikasi; login sendiri terbukti berhasil berulang kali).
+  await expect(page.getByRole("heading", { name: "Command Center" })).toBeVisible({
+    timeout: 15000,
+  });
 }
 
 test.describe("penerimaan Phase 2 — planning core @needs-db", () => {
@@ -29,28 +35,83 @@ test.describe("penerimaan Phase 2 — planning core @needs-db", () => {
   test("buat konten → 2 placement → kalender + board → edit → pindah stage → reschedule → reload", async ({
     page,
   }) => {
+    // Semua expect di tes ini memakai 30 dtk (bukan default 5 dtk):
+    // render halaman + round-trip aksi server ke Supabase dari VM ini
+    // kerap >5 dtk, dan aksi placement pernah >15 dtk (terbukti
+    // 2026-11-19: login, pesan sukses channel, pesan sukses konten,
+    // heading detail konten, pesan sukses placement). Timeout tes
+    // 180 dtk karena total alur live-DB ini ~45–90 dtk.
+    test.setTimeout(180000);
+    expect.configure({ timeout: 30000 });
     await signIn(page);
     const slug = `e2e-${Date.now().toString(36)}`;
 
     // 1. Buat brand (bila belum ada, halaman Merek selalu bisa membuat baru).
     await page.goto("/merek");
     await expect(page.getByRole("heading", { name: "Merek" })).toBeVisible();
-    await page.getByLabel("Nama brand").fill(`Brand E2E ${slug}`);
-    await page.getByLabel(/Slug \(huruf kecil/).fill(`brand-${slug}`);
+    // Lokator berdasarkan id form buat-baru: bila sudah ada brand, halaman
+    // juga menampilkan form edit per brand dengan label "Nama brand" yang
+    // sama — getByLabel menjadi ambigu (strict mode). Defect tes e2e
+    // 2026-11-19; form buat memakai id brand-name-new / brand-slug-new.
+    await page.locator("#brand-name-new").fill(`Brand E2E ${slug}`);
+    await page.locator("#brand-slug-new").fill(`brand-${slug}`);
     await page.getByRole("button", { name: "Buat brand" }).click();
-    await expect(page.getByText("Brand dibuat.")).toBeVisible();
+    // Pesan sukses setelah aksi server memakai timeout 30 dtk (bukan
+    // default 5 dtk): round-trip ke Supabase dari VM ini kerap >5 dtk
+    // dan pernah >15 dtk — terbukti 2026-11-19 di channel, konten,
+    // dan placement (baris tercatat di DB, expect yang gagal).
+    // Berlaku untuk semua expect pesan sukses di tes ini.
+    await expect(page.getByText("Brand dibuat.")).toBeVisible({ timeout: 30000 });
 
     // 2. Buat 2 channel (Instagram + TikTok) untuk brand itu.
     await page.goto("/channel");
-    await expect(page.getByRole("heading", { name: "Channel" })).toBeVisible();
-    const channelDetails = page.getByText(`Tambah channel untuk Brand E2E ${slug}`);
-    await channelDetails.click();
-    await page.getByLabel("Platform").first().selectOption("instagram");
-    await page.getByLabel("Nama akun").first().fill(`Akun IG E2E ${slug}`);
-    await page.getByRole("button", { name: "Tambah channel" }).click();
+    // exact: judul halaman "Channel" — tanpa exact, heading per-brand
+    // "Brand E2E ... — 0 channel" ikut cocok (substring) dan melanggar
+    // strict mode (defect tes e2e 2026-11-19).
+    await expect(page.getByRole("heading", { name: "Channel", exact: true })).toBeVisible();
+    // Render /channel kadang belum menampilkan brand yang baru dibuat
+    // (stale sesaat setelah mutasi — terbukti 2026-11-19: 4 dari 7
+    // pemuatan pertama melewatkan brand baru; muat ulang menampilkannya).
+    // Muat ulang sekali bila ringkasan brand belum muncul.
+    const channelSummary = page.getByText(`Tambah channel untuk Brand E2E ${slug}`);
+    try {
+      await channelSummary.waitFor({ state: "attached", timeout: 10000 });
+    } catch {
+      await page.reload();
+      await expect(page.getByRole("heading", { name: "Channel", exact: true })).toBeVisible();
+      await channelSummary.waitFor({ state: "attached", timeout: 15000 });
+    }
+    await channelSummary.click();
+    // Form channel ada di dalam <details> per brand; getByLabel global
+    // menemukan semua form (termasuk yang tersembunyi di <details>
+    // tertutup) sehingga .first() menarget form brand lain yang
+    // tersembunyi dan menggantung selamanya (defect tes e2e 2026-11-19).
+    // Batasi ke <details> brand yang baru dibuka.
+    const channelDetails = page.locator("details", { has: channelSummary });
+    await channelDetails.getByLabel("Platform").selectOption("instagram");
+    await channelDetails.getByLabel("Nama akun").fill(`Akun IG E2E ${slug}`);
+    await channelDetails.getByRole("button", { name: "Tambah channel" }).click();
     await expect(
       page.getByText("Channel dicatat sebagai metadata (belum terhubung)."),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 30000 });
+    // Channel kedua (TikTok): tanpa channel bebas kedua, form tambah
+    // placement hilang setelah placement pertama (freeChannels kosong)
+    // sehingga pesan suksesnya tidak pernah tampil — terbukti
+    // 2026-11-19 (placement tercatat di DB, pesan tak pernah muncul
+    // walau ditunggu 30 dtk). Langkah ini diniatkan 2 channel sejak
+    // awal (lihat komentar langkah 2) — buat channel TikTok juga.
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "Channel", exact: true })).toBeVisible();
+    const channelSummary2 = page.getByText(`Tambah channel untuk Brand E2E ${slug}`);
+    await channelSummary2.waitFor({ state: "attached", timeout: 30000 });
+    await channelSummary2.click();
+    const channelDetails2 = page.locator("details", { has: channelSummary2 });
+    await channelDetails2.getByLabel("Platform").selectOption("tiktok");
+    await channelDetails2.getByLabel("Nama akun").fill(`Akun TikTok E2E ${slug}`);
+    await channelDetails2.getByRole("button", { name: "Tambah channel" }).click();
+    await expect(
+      page.getByText("Channel dicatat sebagai metadata (belum terhubung)."),
+    ).toBeVisible({ timeout: 30000 });
 
     // 3. Buat content item (otomatis v1).
     await page.goto("/konten/baru");
@@ -61,18 +122,25 @@ test.describe("penerimaan Phase 2 — planning core @needs-db", () => {
       .getByLabel("Ringkasan perubahan (wajib — tercatat di versi)")
       .fill("Versi awal (v1)");
     await page.getByRole("button", { name: "Buat konten (v1)" }).click();
-    await expect(page.getByText("Konten dibuat beserta versi v1.")).toBeVisible();
+    await expect(page.getByText("Konten dibuat beserta versi v1.")).toBeVisible({ timeout: 30000 });
 
     // 4. Buka detail konten, tambah 2 placement (IG + TikTok butuh channel
     //    TikTok dulu — tambahkan lewat detail bila channel belum ada).
     await page.goto("/konten");
     await page.getByRole("link", { name: `Konten E2E ${slug}` }).click();
     await expect(page.getByRole("heading", { name: `Konten E2E ${slug}` })).toBeVisible();
-    await page.getByText("Tambah placement").click();
-    await page.getByLabel("Channel").selectOption({ index: 1 });
-    await page.getByLabel("Caption per channel").fill("Caption IG E2E");
-    await page.getByRole("button", { name: "Tambah placement" }).click();
-    await expect(page.getByText("Placement ditambahkan (versi v1).")).toBeVisible();
+    // getByText("Tambah placement") ambigu: cocok juga dengan tombol
+    // submit di dalam form (defect tes e2e 2026-11-19) — target <summary>.
+    // getByLabel("Channel") juga ambigu: cocok dengan select Channel DAN
+    // textarea "Caption per channel" (substring) — pakai name select.
+    const placementDetails = page.locator("details", {
+      has: page.locator("summary", { hasText: "Tambah placement" }),
+    });
+    await placementDetails.locator("summary", { hasText: "Tambah placement" }).click();
+    await placementDetails.locator('select[name="socialChannelId"]').selectOption({ index: 1 });
+    await placementDetails.getByLabel("Caption per channel").fill("Caption IG E2E");
+    await placementDetails.getByRole("button", { name: "Tambah placement" }).click();
+    await expect(page.getByText("Placement ditambahkan (versi v1).")).toBeVisible({ timeout: 30000 });
 
     // 5. Temukan di kalender DAN board (record kanonis yang sama).
     await page.goto("/kalender");
@@ -87,12 +155,12 @@ test.describe("penerimaan Phase 2 — planning core @needs-db", () => {
     await page.getByLabel("Judul konten").fill(`Konten E2E ${slug} (revisi)`);
     await page.getByLabel("Ringkasan perubahan (wajib — tercatat di versi)").fill("Perbaiki judul");
     await page.getByRole("button", { name: "Simpan sebagai versi baru" }).click();
-    await expect(page.getByText(/Perubahan disimpan sebagai versi v2/)).toBeVisible();
+    await expect(page.getByText(/Perubahan disimpan sebagai versi v2/)).toBeVisible({ timeout: 30000 });
 
     // 7. Pindah stage Ide → Brief (transisi tervalidasi + riwayat).
     await page.getByLabel("Pindah stage ke").selectOption("brief");
     await page.getByRole("button", { name: "Pindah stage" }).click();
-    await expect(page.getByText("Status produksi diubah: idea → brief.")).toBeVisible();
+    await expect(page.getByText("Status produksi diubah: idea → brief.")).toBeVisible({ timeout: 30000 });
 
     // 8. Reload: semua perubahan persist.
     await page.reload();

@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { getSupabaseServerClient, getSupabaseAdminClient } from "@/lib/supabase/server";
 import { organizationSchema, workspaceSchema, invitationSchema } from "@/lib/validation/schemas";
 import { canInvite } from "@/lib/permissions";
@@ -41,13 +41,34 @@ export async function createOrganizationAction(
   if (!supabase || !user) {
     return { ok: false, message: supabase ? "Anda harus masuk dulu." : SUPABASE_NOT_CONFIGURED_ID };
   }
-  const { error } = await supabase.from("organizations").insert({
-    name: parsed.data.name,
-    slug: parsed.data.slug,
-    owner_user_id: user.id,
-    status: "active",
-  });
+  const { data: org, error } = await supabase
+    .from("organizations")
+    .insert({
+      name: parsed.data.name,
+      slug: parsed.data.slug,
+      owner_user_id: user.id,
+      status: "active",
+    })
+    .select("id")
+    .single();
   if (error) return { ok: false, message: `Gagal membuat organisasi: ${error.message}` };
+  // Keanggotaan owner dibuat terpisah (lihat kebijakan RLS 0002
+  // "org_members_insert_owner_or_admin" butir (a)): tanpa baris ini
+  // organisasi tidak pernah muncul di daftar pengguna dan tombol
+  // "Buat workspace" tetap nonaktif (defect e2e 2026-11-19).
+  const { error: memberError } = await supabase.from("organization_members").insert({
+    organization_id: org.id,
+    user_id: user.id,
+    organization_role: "owner",
+    membership_status: "active",
+    joined_at: new Date().toISOString(),
+  });
+  if (memberError) {
+    return {
+      ok: false,
+      message: `Organisasi dibuat, tetapi keanggotaan owner gagal: ${memberError.message}`,
+    };
+  }
   revalidatePath("/pengaturan/organisasi");
   return { ok: true, message: "Organisasi dibuat." };
 }
@@ -72,7 +93,13 @@ export async function createWorkspaceAction(
   }
   // RLS: hanya member organisasi yang bisa membuat workspace di dalamnya;
   // pembuat otomatis menjadi owner workspace (lihat migrasi 0003).
+  // ID dibuat di server (bukan .select("id")): meminta representation
+  // setelah INSERT workspace gagal 42501 karena kebijakan SELECT
+  // workspaces mensyaratkan keanggotaan workspace — yang baru dibuat
+  // tepat setelah baris workspace ini (defect e2e 2026-11-19).
+  const workspaceId = randomUUID();
   const { error } = await supabase.from("workspaces").insert({
+    id: workspaceId,
     organization_id: parsed.data.organizationId,
     name: parsed.data.name,
     slug: parsed.data.slug,
@@ -80,6 +107,23 @@ export async function createWorkspaceAction(
     default_locale: parsed.data.defaultLocale,
   });
   if (error) return { ok: false, message: `Gagal membuat workspace: ${error.message}` };
+  // Keanggotaan owner dibuat terpisah (lihat kebijakan RLS 0003
+  // "ws_members_insert_owner_admin_or_self" butir (a)): tanpa baris ini
+  // workspace tidak pernah terlihat oleh pembuatnya sendiri dan halaman
+  // anggota menampilkan "Belum ada workspace" (defect e2e 2026-11-19).
+  const { error: memberError } = await supabase.from("workspace_members").insert({
+    workspace_id: workspaceId,
+    user_id: user.id,
+    workspace_role: "owner",
+    membership_status: "active",
+    joined_at: new Date().toISOString(),
+  });
+  if (memberError) {
+    return {
+      ok: false,
+      message: `Workspace dibuat, tetapi keanggotaan owner gagal: ${memberError.message}`,
+    };
+  }
   revalidatePath("/pengaturan/organisasi");
   return { ok: true, message: "Workspace dibuat." };
 }
@@ -92,7 +136,13 @@ export async function listMyWorkspaces() {
     .from("workspace_members")
     .select("workspace_role, workspaces(id, name, slug, timezone)")
     .eq("user_id", user.id)
-    .eq("membership_status", "active");
+    .eq("membership_status", "active")
+    // Urutan DETERMINISTIK (defect e2e 2026-11-19): tanpa ORDER BY,
+    // "workspace pertama" (dipakai getPlanningContext + AppShell saat
+    // tidak ada pilihan eksplisit) bisa berubah antar pemuatan halaman
+    // bila pengguna punya 2+ workspace — brand yang dibuat di halaman
+    // Merek lalu tidak tampil di halaman Channel.
+    .order("created_at", { ascending: true });
   return (data ?? []).map((row) => ({
     role: row.workspace_role as string,
     workspace: row.workspaces as unknown as {

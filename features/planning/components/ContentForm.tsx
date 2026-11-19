@@ -62,6 +62,12 @@ export function ContentForm({
     <form action={formAction} className="flex flex-col gap-4">
       <input type="hidden" name="workspaceId" value={workspaceId} />
       {initial ? <input type="hidden" name="contentItemId" value={initial.id} /> : null}
+      {/* Select brand di-disable saat edit (brand tak bisa diubah), tapi
+          kontrol disabled TIDAK ikut terkirim — tanpa input tersembunyi
+          ini brandId null dan validasi update selalu gagal ("expected
+          string, received null", defect 2026-11-19: edit konten tak
+          pernah bisa menyimpan). */}
+      {initial ? <input type="hidden" name="brandId" value={initial.brand_id} /> : null}
       <label className="flex flex-col gap-1.5 text-sm font-medium">
         Brand <span className="text-[var(--mt-rose-500)]">*</span>
         <select

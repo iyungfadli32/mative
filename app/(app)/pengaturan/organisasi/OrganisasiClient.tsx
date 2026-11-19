@@ -86,7 +86,11 @@ export default function OrganisasiPage({
             <select
               id="ws-org"
               name="organizationId"
-              value={selectedOrg}
+              // Bila state masih kosong (mis. organisasi baru dibuat dan
+              // daftar diperbarui lewat revalidatePath), pakai organisasi
+              // pertama supaya organizationId tidak terkirim kosong
+              // (organizationId wajib UUID — lihat workspaceSchema).
+              value={selectedOrg || organizations[0]?.id || ""}
               onChange={(e) => setSelectedOrg(e.target.value)}
               className="h-10 rounded-[10px] border border-[var(--mt-border)] bg-[var(--mt-surface)] px-3 text-sm"
               required
