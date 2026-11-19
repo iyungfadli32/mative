@@ -736,6 +736,9 @@ saat policy dievaluasi.
    library WebKit via `npx playwright install-deps webkit` vs cukup
    Chromium saja). **JANGAN jalankan apt-get/install-deps tanpa izin
    eksplisit Tuan.**
+   **Koreksi 20 Nov 2026 ~02:17 WIB: SUDAH dijalankan (proyek
+   Playwright-nya bernama `mobile`, iPhone 13, bukan `webkit`) —
+   lihat §11.8. Poin ini tertutup.**
 2. **Approval dua-peran belum terbukti live** (skip, satu pengguna)
    — bawaan Phase 4, tidak berubah di Phase 5.
 3. **Pola seed malas yang menelan galat diam-diam** sudah diperbaiki
@@ -758,3 +761,59 @@ saat policy dievaluasi.
 verifikasi parent atas HEAD `8e0e95d` hijau penuh. Lanjut Phase 6
 (Publishing Foundation). Tes mobile WebKit menyusul bila Tuan
 menyetujui B4 — bukan gate yang menahan Phase 6.
+
+### 11.8 Addendum — tes mobile + perbaikan cacat A5.1 (20 Nov 2026 ~02:17 WIB)
+
+**Tes mobile (proyek Playwright `mobile`, iPhone 13) — SELESAI
+01:53 WIB.** Run penuh pertama **2/4**: A5.5 (CSV) + Smoke lolos;
+A5.1 gagal di `campaign.spec.ts:129` — pesan sukses "Konten
+ditautkan ke campaign." tidak muncul dalam 30 detik; A5.3 gagal di
+`:164` — heading timeout 5000 ms. Re-run solo A5.1 + A5.3 lolos →
+**4/4 pada re-run**.
+
+**Diagnosis (oleh koordinator e2e mobile):**
+
+- **A5.1 = cacat aplikasi nyata** (pola Lesson 6): `LinkContentForm`
+  / `LinkBrandForm` di `CampaignDetailForms.tsx` early-return saat
+  daftar kosong, sehingga sesudah tautan berhasil + revalidasi, form
+  beserta `ResultMessage` dari `useActionState` ikut ter-unmount dan
+  pesan sukses menghilang. Di Chromium sempat tertangkap karena
+  keberuntungan polling.
+- **A5.3 = cacat tes saja** — `expect.configure` di dalam callback
+  tes tidak berlaku, sehingga timeout default 5 detik dipakai untuk
+  navigasi pertama yang berat.
+
+**Perbaikan (atas perintah Tuan "Perbaiki sekarang", 01:56 WIB) —
+commit `9544d36`** (2 file, +22/−7): cabang kosong kedua form kini
+merender pesan kosong **+ `ResultMessage`** (state bertahan karena
+parent tetap me-render komponen di posisi yang sama —
+`page.tsx` baris 263/301); `campaign.spec.ts:164` diberi
+`{ timeout: 30000 }` eksplisit. Tanpa perubahan perilaku lain.
+
+**Verifikasi sesudah perbaikan (koordinator perbaikan, 02:05–
+02:17 WIB):** typecheck 0, lint 0, Vitest **186/186** (17 file),
+Auth HTTP 200, tidak ada server basi, Playwright Chromium **4/4**
+dan mobile **4/4 pada run penuh PERTAMA sesudah perbaikan**
+(masing-masing 3,7 menit, `--workers=1`) — tidak ada lagi pola
+"lolos karena keberuntungan polling". **Tidak ada cacat baru
+ditemukan.** Parent verifikasi langsung dari disk: HEAD `9544d36`
+di atas `8dff127`, tree bersih, diff sesuai laporan.
+
+**Catatan akun uji:** penyegaran akun e2e sempat GAGAL 02:00 WIB
+("Failed to delete user: Database error deleting user", 2×) karena
+akun lama masih memiliki 5 org `org-p5-*` (owner_user_id tanpa
+ON DELETE = RESTRICT; pelajaran Phase 3 14:45 WIB). Urutan
+diperbaiki: residu 5 org + 5 workspace dibersihkan dulu (unset
+`is_default` → hapus `ws-p5-%` → hapus `org-p5-%`, verifikasi
+seed-only lolos), baru akun lama dihapus dan akun baru dibuat
+02:05 WIB — `mative-e2e@example.com`, UID
+`a00f1843-cf39-4214-8f81-b13f7ea6e86a`, Confirmed 02:05 WIB, Auto
+Confirm ON. Kata sandi baru TIDAK dicatat di mana pun (hanya di
+brief koordinator perbaikan).
+
+**Residu yang MASIH menunggu dibersihkan (parent):** kedua run
+verifikasi perbaikan membuat 6 pasangan `org-p5-*`/`ws-p5-*` baru
+(3 per proyek: A5.1, A5.3, A5.5) — prosedur yang sama (unset
+`is_default` dulu, lalu hapus workspace + org, verifikasi
+seed-only). Dibersihkan sesudah Run pgTAP 06 v1.1 selesai, agar
+tidak mengganggu tempelan yang sedang berjalan.
