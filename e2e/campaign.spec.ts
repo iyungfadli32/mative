@@ -186,7 +186,11 @@ test.describe("penerimaan Phase 5 — campaign & visual planning @needs-db", () 
     await page.getByRole("button", { name: "Tautkan konten" }).click();
     await expect(page.getByText("Konten ditautkan ke campaign.")).toBeVisible({ timeout: 30000 });
     await page.getByRole("link", { name: `Akun IG E2E ${slug}` }).click();
-    await expect(page.getByRole("heading", { name: "Visual Planner" })).toBeVisible();
+    // A5.3: timeout eksplisit 30 dtk — expect.configure di dalam callback
+    // tes tidak berlaku, sehingga default 5 dtk sempat membuat tes ini gagal.
+    await expect(page.getByRole("heading", { name: "Visual Planner" })).toBeVisible({
+      timeout: 30000,
+    });
 
     // Label "approximate" WAJIB terlihat (R5.3).
     await expect(

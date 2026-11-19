@@ -230,10 +230,16 @@ export function LinkContentForm({
     message: "",
   });
   if (items.length === 0) {
+    // A5.1 (Phase 5 mobile): JANGAN unmount ResultMessage — sesudah tautan
+    // berhasil + revalidasi, daftar menjadi kosong dan pesan sukses harus
+    // tetap terlihat di cabang ini.
     return (
-      <p className="text-sm text-[var(--mt-text-muted)]">
-        Tidak ada konten tanpa campaign di workspace ini.
-      </p>
+      <div className="flex flex-col gap-3">
+        <p className="text-sm text-[var(--mt-text-muted)]">
+          Tidak ada konten tanpa campaign di workspace ini.
+        </p>
+        <ResultMessage state={state} />
+      </div>
     );
   }
   return (
@@ -311,10 +317,15 @@ export function LinkBrandForm({
     message: "",
   });
   if (brands.length === 0) {
+    // A5.1 (Phase 5 mobile): sama seperti LinkContentForm — pesan sukses
+    // tautan brand harus tetap terlihat sesudah revalidasi mengosongkan daftar.
     return (
-      <p className="text-sm text-[var(--mt-text-muted)]">
-        Semua brand di workspace ini sudah terhubung ke campaign ini.
-      </p>
+      <div className="flex flex-col gap-3">
+        <p className="text-sm text-[var(--mt-text-muted)]">
+          Semua brand di workspace ini sudah terhubung ke campaign ini.
+        </p>
+        <ResultMessage state={state} />
+      </div>
     );
   }
   return (
