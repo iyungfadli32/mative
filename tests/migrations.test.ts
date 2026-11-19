@@ -22,7 +22,7 @@ function migrationFiles(): Array<{ name: string; sql: string }> {
 }
 
 describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
-  it("memiliki 15 migrasi berversi berurutan 0001–0015", () => {
+  it("memiliki 17 migrasi berversi berurutan 0001–0017", () => {
     const files = migrationFiles();
     expect(files.map((f) => f.name)).toEqual([
       "0001_profiles.sql",
@@ -40,6 +40,8 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
       "0013_approval_core.sql",
       "0014_approval_transactions.sql",
       "0015_notification_scope_placement.sql",
+      "0016_brand_scope.sql",
+      "0017_visual_planner_templates.sql",
     ]);
   });
 
@@ -52,14 +54,16 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
       // (tanpa tabel/policy baru); 0012 hanya mengganti satu fungsi RPC
       // (tanpa tabel/policy baru); 0014 hanya berisi fungsi approval
       // (tanpa tabel/policy baru); 0015 hanya memperluas satu CHECK +
-      // mengganti satu fungsi trigger (tanpa tabel/policy baru).
+      // mengganti satu fungsi trigger (tanpa tabel/policy baru); 0016
+      // hanya menulis ulang policy + helper (tanpa tabel baru).
       if (
         name === "0008_planning_transactions.sql" ||
         name === "0010_production_transactions.sql" ||
         name === "0011_fix_content_item_brand_null.sql" ||
         name === "0012_convert_idea_brand_param.sql" ||
         name === "0014_approval_transactions.sql" ||
-        name === "0015_notification_scope_placement.sql"
+        name === "0015_notification_scope_placement.sql" ||
+        name === "0016_brand_scope.sql"
       ) {
         expect(sql, `${name} tidak boleh membuat tabel`).not.toMatch(/create table/i);
         expect(sql, `${name} harus berisi fungsi RPC`).toMatch(/create or replace function/i);
@@ -332,6 +336,93 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
     expect(m15).not.toMatch(/create policy/i);
     expect(m15).not.toMatch(/grant .* to authenticated/i);
     expect(m15.match(/create or replace function/g)?.length).toBe(1);
+  });
+
+  it("migrasi 0016 menegakkan brand scope (P1-A7, Keputusan #9)", () => {
+    const m16 =
+      migrationFiles().find((f) => f.name === "0016_brand_scope.sql")?.sql ?? "";
+    // CHECK bentuk brand_scope: NULL atau array.
+    expect(m16).toContain("workspace_members_brand_scope_check");
+    expect(m16).toContain("check (brand_scope is null or jsonb_typeof(brand_scope) = 'array')");
+    // Helper baru brand_in_scope (SECURITY DEFINER, search_path terkunci).
+    expect(m16).toContain("create or replace function public.brand_in_scope(p_brand_id uuid)");
+    expect(m16).toMatch(/security definer/i);
+    expect(m16).toMatch(/search_path = public, pg_temp/);
+    expect(m16).toContain("revoke all on function public.brand_in_scope(uuid) from public");
+    expect(m16).toContain("grant execute on function public.brand_in_scope(uuid) to authenticated");
+    // Helper ditulis ulang (+ scope): is_brand_member, is_content_item_member,
+    // can_read_placement, can_edit_placement.
+    for (const fn of [
+      "is_brand_member(p_brand_id uuid",
+      "is_content_item_member(p_content_item_id uuid",
+      "can_read_placement(p_placement_id uuid",
+      "can_edit_placement(p_placement_id uuid",
+    ]) {
+      expect(m16, `0016 harus menulis ulang ${fn}`).toContain(
+        `create or replace function public.${fn}`,
+      );
+    }
+    // 15 policy ditulis ulang dan semuanya menyebut brand_in_scope.
+    expect(m16.match(/drop policy if exists/g)?.length).toBe(15);
+    expect(m16.match(/public\.brand_in_scope\(/g)?.length).toBeGreaterThanOrEqual(15);
+    // Cabang shared TIDAK di-scope (berbagi eksplisit mengalahkan scope).
+    expect(m16).toContain("is_resource_shared_with_me('content_item', content_items.id)");
+    expect(m16).toContain("is_resource_shared_with_me('campaign', campaign_brands.campaign_id)");
+    // Tanpa tabel baru; tanpa pelonggaran (tidak ada using(true)).
+    expect(m16).not.toMatch(/create table/i);
+    expect(m16).not.toMatch(/using\s*\(\s*true\s*\)/i);
+  });
+
+  it("migrasi 0017 membuat 5 tabel Phase 5 + RPC set_visual_order", () => {
+    const m17 =
+      migrationFiles().find((f) => f.name === "0017_visual_planner_templates.sql")?.sql ?? "";
+    // 5 tabel baru + RLS aktif untuk kelimanya.
+    for (const table of [
+      "visual_orders",
+      "campaign_templates",
+      "campaign_template_brands",
+      "content_templates",
+      "content_template_placements",
+    ]) {
+      expect(m17, `0017 harus membuat tabel ${table}`).toContain(
+        `create table if not exists public.${table}`,
+      );
+      expect(m17, `0017 harus mengaktifkan RLS untuk ${table}`).toMatch(
+        new RegExp(`alter table public\\.${table} enable row level security`, "i"),
+      );
+    }
+    // visual_orders: revoke all + grant select saja (tulis hanya via RPC).
+    expect(m17).toContain("revoke all on public.visual_orders from anon, authenticated");
+    expect(m17).toContain("grant select on public.visual_orders to authenticated");
+    expect(m17).toContain('create policy "visual_orders_no_insert"');
+    // 5 trigger scope (pola 0007) + 2 helper template-member.
+    for (const fn of [
+      "validate_visual_order_scope",
+      "validate_campaign_template_scope",
+      "validate_campaign_template_brand_scope",
+      "validate_content_template_scope",
+      "validate_content_template_placement_scope",
+    ]) {
+      expect(m17, `0017 harus berisi trigger ${fn}`).toContain(fn);
+    }
+    expect(m17).toContain("is_campaign_template_member(p_template_id uuid");
+    expect(m17).toContain("is_content_template_member(p_template_id uuid");
+    // RPC set_visual_order: SECURITY DEFINER, search_path terkunci, grant
+    // hanya ke authenticated, dan BADANNYA tidak pernah menyentuh
+    // scheduled_at / content_placements (R5.1 — bukti pemisahan statis).
+    expect(m17).toContain("create or replace function public.set_visual_order(");
+    expect(m17).toContain("grant execute on function public.set_visual_order(uuid, uuid, uuid, uuid[]) to authenticated");
+    const fnBody =
+      m17.match(/create or replace function public\.set_visual_order\([\s\S]*?^end;\n\$\$;/m)?.[0] ?? "";
+    expect(fnBody.length).toBeGreaterThan(0);
+    expect(fnBody).not.toContain("scheduled_at");
+    expect(fnBody).not.toMatch(/update\s+public\.content_placements/i);
+    expect(fnBody).not.toMatch(/insert\s+into\s+public\.content_placements/i);
+    expect(fnBody).toContain("activity_logs");
+    expect(fnBody).toContain("brand_in_scope");
+    // Unik ganda visual_orders: per placement + per posisi.
+    expect(m17).toContain("unique (workspace_id, brand_id, social_channel_id, placement_id)");
+    expect(m17).toContain("unique (workspace_id, brand_id, social_channel_id, position)");
   });
 
   it("pgTAP 04 ada dengan plan(64) + pola placeholder yang benar", () => {
