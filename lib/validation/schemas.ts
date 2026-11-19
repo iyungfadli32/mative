@@ -204,7 +204,11 @@ export function parseTargetMetricsLenient(value: unknown): CampaignTargetMetrics
   if (typeof value !== "object" || value === null || Array.isArray(value)) return {};
   const v = value as Record<string, unknown>;
   const out: CampaignTargetMetrics = {};
-  if (typeof v.target_deliverables === "number" && Number.isInteger(v.target_deliverables) && v.target_deliverables >= 0) {
+  if (
+    typeof v.target_deliverables === "number" &&
+    Number.isInteger(v.target_deliverables) &&
+    v.target_deliverables >= 0
+  ) {
     out.target_deliverables = v.target_deliverables;
   }
   if (typeof v.target_date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v.target_date)) {

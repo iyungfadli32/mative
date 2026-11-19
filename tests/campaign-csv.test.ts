@@ -114,14 +114,13 @@ describe("validateCampaignCsvRow — validasi per baris", () => {
     row.status = "live";
     const bad = validateCampaignCsvRow(row);
     expect(bad.ok).toBe(false);
-    if (!bad.ok) expect(bad.error).toContain("Baris 2");
+    if (!bad.ok) expect(bad.error).toContain("status 'live' tidak dikenal");
   });
   it("nama < 2 karakter, tanggal tidak valid, mulai > selesai ditolak", () => {
     expect(validateCampaignCsvRow({ ...validRow(), name: "A" }).ok).toBe(false);
     expect(validateCampaignCsvRow({ ...validRow(), start_at: "01-10-2026" }).ok).toBe(false);
     expect(
-      validateCampaignCsvRow({ ...validRow(), start_at: "2026-12-31", end_at: "2026-10-01" })
-        .ok,
+      validateCampaignCsvRow({ ...validRow(), start_at: "2026-12-31", end_at: "2026-10-01" }).ok,
     ).toBe(false);
   });
   it("target_deliverables negatif/pecahan dan target_date salah format ditolak", () => {

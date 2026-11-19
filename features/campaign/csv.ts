@@ -61,7 +61,10 @@ export type ValidatedCampaignCsvRow = {
   deliverableTitles: string[];
 };
 
-function parseCsvDate(value: string, field: string): { ok: true; value: string } | { ok: false; error: string } {
+function parseCsvDate(
+  value: string,
+  field: string,
+): { ok: true; value: string } | { ok: false; error: string } {
   const v = value.trim();
   if (v === "") return { ok: true, value: "" };
   const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(v);

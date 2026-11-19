@@ -11,10 +11,7 @@ import { EMPTY_FILTERS } from "@/features/planning/search";
 import { PLANNING_TABLES_UNAVAILABLE_ID } from "@/features/planning/context";
 import { can } from "@/lib/permissions";
 import type { WorkspaceRole } from "@/lib/permissions";
-import {
-  listCampaignTemplates,
-  listContentTemplates,
-} from "@/features/campaign/queries";
+import { listCampaignTemplates, listContentTemplates } from "@/features/campaign/queries";
 import { CAMPAIGN_TABLES_UNAVAILABLE_ID } from "@/features/campaign/constants";
 import {
   CreateCampaignFromTemplateForm,
@@ -56,8 +53,7 @@ async function TemplateContent({
     listContentTemplates(supabase, workspaceId),
     listContentItems(supabase, { workspaceId, ...EMPTY_FILTERS }),
   ]);
-  const unavailable =
-    !campaignTemplates.ok || !contentTemplates.ok || contentItems.unavailable;
+  const unavailable = !campaignTemplates.ok || !contentTemplates.ok || contentItems.unavailable;
   const canManageCampaigns = can(role, "manage_pillars_campaigns");
   const canCreateContent = can(role, "create_edit_content");
   const contentOptions = (contentItems.data ?? []).map((item) => ({
@@ -78,7 +74,9 @@ async function TemplateContent({
       ) : null}
 
       <section>
-        <h2 className="font-semibold">Template campaign ({campaignTemplates.ok ? campaignTemplates.data.length : 0})</h2>
+        <h2 className="font-semibold">
+          Template campaign ({campaignTemplates.ok ? campaignTemplates.data.length : 0})
+        </h2>
         {!campaignTemplates.ok || campaignTemplates.data.length === 0 ? (
           <div className="mt-3">
             <EmptyState
@@ -120,7 +118,9 @@ async function TemplateContent({
       </section>
 
       <section>
-        <h2 className="font-semibold">Template konten ({contentTemplates.ok ? contentTemplates.data.length : 0})</h2>
+        <h2 className="font-semibold">
+          Template konten ({contentTemplates.ok ? contentTemplates.data.length : 0})
+        </h2>
         {!contentTemplates.ok || contentTemplates.data.length === 0 ? (
           <div className="mt-3">
             <EmptyState
@@ -138,8 +138,8 @@ async function TemplateContent({
               >
                 <span className="font-semibold">{t.name}</span>
                 <p className="mt-1 text-sm text-[var(--mt-text-muted)]">
-                  Judul: {t.title} · Brand: {t.brand_name ?? "—"} ·{" "}
-                  {t.placement_channels.length} channel
+                  Judul: {t.title} · Brand: {t.brand_name ?? "—"} · {t.placement_channels.length}{" "}
+                  channel
                 </p>
                 {canCreateContent ? (
                   <div className="mt-2 max-w-xl">

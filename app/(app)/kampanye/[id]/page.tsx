@@ -76,14 +76,15 @@ async function CampaignDetailContent({
 }) {
   const supabase = await getSupabaseServerClient();
   if (!supabase) return <p className="text-sm">Supabase belum dikonfigurasi.</p>;
-  const [campaignOutcome, brands, audiences, deliverablesOutcome, contentItems] =
-    await Promise.all([
+  const [campaignOutcome, brands, audiences, deliverablesOutcome, contentItems] = await Promise.all(
+    [
       getCampaign(supabase, campaignId),
       listBrands(supabase, workspaceId),
       listAudiences(supabase, workspaceId),
       listCampaignDeliverables(supabase, campaignId),
       listContentItems(supabase, { workspaceId, ...EMPTY_FILTERS }),
-    ]);
+    ],
+  );
   const unavailable =
     !campaignOutcome.ok ||
     brands.unavailable ||
@@ -114,8 +115,7 @@ async function CampaignDetailContent({
   const deliverables = deliverablesOutcome.ok ? deliverablesOutcome.data : [];
   const progress = computeCampaignProgress(deliverables);
   const metrics = parseTargetMetricsLenient(campaign.target_metrics);
-  const audienceName =
-    audiences.data.find((a) => a.id === campaign.audience_id)?.name ?? "—";
+  const audienceName = audiences.data.find((a) => a.id === campaign.audience_id)?.name ?? "—";
   const unlinkedItems = (contentItems.data ?? [])
     .filter((item) => {
       const c = (item as unknown as { campaign?: { id: string } | null }).campaign;
@@ -173,7 +173,9 @@ async function CampaignDetailContent({
       </section>
 
       <section className="rounded-2xl border border-[var(--mt-border)] bg-[var(--mt-surface)] p-4">
-        <h2 className="font-semibold">Progres — dihitung dari linked content (bukan ketikan manual)</h2>
+        <h2 className="font-semibold">
+          Progres — dihitung dari linked content (bukan ketikan manual)
+        </h2>
         <p className="mt-1 text-sm">
           Siap tayang (approved): {progress.ready} dari {progress.total} deliverable —{" "}
           {progress.readyPercent}%
@@ -213,15 +215,15 @@ async function CampaignDetailContent({
         ) : (
           <ul className="mt-3 flex flex-col gap-3">
             {deliverables.map((d) => (
-              <li
-                key={d.id}
-                className="rounded-xl border border-[var(--mt-border)] p-3"
-              >
+              <li key={d.id} className="rounded-xl border border-[var(--mt-border)] p-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <Link href={`/konten/${d.id}`} className="font-medium underline">
                     {d.title}
                   </Link>
-                  <StatusBadge label={d.production_status} tone={d.production_status === "approved" ? "success" : "neutral"} />
+                  <StatusBadge
+                    label={d.production_status}
+                    tone={d.production_status === "approved" ? "success" : "neutral"}
+                  />
                   <span className="text-xs text-[var(--mt-text-muted)]">
                     {d.brand_name ?? "tanpa brand"}
                     {d.production_status === "approved" ? " · Siap tayang" : ""}
@@ -239,7 +241,8 @@ async function CampaignDetailContent({
                   <ul className="mt-2 flex flex-col gap-1 text-xs text-[var(--mt-text-muted)]">
                     {d.placements.map((p) => (
                       <li key={p.id}>
-                        {p.channel_platform ?? "Channel"} {p.channel_account ? `(${p.channel_account})` : ""} ·{" "}
+                        {p.channel_platform ?? "Channel"}{" "}
+                        {p.channel_account ? `(${p.channel_account})` : ""} ·{" "}
                         {p.platform_format ?? "format tidak diatur"} ·{" "}
                         {p.scheduled_at ? formatInTimezone(p.scheduled_at) : "belum dijadwalkan"} ·{" "}
                         {p.distribution_status}
@@ -316,8 +319,7 @@ async function CampaignDetailContent({
         ) : (
           <ul className="mt-3 flex flex-col gap-2">
             {channelsOutcome.data.map((ch) => {
-              const brandName =
-                brands.data.find((b) => b.id === ch.brand_id)?.name ?? ch.brand_id;
+              const brandName = brands.data.find((b) => b.id === ch.brand_id)?.name ?? ch.brand_id;
               return (
                 <li key={ch.id}>
                   <Link

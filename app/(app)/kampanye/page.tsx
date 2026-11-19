@@ -96,8 +96,8 @@ async function KampanyeContent({
         <section className="rounded-2xl border border-[var(--mt-border)] bg-[var(--mt-surface)] p-4">
           <h2 className="font-semibold">Impor / Ekspor CSV</h2>
           <p className="mt-1 text-sm text-[var(--mt-text-muted)]">
-            Ekspor menghasilkan file yang bisa diimpor kembali. Impor menolak baris yang tidak
-            valid satu per satu — baris lain tetap masuk.
+            Ekspor menghasilkan file yang bisa diimpor kembali. Impor menolak baris yang tidak valid
+            satu per satu — baris lain tetap masuk.
           </p>
           <div className="mt-3 flex max-w-xl flex-col gap-4">
             <CampaignCsvExportButton workspaceId={workspaceId} />

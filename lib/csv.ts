@@ -12,7 +12,11 @@ export type CsvParseResult = {
 };
 
 /** Parse teks CSV menjadi baris-baris string. Baris pertama = header. */
-export function parseCsv(text: string): { headers: string[]; rows: string[][]; rowNumbers: number[] } {
+export function parseCsv(text: string): {
+  headers: string[];
+  rows: string[][];
+  rowNumbers: number[];
+} {
   const rows: string[][] = [];
   let row: string[] = [];
   let field = "";

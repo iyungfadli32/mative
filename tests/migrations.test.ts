@@ -339,8 +339,7 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
   });
 
   it("migrasi 0016 menegakkan brand scope (P1-A7, Keputusan #9)", () => {
-    const m16 =
-      migrationFiles().find((f) => f.name === "0016_brand_scope.sql")?.sql ?? "";
+    const m16 = migrationFiles().find((f) => f.name === "0016_brand_scope.sql")?.sql ?? "";
     // CHECK bentuk brand_scope: NULL atau array.
     expect(m16).toContain("workspace_members_brand_scope_check");
     expect(m16).toContain("check (brand_scope is null or jsonb_typeof(brand_scope) = 'array')");
@@ -411,9 +410,13 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
     // hanya ke authenticated, dan BADANNYA tidak pernah menyentuh
     // scheduled_at / content_placements (R5.1 — bukti pemisahan statis).
     expect(m17).toContain("create or replace function public.set_visual_order(");
-    expect(m17).toContain("grant execute on function public.set_visual_order(uuid, uuid, uuid, uuid[]) to authenticated");
+    expect(m17).toContain(
+      "grant execute on function public.set_visual_order(uuid, uuid, uuid, uuid[]) to authenticated",
+    );
     const fnBody =
-      m17.match(/create or replace function public\.set_visual_order\([\s\S]*?^end;\n\$\$;/m)?.[0] ?? "";
+      m17.match(
+        /create or replace function public\.set_visual_order\([\s\S]*?^end;\n\$\$;/m,
+      )?.[0] ?? "";
     expect(fnBody.length).toBeGreaterThan(0);
     expect(fnBody).not.toContain("scheduled_at");
     expect(fnBody).not.toMatch(/update\s+public\.content_placements/i);

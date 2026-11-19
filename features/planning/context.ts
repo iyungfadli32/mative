@@ -86,7 +86,8 @@ export async function getCallerBrandScope(
   if (!Array.isArray(scope)) return null;
   return scope.filter(
     (v): v is string =>
-      typeof v === "string" && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(v),
+      typeof v === "string" &&
+      /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(v),
   );
 }
 

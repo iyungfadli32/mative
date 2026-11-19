@@ -38,7 +38,7 @@ tidak dipakai) kini ditegakkan. Bentuk yang dikunci:
 - Array JSON berisi UUID brand, mis. `["<uuid-brand-1>"]` = member hanya
   boleh melihat/memakai brand itu. Array kosong `[]` = tidak ada brand.
 - CHECK di migrasi 0016: `brand_scope IS NULL OR
-  jsonb_typeof(brand_scope) = 'array'`. Elemen yang bukan UUID diabaikan
+jsonb_typeof(brand_scope) = 'array'`. Elemen yang bukan UUID diabaikan
   secara fail-closed oleh helper (tidak pernah melonggarkan akses);
   aplikasi memvalidasi UUID lewat Zod sebelum menulis.
 
@@ -62,10 +62,10 @@ Penegakan tiga lapis (migrasi 0016):
      deliverable-nya yang ter-scope). Unbranded ideas/pillars
      (`brand_id` NULL) tetap terlihat semua member.
 2. **Server actions (pertahanan + pesan jelas):** `getCallerBrandScope`
-   + `brandInScope` di `features/planning/context.ts` /
-   `lib/permissions.ts`; setiap action yang menerima `brandId` menolak
-   brand di luar cakupan dengan pesan "Brand di luar cakupan Anda."
-   SEBELUM menyentuh DB (RLS tetap menolak bila lolos).
+   - `brandInScope` di `features/planning/context.ts` /
+     `lib/permissions.ts`; setiap action yang menerima `brandId` menolak
+     brand di luar cakupan dengan pesan "Brand di luar cakupan Anda."
+     SEBELUM menyentuh DB (RLS tetap menolak bila lolos).
 3. **UI:** editor scope di `/pengaturan/anggota` (hanya owner/admin) —
    tanpa UI, scope hanya bisa diubah lewat SQL.
 
@@ -143,7 +143,7 @@ Unique `(workspace_id, brand_id, channel_id, placement_id)` dan
 `(workspace_id, brand_id, channel_id, position)`.
 
 - Reorder HANYA lewat RPC `set_visual_order(p_workspace_id,
-  p_brand_id, p_channel_id, p_placement_ids uuid[])` (SECURITY
+p_brand_id, p_channel_id, p_placement_ids uuid[])` (SECURITY
   DEFINER, search_path terkunci): validasi 7 poin Dok 06 §4 (auth,
   member aktif, role `manage_pillars_campaigns`, scope brand,
   tenant boundary, placement milik workspace+brand+channel yang
@@ -194,7 +194,7 @@ target_deliverables, target_date, notes, brands, deliverables
   baris = satu campaign + tautan brand + tautan deliverable yang
   ter-resolve), baris tidak valid ditolak PER BARIS dengan pesan jelas;
   laporan hasil lengkap `{total, imported, failed, errors[{row,
-  message}], linkedDeliverables, skippedDeliverables}` + satu entri
+message}], linkedDeliverables, skippedDeliverables}` + satu entri
   `activity_logs`. Tidak ada import sebagian tanpa jejak (R5.4).
 - Parser CSV ditulis sendiri di `lib/csv.ts` (RFC 4180: kutip ganda,
   koma di dalam kutip, baris baru di dalam kutip) — tanpa dependensi

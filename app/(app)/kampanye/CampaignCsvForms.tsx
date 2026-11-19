@@ -7,10 +7,7 @@
 
 import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/Button";
-import {
-  exportCampaignsCsvAction,
-  importCampaignsCsvAction,
-} from "@/features/campaign/actions";
+import { exportCampaignsCsvAction, importCampaignsCsvAction } from "@/features/campaign/actions";
 import { CAMPAIGN_CSV_FILENAME } from "@/features/campaign/constants";
 
 export function CampaignCsvExportButton({ workspaceId }: { workspaceId: string }) {
@@ -73,9 +70,8 @@ export function CampaignCsvImportForm({ workspaceId }: { workspaceId: string }) 
         />
         <span className="text-[13px] font-normal text-[var(--mt-text-muted)]">
           Kolom: name, objective, audience_name, start_at, end_at, status, owner_email,
-          target_deliverables, target_date, notes, brands, deliverables. Baris yang gagal
-          ditolak satu per satu — baris lain tetap diimpor. owner_email hanya bisa diisi
-          email Anda sendiri.
+          target_deliverables, target_date, notes, brands, deliverables. Baris yang gagal ditolak
+          satu per satu — baris lain tetap diimpor. owner_email hanya bisa diisi email Anda sendiri.
         </span>
       </label>
       {state.message ? (

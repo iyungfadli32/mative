@@ -196,7 +196,9 @@ export async function listCampaignTemplates(
   return wrap(async () => {
     const { data, error } = await supabase
       .from("campaign_templates")
-      .select("id, workspace_id, name, source_campaign_id, objective, audience_id, target_metrics, created_by, created_at, campaign_template_brands(brand_id)")
+      .select(
+        "id, workspace_id, name, source_campaign_id, objective, audience_id, target_metrics, created_by, created_at, campaign_template_brands(brand_id)",
+      )
       .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: false });
     if (error) throw error;

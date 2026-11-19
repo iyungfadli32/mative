@@ -47,7 +47,9 @@ export function CampaignTransitionForm({
   if (allowed.length === 0) {
     return (
       <p className="text-sm text-[var(--mt-text-muted)]">
-        Status {CAMPAIGN_STATUS_LABELS[campaign.status as keyof typeof CAMPAIGN_STATUS_LABELS] ?? campaign.status}{" "}
+        Status{" "}
+        {CAMPAIGN_STATUS_LABELS[campaign.status as keyof typeof CAMPAIGN_STATUS_LABELS] ??
+          campaign.status}{" "}
         adalah status akhir — tidak ada transisi lagi.
       </p>
     );
@@ -110,7 +112,13 @@ export function CampaignEditForm({
     <form action={formAction} className="flex flex-col gap-3">
       <input type="hidden" name="campaignId" value={campaign.id} />
       <input type="hidden" name="workspaceId" value={workspaceId} />
-      <Input id="edit-name" name="name" label="Nama campaign" defaultValue={campaign.name} required />
+      <Input
+        id="edit-name"
+        name="name"
+        label="Nama campaign"
+        defaultValue={campaign.name}
+        required
+      />
       <label className="flex flex-col gap-1.5 text-sm font-medium">
         Tujuan (objective)
         <textarea

@@ -209,8 +209,8 @@ export default function VisualPlannerClient({
   return (
     <div className="space-y-6">
       <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-        {VISUAL_PREVIEW_APPROXIMATE_LABEL_ID} Urutan di bawah ini hanya mengatur
-        tampilan feed — jadwal tayang (scheduled_at) tiap placement TIDAK berubah.
+        {VISUAL_PREVIEW_APPROXIMATE_LABEL_ID} Urutan di bawah ini hanya mengatur tampilan feed —
+        jadwal tayang (scheduled_at) tiap placement TIDAK berubah.
       </div>
 
       <section aria-label="Urutan feed">
@@ -218,15 +218,19 @@ export default function VisualPlannerClient({
           Urutan feed — {channelLabel} · {brandName}
         </h2>
         <p className="mt-1 text-sm text-slate-600">
-          Seret kartu (atau pakai tombol Naik/Turun) untuk mengubah urutan, lalu tekan
-          &ldquo;Simpan urutan&rdquo;. Placement yang belum masuk urutan ada di bawah.
+          Seret kartu (atau pakai tombol Naik/Turun) untuk mengubah urutan, lalu tekan &ldquo;Simpan
+          urutan&rdquo;. Placement yang belum masuk urutan ada di bawah.
         </p>
         {orderedItems.length === 0 ? (
           <p className="mt-3 rounded-lg border border-dashed p-4 text-sm text-slate-500">
             Belum ada placement dalam urutan. Tambahkan dari daftar di bawah.
           </p>
         ) : (
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
             <SortableContext items={orderedIds} strategy={verticalListSortingStrategy}>
               <ol className="mt-3 space-y-2">
                 {orderedItems.map((item, index) => (
@@ -237,9 +241,7 @@ export default function VisualPlannerClient({
                     total={orderedItems.length}
                     onMoveUp={() => move(index, -1)}
                     onMoveDown={() => move(index, 1)}
-                    onRemove={() =>
-                      setOrderedIds((ids) => ids.filter((id) => id !== item.id))
-                    }
+                    onRemove={() => setOrderedIds((ids) => ids.filter((id) => id !== item.id))}
                   />
                 ))}
               </ol>
@@ -284,7 +286,8 @@ export default function VisualPlannerClient({
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-medium">{item.content_title}</span>
                   <span className="mt-0.5 block text-xs text-slate-500">
-                    {item.platform_format ?? "format tidak diatur"} · {formatDate(item.scheduled_at)}
+                    {item.platform_format ?? "format tidak diatur"} ·{" "}
+                    {formatDate(item.scheduled_at)}
                     {" · "}Status konten: {item.content_status}
                   </span>
                 </span>

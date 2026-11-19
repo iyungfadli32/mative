@@ -45,9 +45,7 @@ function MemberScopeForm({
   brands: BrandRow[];
   canManageScope: boolean;
 }) {
-  const [mode, setMode] = useState<"all" | "custom">(
-    member.brandScope === null ? "all" : "custom",
-  );
+  const [mode, setMode] = useState<"all" | "custom">(member.brandScope === null ? "all" : "custom");
   const [state, formAction, pending] = useActionState(setMemberBrandScopeAction, {
     ok: false,
     message: "",
@@ -57,9 +55,7 @@ function MemberScopeForm({
       ? "Semua brand"
       : member.brandScope.length === 0
         ? "Tidak ada brand"
-        : member.brandScope
-            .map((id) => brands.find((b) => b.id === id)?.name ?? id)
-            .join(", ");
+        : member.brandScope.map((id) => brands.find((b) => b.id === id)?.name ?? id).join(", ");
   if (!canManageScope) return <span className="text-sm">{scopeLabel}</span>;
   return (
     <details className="text-sm">

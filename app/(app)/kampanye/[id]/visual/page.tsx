@@ -98,9 +98,10 @@ async function VisualPlannerContent({
       : channelsForBrand[0]?.id;
   const selectedBrand = brands.data.find((b) => b.id === selectedBrandId);
   const selectedChannel = channels.find((c) => c.id === selectedChannelId);
-  const placementsOutcome = selectedBrandId && selectedChannelId
-    ? await listPlannerPlacements(supabase, workspaceId, selectedBrandId, selectedChannelId)
-    : { ok: true as const, data: [] };
+  const placementsOutcome =
+    selectedBrandId && selectedChannelId
+      ? await listPlannerPlacements(supabase, workspaceId, selectedBrandId, selectedChannelId)
+      : { ok: true as const, data: [] };
 
   return (
     <div className="flex flex-col gap-6">

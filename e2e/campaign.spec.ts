@@ -93,9 +93,7 @@ async function createContent(
   await expect(page.getByRole("heading", { name: "Buat konten" })).toBeVisible();
   await page.getByLabel(/Brand/).selectOption({ label: `Brand E2E ${slug}` });
   await page.getByLabel("Judul konten").fill(contentTitle);
-  await page
-    .getByLabel("Ringkasan perubahan (wajib — tercatat di versi)")
-    .fill("Versi awal (v1)");
+  await page.getByLabel("Ringkasan perubahan (wajib — tercatat di versi)").fill("Versi awal (v1)");
   await page.getByRole("button", { name: "Buat konten (v1)" }).click();
   await expect(page.getByText("Konten dibuat beserta versi v1.")).toBeVisible({ timeout: 30000 });
 }
@@ -124,7 +122,9 @@ test.describe("penerimaan Phase 5 — campaign & visual planning @needs-db", () 
     await createContent(page, slug, contentTitle);
     await page.goto("/kampanye");
     await page.getByRole("link", { name: campaignName }).click();
-    await page.getByLabel("Konten yang ditautkan").selectOption({ label: new RegExp(contentTitle) });
+    await page
+      .getByLabel("Konten yang ditautkan")
+      .selectOption({ label: `${contentTitle} — Brand E2E ${slug}` });
     await page.getByRole("button", { name: "Tautkan konten" }).click();
     await expect(page.getByText("Konten ditautkan ke campaign.")).toBeVisible({ timeout: 30000 });
     await expect(page.getByText("Siap tayang (approved): 0 dari 1 deliverable")).toBeVisible();
@@ -168,7 +168,9 @@ test.describe("penerimaan Phase 5 — campaign & visual planning @needs-db", () 
     });
     await placementDetails.locator("summary", { hasText: "Tambah placement" }).click();
     await placementDetails.locator('select[name="socialChannelId"]').selectOption({ index: 1 });
-    await placementDetails.getByLabel("Jadwal tayang (opsional — kosong = backlog)").fill("2026-12-10T10:00");
+    await placementDetails
+      .getByLabel("Jadwal tayang (opsional — kosong = backlog)")
+      .fill("2026-12-10T10:00");
     await placementDetails.getByLabel("Caption per channel").fill("Caption IG E2E");
     await placementDetails.getByRole("button", { name: "Tambah placement" }).click();
     await expect(page.getByText("Placement ditambahkan (versi v1).")).toBeVisible({
@@ -178,7 +180,9 @@ test.describe("penerimaan Phase 5 — campaign & visual planning @needs-db", () 
     // Tautkan konten ke campaign, lalu buka visual planner.
     await page.goto("/kampanye");
     await page.getByRole("link", { name: campaignName }).click();
-    await page.getByLabel("Konten yang ditautkan").selectOption({ label: new RegExp(contentTitle) });
+    await page
+      .getByLabel("Konten yang ditautkan")
+      .selectOption({ label: `${contentTitle} — Brand E2E ${slug}` });
     await page.getByRole("button", { name: "Tautkan konten" }).click();
     await expect(page.getByText("Konten ditautkan ke campaign.")).toBeVisible({ timeout: 30000 });
     await page.getByRole("link", { name: `Akun IG E2E ${slug}` }).click();
@@ -200,7 +204,8 @@ test.describe("penerimaan Phase 5 — campaign & visual planning @needs-db", () 
       timeout: 30000,
     });
     await page.reload();
-    const afterText = (await page.locator("ol li", { hasText: contentTitle }).first().textContent()) ?? "";
+    const afterText =
+      (await page.locator("ol li", { hasText: contentTitle }).first().textContent()) ?? "";
     expect(afterText).toBe(beforeText);
   });
 

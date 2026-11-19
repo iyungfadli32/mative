@@ -169,7 +169,8 @@ export async function updateCampaignAction(
   }
   const metrics = parsed.data.targetMetrics;
   const targetMetrics: Record<string, unknown> = {};
-  if (metrics.target_deliverables !== undefined) targetMetrics.target_deliverables = metrics.target_deliverables;
+  if (metrics.target_deliverables !== undefined)
+    targetMetrics.target_deliverables = metrics.target_deliverables;
   if (metrics.target_date !== undefined) targetMetrics.target_date = metrics.target_date;
   if (metrics.notes !== undefined) targetMetrics.notes = metrics.notes;
   const { error } = await supabase
@@ -416,9 +417,11 @@ export async function saveCampaignAsTemplateAction(
     .single();
   if (error) return fail(dbErrorMessage(error, "Gagal menyimpan template"));
   if (parsed.data.brandIds.length > 0) {
-    const { error: linkError } = await supabase.from("campaign_template_brands").insert(
-      parsed.data.brandIds.map((brandId) => ({ template_id: template.id, brand_id: brandId })),
-    );
+    const { error: linkError } = await supabase
+      .from("campaign_template_brands")
+      .insert(
+        parsed.data.brandIds.map((brandId) => ({ template_id: template.id, brand_id: brandId })),
+      );
     if (linkError) return fail(dbErrorMessage(linkError, "Gagal menautkan brand template"));
   }
   revalidatePath("/template");
@@ -444,7 +447,9 @@ export async function createCampaignFromTemplateAction(
     return fail("Peran Anda tidak boleh membuat campaign.");
   const { data: template, error: templateError } = await supabase
     .from("campaign_templates")
-    .select("id, workspace_id, objective, audience_id, target_metrics, campaign_template_brands(brand_id)")
+    .select(
+      "id, workspace_id, objective, audience_id, target_metrics, campaign_template_brands(brand_id)",
+    )
     .eq("id", parsed.data.templateId)
     .single();
   if (templateError || !template || template.workspace_id !== parsed.data.workspaceId) {
@@ -483,9 +488,9 @@ export async function createCampaignFromTemplateAction(
     .single();
   if (error) return fail(dbErrorMessage(error, "Gagal membuat campaign dari template"));
   if (brandIds.length > 0) {
-    const { error: linkError } = await supabase.from("campaign_brands").insert(
-      brandIds.map((brandId) => ({ campaign_id: campaign.id, brand_id: brandId })),
-    );
+    const { error: linkError } = await supabase
+      .from("campaign_brands")
+      .insert(brandIds.map((brandId) => ({ campaign_id: campaign.id, brand_id: brandId })));
     if (linkError) return fail(dbErrorMessage(linkError, "Gagal menautkan brand campaign"));
   }
   revalidateCampaign(campaign.id);
@@ -656,7 +661,9 @@ export async function createContentFromTemplateAction(
       })),
     );
     if (placementError) {
-      return fail(dbErrorMessage(placementError, "Konten dibuat, tetapi placement template gagal dibuat"));
+      return fail(
+        dbErrorMessage(placementError, "Konten dibuat, tetapi placement template gagal dibuat"),
+      );
     }
   }
   revalidatePath("/konten");
@@ -696,8 +703,7 @@ export async function exportCampaignsCsvAction(formData: FormData): Promise<Camp
       status: campaign.status,
       // Batas jujur: email member lain tidak bisa dibaca dari klien aplikasi
       // (auth.users hanya admin); hanya email pemanggil sendiri yang diisi.
-      ownerEmail:
-        campaign.owner_user_id === user.id ? (user.email ?? "") : "",
+      ownerEmail: campaign.owner_user_id === user.id ? (user.email ?? "") : "",
       targetDeliverables:
         metrics.target_deliverables !== undefined ? String(metrics.target_deliverables) : "",
       targetDate: metrics.target_date ?? "",
@@ -802,12 +808,18 @@ export async function importCampaignsCsvAction(
       const { found, ambiguous } = resolveByName(audiences, d.audienceName);
       if (ambiguous) {
         report.failed += 1;
-        report.errors.push({ row: rowNumber, message: `audience '${d.audienceName}' ambigu (ada lebih dari satu dengan nama itu).` });
+        report.errors.push({
+          row: rowNumber,
+          message: `audience '${d.audienceName}' ambigu (ada lebih dari satu dengan nama itu).`,
+        });
         continue;
       }
       if (!found) {
         report.failed += 1;
-        report.errors.push({ row: rowNumber, message: `audience '${d.audienceName}' tidak ditemukan di workspace ini.` });
+        report.errors.push({
+          row: rowNumber,
+          message: `audience '${d.audienceName}' tidak ditemukan di workspace ini.`,
+        });
         continue;
       }
       audienceId = found.id;
@@ -819,13 +831,19 @@ export async function importCampaignsCsvAction(
       const { found, ambiguous } = resolveByName(brands, brandName);
       if (ambiguous) {
         report.failed += 1;
-        report.errors.push({ row: rowNumber, message: `brand '${brandName}' ambigu (ada lebih dari satu dengan nama itu).` });
+        report.errors.push({
+          row: rowNumber,
+          message: `brand '${brandName}' ambigu (ada lebih dari satu dengan nama itu).`,
+        });
         brandFailed = true;
         break;
       }
       if (!found) {
         report.failed += 1;
-        report.errors.push({ row: rowNumber, message: `brand '${brandName}' tidak ditemukan di workspace ini (atau di luar scope Anda).` });
+        report.errors.push({
+          row: rowNumber,
+          message: `brand '${brandName}' tidak ditemukan di workspace ini (atau di luar scope Anda).`,
+        });
         brandFailed = true;
         break;
       }
@@ -842,7 +860,10 @@ export async function importCampaignsCsvAction(
     const nameKey = d.name.toLowerCase();
     if (existingNames.has(nameKey) || importedNames.has(nameKey)) {
       report.failed += 1;
-      report.errors.push({ row: rowNumber, message: `nama campaign '${d.name}' sudah dipakai di workspace ini.` });
+      report.errors.push({
+        row: rowNumber,
+        message: `nama campaign '${d.name}' sudah dipakai di workspace ini.`,
+      });
       continue;
     }
     const metrics: Record<string, unknown> = {};
@@ -874,9 +895,9 @@ export async function importCampaignsCsvAction(
     }
     importedNames.add(nameKey);
     if (brandIds.length > 0) {
-      await supabase.from("campaign_brands").insert(
-        brandIds.map((brandId) => ({ campaign_id: campaign.id, brand_id: brandId })),
-      );
+      await supabase
+        .from("campaign_brands")
+        .insert(brandIds.map((brandId) => ({ campaign_id: campaign.id, brand_id: brandId })));
     }
     // Deliverable: resolve per judul — tak ditemukan/ambigu dilewati + dicatat.
     for (const title of d.deliverableTitles) {
@@ -885,20 +906,26 @@ export async function importCampaignsCsvAction(
         .select("id, title, brand_id")
         .eq("workspace_id", workspaceId)
         .ilike("title", title);
-      const matches = (items ?? []).filter(
-        (it) => it.title.toLowerCase() === title.toLowerCase(),
-      );
+      const matches = (items ?? []).filter((it) => it.title.toLowerCase() === title.toLowerCase());
       if (matches.length === 0) {
         report.skippedDeliverables.push({ row: rowNumber, title, reason: "tidak ditemukan" });
         continue;
       }
       if (matches.length > 1) {
-        report.skippedDeliverables.push({ row: rowNumber, title, reason: "ambigu (lebih dari satu)" });
+        report.skippedDeliverables.push({
+          row: rowNumber,
+          title,
+          reason: "ambigu (lebih dari satu)",
+        });
         continue;
       }
       const item = matches[0];
       if (!brandInScope(scope, item.brand_id)) {
-        report.skippedDeliverables.push({ row: rowNumber, title, reason: "brand di luar scope Anda" });
+        report.skippedDeliverables.push({
+          row: rowNumber,
+          title,
+          reason: "brand di luar scope Anda",
+        });
         continue;
       }
       const { error: linkError } = await supabase
@@ -906,7 +933,11 @@ export async function importCampaignsCsvAction(
         .update({ campaign_id: campaign.id })
         .eq("id", item.id);
       if (linkError) {
-        report.skippedDeliverables.push({ row: rowNumber, title, reason: `gagal ditautkan (${linkError.message})` });
+        report.skippedDeliverables.push({
+          row: rowNumber,
+          title,
+          reason: `gagal ditautkan (${linkError.message})`,
+        });
         continue;
       }
       report.linkedDeliverables += 1;
