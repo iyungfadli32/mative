@@ -114,7 +114,13 @@ test.describe("penerimaan Phase 5 — campaign & visual planning @needs-db", () 
 
     // Detail campaign: progres 0 dari 0, target 3 field tampil.
     await page.getByRole("link", { name: campaignName }).click();
-    await expect(page.getByRole("heading", { name: campaignName })).toBeVisible();
+    // Timeout eksplisit: navigasi ke detail pernah gagal 1× di run penuh
+    // (heading tak muncul dalam default 5 dtk) padahal run ulang solo
+    // lolos — flake timing, bukan cacat produk (pola yang sama seperti
+    // openContentDetail di publishing.spec.ts).
+    await expect(page.getByRole("heading", { name: campaignName })).toBeVisible({
+      timeout: 30000,
+    });
     await expect(page.getByText("Siap tayang (approved): 0 dari 0 deliverable")).toBeVisible();
     await expect(page.getByText("Target: 5 deliverable")).toBeVisible();
 
