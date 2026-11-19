@@ -22,7 +22,7 @@ function migrationFiles(): Array<{ name: string; sql: string }> {
 }
 
 describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
-  it("memiliki 19 migrasi berversi berurutan 0001–0019", () => {
+  it("memiliki 20 migrasi berversi berurutan 0001–0020", () => {
     const files = migrationFiles();
     expect(files.map((f) => f.name)).toEqual([
       "0001_profiles.sql",
@@ -44,6 +44,7 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
       "0017_visual_planner_templates.sql",
       "0018_set_visual_order_fixes.sql",
       "0019_brands_insert_scope_fix.sql",
+      "0020_publishing_foundation.sql",
     ]);
   });
 
@@ -576,6 +577,87 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
     expect(test05).toContain("T10e M5.4");
     expect(test05).toContain("T10f M5.4");
     expect(test05).toContain("set_visual_order");
+  });
+
+  it("migrasi 0020 membuat 3 tabel publishing + 7 RPC + preflight (Phase 6)", () => {
+    const m20 =
+      migrationFiles().find((f) => f.name === "0020_publishing_foundation.sql")?.sql ?? "";
+    // 3 tabel baru + RLS aktif untuk ketiganya.
+    for (const table of ["publishing_jobs", "publishing_attempts", "published_posts"]) {
+      expect(m20, `0020 harus membuat tabel ${table}`).toContain(
+        `create table if not exists public.${table}`,
+      );
+      expect(m20, `0020 harus mengaktifkan RLS untuk ${table}`).toMatch(
+        new RegExp(`alter table public\\.${table} enable row level security`, "i"),
+      );
+      expect(m20, `0020 harus revoke-all + grant select saja untuk ${table}`).toContain(
+        `revoke all on public.${table} from anon, authenticated`,
+      );
+      expect(m20).toContain(`grant select on public.${table} to authenticated`);
+    }
+    // 7 RPC + backoff: SECURITY DEFINER, search_path terkunci, grant
+    // hanya ke authenticated.
+    for (const fn of [
+      "publishing_preflight",
+      "create_publishing_job",
+      "claim_publishing_job",
+      "process_publishing_jobs",
+      "retry_publishing_job",
+      "cancel_publishing_job",
+      "confirm_publishing_job",
+      "publishing_backoff_minutes",
+    ]) {
+      expect(m20, `0020 harus berisi fungsi ${fn}`).toContain(fn);
+    }
+    expect(m20).toMatch(/security definer/i);
+    expect(m20).toMatch(/search_path = public, pg_temp/);
+    // Helper visibilitas v1.1 (member + brand scope, pola 0016); helper
+    // lama is_publishing_job_member sudah dihapus sebelum live.
+    expect(m20).toContain("is_publishing_job_visible(p_job_id uuid");
+    expect(m20).toContain("is_publishing_post_visible(p_post_id uuid");
+    expect(m20).not.toContain("create or replace function public.is_publishing_job_member");
+    expect(m20).toContain("public.brand_in_scope(ci.brand_id)");
+    // TIDAK ADA fungsi adapter provider (manual-only, Decision #3).
+    for (const fn of [
+      "uploadOrCreatePost",
+      "getPublishStatus",
+      "fetchPostMetadata",
+      "fetchAnalytics",
+    ]) {
+      expect(m20, `0020 TIDAK BOLEH berisi adapter ${fn}`).not.toContain(fn);
+    }
+    // Indeks partial idempotency (ASUMSI-6.2) + CHECK provider null.
+    expect(m20).toContain("idx_publishing_jobs_idempotency_active");
+    expect(m20).toContain("where status <> 'cancelled'");
+    expect(m20).toContain("constraint publishing_jobs_provider_job_id_null_check");
+    expect(m20).toContain("constraint published_posts_provider_post_id_null_check");
+    expect(m20).toContain("check (confirmation_source in ('manual_user_confirmation'))");
+    // Preflight TIDAK PERNAH melempar (mengembalikan jsonb); process loop
+    // maks 20; claim atomik.
+    expect(m20).toContain("stable\nsecurity definer");
+    expect(m20).toContain("exit when v_n >= 20");
+    expect(m20).toContain("for update skip locked");
+    // Policy INSERT hanya WITH CHECK (regresi 0017 — pglast tidak menangkap).
+    expect(m20).toContain(
+      "on public.publishing_jobs for insert to authenticated with check (false);",
+    );
+    // pgTAP 06 v1.0: 109 asersi, mencakup preflight + create + process +
+    // confirm + cancel + retry + RLS scope.
+    const test06 = readFileSync(path.join(APP_ROOT, "supabase/tests/06_rls_phase6.sql"), "utf8");
+    expect(test06).toContain("select plan(109);");
+    expect(test06).toContain("T2a preflight p1 lolos");
+    expect(test06).toContain("T20c job p5 berstatus published sesudah konfirmasi manual");
+    expect(test06).toContain("T32b B hanya melihat 6 dari 7 job WS-A");
+  });
+
+  it("pgTAP 06 ada dengan plan(109) + pola placeholder yang benar", () => {
+    const test06 = readFileSync(path.join(APP_ROOT, "supabase/tests/06_rls_phase6.sql"), "utf8");
+    expect(test06).toContain("select plan(109);");
+    expect(test06).not.toContain("094e8752-eef4-4f0e-b6ae-2d5813445018");
+    expect(test06).not.toContain("aabb1dab-77c1-4659-af0e-c703c9de279c");
+    expect(test06).toContain("select * from finish();");
+    expect(test06).toContain("publishing_preflight");
+    expect(test06).toContain("confirm_publishing_job");
   });
 });
 
