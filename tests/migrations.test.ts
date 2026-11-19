@@ -22,7 +22,7 @@ function migrationFiles(): Array<{ name: string; sql: string }> {
 }
 
 describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
-  it("memiliki 20 migrasi berversi berurutan 0001–0020", () => {
+  it("memiliki 21 migrasi berversi berurutan 0001–0021", () => {
     const files = migrationFiles();
     expect(files.map((f) => f.name)).toEqual([
       "0001_profiles.sql",
@@ -45,6 +45,7 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
       "0018_set_visual_order_fixes.sql",
       "0019_brands_insert_scope_fix.sql",
       "0020_publishing_foundation.sql",
+      "0021_analytics_foundation.sql",
     ]);
   });
 
@@ -658,6 +659,164 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
     expect(test06).toContain("select * from finish();");
     expect(test06).toContain("publishing_preflight");
     expect(test06).toContain("confirm_publishing_job");
+  });
+
+  it("migrasi 0021 membuat 6 tabel analytics + RPC impor + seed 14 metrik (Phase 7)", () => {
+    const m21 =
+      migrationFiles().find((f) => f.name === "0021_analytics_foundation.sql")?.sql ?? "";
+    // 6 tabel baru + RLS aktif untuk keenamnya.
+    for (const table of [
+      "metric_definitions",
+      "analytics_snapshots",
+      "content_metrics",
+      "campaign_metrics",
+      "integration_events",
+      "channel_credentials",
+    ]) {
+      expect(m21, `0021 harus membuat tabel ${table}`).toContain(
+        `create table if not exists public.${table}`,
+      );
+      expect(m21, `0021 harus mengaktifkan RLS untuk ${table}`).toMatch(
+        new RegExp(`alter table public\\.${table} enable row level security`, "i"),
+      );
+      expect(m21, `0021 harus revoke-all untuk ${table}`).toContain(
+        `revoke all on public.${table} from anon, authenticated`,
+      );
+    }
+    // Grant select untuk 4 tabel; integration_events dapat select+insert
+    // (pola actor — ditangani terpisah di bawah).
+    for (const table of [
+      "metric_definitions",
+      "analytics_snapshots",
+      "content_metrics",
+      "campaign_metrics",
+    ]) {
+      expect(m21, `0021 harus grant select untuk ${table}`).toContain(
+        `grant select on public.${table} to authenticated`,
+      );
+    }
+    expect(m21).toContain("grant select, insert on public.integration_events to authenticated");
+    expect(m21, "0021 TIDAK BOLEH grant apa pun ke channel_credentials").not.toMatch(
+      /grant\s+\w+\s+on\s+public\.channel_credentials/i,
+    );
+    expect(m21, "0021 TIDAK BOLEH punya policy channel_credentials").not.toMatch(
+      /create\s+policy\s+"[^"]+"\s+on\s+public\.channel_credentials/i,
+    );
+    // RPC impor + backoff + TTL: SECURITY DEFINER/INVOKER, search_path
+    // terkunci, grant hanya ke authenticated.
+    for (const fn of [
+      "import_analytics_snapshot",
+      "integration_backoff_seconds",
+      "analytics_snapshot_is_stale",
+    ]) {
+      expect(m21, `0021 harus berisi fungsi ${fn}`).toContain(fn);
+    }
+    expect(m21).toMatch(/security definer/i);
+    expect(m21).toMatch(/search_path = public, pg_temp/);
+    expect(m21).toContain(
+      "grant execute on function public.import_analytics_snapshot(uuid, uuid, date, date, text, jsonb) to authenticated",
+    );
+    // Helper visibilitas (member + brand scope, pola 0016) + fail-safe
+    // multi-brand; viewer_client TIDAK ADA di daftar peran (komentar
+    // di-strip dulu — komentar memang menyebut viewer_client saat
+    // menjelaskan penolakan itu).
+    for (const fn of [
+      "is_unlimited_scope(p_workspace_id uuid",
+      "is_analytics_snapshot_visible(p_snapshot_id uuid",
+      "is_content_metric_visible(p_metric_id uuid",
+      "is_campaign_metric_visible(p_metric_id uuid",
+    ]) {
+      expect(m21, `0021 harus berisi helper ${fn}`).toContain(
+        `create or replace function public.${fn}`,
+      );
+    }
+    expect(m21).toContain("s.brand_id is null and public.is_unlimited_scope(s.workspace_id)");
+    const m21NoComments = m21.replace(/--[^\n]*/g, "");
+    expect(m21NoComments, "viewer_client TIDAK BOLEH ada di kode 0021").not.toContain(
+      "viewer_client",
+    );
+    // Seed 14 definisi metrik (12 impor + 2 turunan) + formula turunan.
+    for (const key of [
+      "reach",
+      "impressions",
+      "views",
+      "video_views",
+      "engagements",
+      "likes",
+      "comments",
+      "shares",
+      "saves",
+      "clicks",
+      "followers_net_change",
+      "conversions",
+      "engagement_rate",
+      "publishing_adherence",
+    ]) {
+      expect(m21, `0021 harus men-seed metrik ${key}`).toContain(`'${key}'`);
+    }
+    expect(m21).toContain("engagements / reach");
+    expect(m21).toContain("publishing_jobs");
+    // CHECK connection_status diperluas 'disabled' (ASUMSI-7B) + CHECK
+    // kunci/nilai/periode/tipe event/provider + indeks partial unique.
+    expect(m21).toContain("check (connection_status in ('not_connected', 'manual', 'disabled'))");
+    expect(m21).toContain("constraint content_metrics_key_check");
+    expect(m21).toContain("constraint content_metrics_value_check");
+    expect(m21).toContain("constraint analytics_snapshots_period_check");
+    expect(m21).toContain("constraint integration_events_type_check");
+    expect(m21).toContain("constraint channel_credentials_provider_check");
+    expect(m21).toContain("idx_metric_definitions_global_unique");
+    expect(m21).toContain("idx_content_metrics_snapshot_subject_key");
+    // retrieved_at pakai clock_timestamp() (bukan now() — pelajaran 31).
+    expect(m21).toContain("clock_timestamp(), btrim(p_raw_reference)");
+    // Backoff 60/300/900 + TTL 24 jam (ASUMSI-7D).
+    expect(m21).toContain("when p_attempt_number <= 1 then 60");
+    expect(m21).toContain("when p_attempt_number = 2 then 300");
+    expect(m21).toContain("else 900");
+    expect(m21).toContain("interval '24 hours'");
+    // RPC impor TIDAK PERNAH melempar (mengembalikan jsonb kode galat).
+    for (const code of [
+      "INVALID_METRIC",
+      "INVALID_UNIT",
+      "DUPLICATE_METRIC",
+      "INVALID_SUBJECT",
+      "INVALID_PERIOD",
+      "EMPTY_METRICS",
+      "FORBIDDEN",
+    ]) {
+      expect(m21, `0021 harus mengembalikan kode ${code}`).toContain(code);
+    }
+    // TIDAK ADA fungsi adapter provider (adapter DISABLED, ASUMSI-7B).
+    for (const fn of [
+      "uploadOrCreatePost",
+      "getPublishStatus",
+      "fetchPostMetadata",
+      "fetchAnalytics",
+    ]) {
+      expect(m21, `0021 TIDAK BOLEH berisi adapter ${fn}`).not.toContain(fn);
+    }
+    // Policy INSERT hanya WITH CHECK (regresi 0017 — pglast tidak menangkap).
+    expect(m21).toContain(
+      "on public.content_metrics for insert to authenticated with check (false);",
+    );
+  });
+
+  it("pgTAP 07 ada dengan plan(77) + pola placeholder yang benar", () => {
+    const test07 = readFileSync(path.join(APP_ROOT, "supabase/tests/07_rls_phase7.sql"), "utf8");
+    expect(test07).toContain("select plan(77);");
+    expect(test07).not.toContain("094e8752-eef4-4f0e-b6ae-2d5813445018");
+    expect(test07).not.toContain("aabb1dab-77c1-4659-af0e-c703c9de279c");
+    expect(test07).toContain("select * from finish();");
+    expect(test07).toContain("import_analytics_snapshot");
+    expect(test07).toContain("T2a impor Brand A (4 baris) lolos");
+    expect(test07).toContain("T5b A (viewer_client WS-B7) melihat 0 snapshot");
+    expect(test07).toContain("T13b agregat campaign reach = 1500");
+    // Cleanup daun → akar (pelajaran 06 v1.0): brands dihapus SETELAH
+    // content_items, dan katalog global metric_definitions TIDAK dihapus.
+    expect(test07).toContain("delete from public.content_items where workspace_id in");
+    const brandsPos = test07.indexOf("delete from public.brands where workspace_id in");
+    const itemsPos = test07.indexOf("delete from public.content_items where workspace_id in");
+    expect(brandsPos).toBeGreaterThan(itemsPos);
+    expect(test07).not.toContain("delete from public.metric_definitions");
   });
 });
 
