@@ -425,7 +425,8 @@ Sama seperti Phase 3 (`docs/apply-migrations.md`): proyek Supabase
 "mative" ref `kwyqtlxglhlvtghfrnhr`, dashboard
 https://supabase.com/dashboard/project/kwyqtlxglhlvtghfrnhr. JANGAN
 sentuh pengguna Auth (khususnya `mative-test-a@` / `mative-test-b@` /
-`mative-e2e@example.com` — UID `cf394752-bf52-473c-a380-6d4d2740ff30`);
+`mative-e2e@example.com` — UID `ef1c74e3-4a55-4e56-8799-db8f9a194f09`
+(dibuat ulang 2026-11-19 18:49 WIB);
 JANGAN hapus data seed; JANGAN ubah pengaturan Auth. Izin jaringan
 Supabase allow_always sudah berlaku — tidak ada kartu persetujuan baru
 yang diharapkan.
@@ -615,10 +616,61 @@ Phase 6), timezone source of truth item vs placement (ASUMSI-6.6,
 Phase 6), threshold evaluasi AI (Phase 8 step 8.9), threshold performa
 (Phase 9 step 9.5).
 
-## 11. Deklarasi — MENUNGGU BUKTI LIVE
+## 11. Deklarasi — LULUS (dinyatakan parent 2026-11-19 20:24 WIB)
 
-**Belum diisi.** Parent mengisi setelah §8 langkah 1–3 lolos live:
-pgTAP 04 64/64, e2e approval (penerimaan + smoke) lolos, regresi
-planning 4/4 + production 3/3 lolos, residu dibersihkan. Setelah itu:
-buku rencana 6/11 = 55%, `MEMORY.md`, `completions.jsonl`, pesan
-milestone ke user, lalu spawn koordinator Phase 5.
+**Phase 4 LULUS.** Tiga gerbang live lolos, dan parent memverifikasi
+langsung dari disk + perintah (bukan hanya dari laporan koordinator):
+
+| Gerbang | Bukti |
+| ------- | ----- |
+| Migrasi 0001–0015 live | 0013 diterapkan 17:40 WIB, 0014 17:54 WIB, 0015 18:32–18:35 WIB — semua terverifikasi live (4 tabel + RLS ×4 + 16 policy; 7 fungsi, 0 grant helper ke authenticated; guard APPROVAL_REQUIRED; CHECK notifikasi kini mencakup 'placement'; definisi `validate_notification_scope()` memuat cabang placement) |
+| pgTAP 04 v1.4 (commit `65ce724`) | **64/64 PASS live** 18:36–18:42 WIB, `finish()` 0 baris, nol "not ok", residu 0 |
+| e2e live (akun uji segar UID `ef1c74e3-…`, kredensial diverifikasi HTTP 200 ke endpoint Auth dulu) | `approval.spec.ts` **2 passed + 1 skipped** (dua-peran SKIP — diharapkan, butuh akun approver kedua); `planning.spec.ts` **4/4**; `production.spec.ts` **3/3** |
+
+### Saga pgTAP 04 (semua gagal sebelum v1.4 adalah cacat file tes, kecuali satu)
+
+- v1.0 gagal 18:01 WIB — 23514 di SETUP (CHECK `social_channels` menolak 'disconnected') → perbaikan v1.1 (`e928c1b`).
+- v1.1 gagal 18:08 WIB — 42703 di SETUP (kolom `resource_shares.created_by` tidak ada; kolom 0005 adalah `shared_by` NOT NULL) → v1.2 (`28a8f4c`).
+- v1.2 gagal 18:13 WIB — 42883 di T5 (`is(bigint, integer)` tanpa overload; 5 assert count tanpa cast `::int`) → v1.3 (`4f4262e`).
+- v1.3 gagal 18:16–18:20 WIB — 42501 di T5 (authenticated TIDAK PUNYA grant UPDATE/DELETE pada `approval_decisions` — 0013:208/212 revoke all + grant select saja, sesuai desain append-only; cek privilege Postgres mendahului RLS, jadi 0-baris yang diharapkan tidak pernah terjadi) → v1.4 (`65ce724`, T5/T5b ditulis ulang sebagai `throws_ok` 42501 — bukti DENY yang lebih kuat; TIDAK ada grant yang ditambah).
+- v1.4 run pertama gagal 18:27–18:30 WIB — P0001 di **T16 SETUP** (bukan T2 seperti ditebak browser task): **CACAT PRODUK NYATA** — `create_approval_request` untuk placement selalu crash saat menulis notifikasi 'approval_requested', karena trigger `validate_notification_scope()` (0009) tidak punya cabang 'placement' (v_ws NULL → raise) DAN CHECK `notifications_target_type_check` tidak mencakup 'placement' (akan gagal 23514 berikutnya). Ketiga penulis notifikasi 0014 (create:254, decide:489, reapproval:653) memakai target_type request — jadi SELURUH alur approval placement di produksi rusak; e2e lokal tidak menangkapnya (hanya alur content_item). Perbaikan = **migrasi 0015** (commit `e307ed0`): CHECK diperluas + cabang placement di trigger (workspace lewat content_placements → content_items). Diterapkan + terverifikasi live 18:35 WIB; residu 0/0.
+- v1.4 run ulang **64/64 PASS** 18:36–18:42 WIB. Migrasi TIDAK PERNAH dilonggarkan demi tes lolos.
+
+### Saga e2e (run 1 gagal di kredensial, run 2 lolos penuh)
+
+- Run 1 (18:46 WIB): penerimaan gagal di sign-in ("Email atau kata sandi salah"); smoke lolos; dua-peran SKIP. Diagnosis terverifikasi: kata sandi lama tidak cocok di endpoint Auth (HTTP 400 `invalid_credentials`) — bukan cacat aplikasi. Akun dibuat ulang 18:49 WIB dengan kata sandi baru dari parent (huruf+angka saja), UID baru `ef1c74e3-4a55-4e56-8799-db8f9a194f09`, Auto Confirm ON.
+- Run 2 (20:21 WIB): kredensial diverifikasi HTTP 200 dulu, lalu **semua lolos** (tabel di atas). Regresi production sempat gagal 1× di run pertama ("Template Brief Standar" menampilkan "Template (0)" padahal template default SUDAH ada di DB sejak 20:15 WIB, terverifikasi via REST) — lolos 3/3 di run ulang. Dugaan (BELUM terbukti): koneksi VM→Supabase sempat putus dan `runQuery` menelan galat list menjadi daftar kosong. Tindak lanjut hardening (di luar Phase 4): tampilkan galat query, bukan daftar kosong.
+
+### Cacat aplikasi yang ditemukan & diperbaiki selama e2e (11 commit, semua diverifikasi parent dari disk)
+
+1. `3c83a08` — Workflow default dibuat LAZY oleh RPC 0014 (baru ada saat submit pertama), sehingga form penugasan step TIDAK PERNAH muncul sebelum submit pertama — padahal penugasan harus bisa dilakukan SEBELUM submit (R4.3). ApprovalTab kini memanggil RPC idempotent `get_or_create_default_workflow` saat tab dibuka (owner/admin/manager), lalu baca ulang; galat RPC diabaikan (balapan aman via indeks unik satu-default). Tanpa migrasi.
+2. `09d4d6f` — Revalidasi `/konten/baru` sesudah mutasi planning.
+3. `3c19f67` — Paksa `no-store` pada fetch klien Supabase server (hardening; komentar jujur di kode: ini BUKAN perbaikan "daftar brand basi" — penyebabnya wait spek yang false-positive).
+4. `a869027` — Tiga form `useActionState` (SubmitForApproval, Decision, SubmitClientReview) di-unmount tepat saat aksinya berhasil sehingga pesan sukses hilang sebelum dibaca (pola yang sama dengan 2 cacat Phase 3). Kini ketiga form tetap mounted; yang sudah diputuskan dirender disabled; key per versi/request.
+5. `d20c163` — Form keputusan dirender di dalam panel request aktif; request yang sudah diputuskan bukan lagi "aktif", jadi panel + form + pesan "Keputusan tercatat: …" ikut hilang dari DOM. Form kini di luar panel, mengikuti request terbaru (aktif atau yang baru diputuskan).
+6. Perbaikan spek (bukan pelonggaran): `f490889` wait toast brand, `969bc0a` pindah stage ke Editing sebelum submit, `b229b3d` isi ringkasan perubahan saat buat v2, `c8c3e43` susun ulang alur penerimaan (lihat bawah), `354123d` assert approve v3 lewat riwayat + status produksi (bukan pesan form yang transien), `5bb35c4` antrean "Menunggu saya" berisi request v2 (bukan kosong). Spek regresi DIPERKETAT: `exact: true` pada wait "Brand dibuat." / "Task dibuat." — tanpa exact, wait cocok dengan hint statis ("…setelah brand dibuat.") dan lolos instan sebelum insert selesai.
+7. Commit parent: `4f54560` (uji statis migrasi diperbarui ke 15 migrasi + uji khusus 0015 — 3 tes sempat gagal karena ekspektasi basi 0001–0014, BUKAN regresi; Vitest kini 132/132), `eeb436c` (Prettier `production.spec.ts`, kosmetik saja).
+
+**Restrukturisasi alur stale — DIKONFIRMASI parent:** alur lama (submit v1 → buat v2 → approve v1 ditolak basi → minta revisi v1) tidak mungkin — `decide_approval_request` (0014) menolak SEMUA keputusan atas versi basi, bukan hanya approve. R4.1/A4.5 + pgTAP 04 (T4, T6) hanya menetapkan approve-basi ditolak dan minta-revisi atas versi terbaru berhasil — jadi RPC benar, spek yang salah. Alur baru mengikuti RPC: submit v1 → minta revisi v1 selagi terbaru → buat v2 → submit v2 → buat v3 → approve v2 ditolak basi (R4.1) → submit v3 → setujui v3 → Disetujui. Bila suatu hari minta-revisi atas versi basi diinginkan, itu perubahan desain yang butuh migrasi 0016 + ubah pgTAP — tidak dilakukan di sini.
+
+### Verifikasi first-hand parent (20:22–20:24 WIB, HEAD `eeb436c`, 50 commit, tree bersih)
+
+- `git log` + `git diff e307ed0..HEAD` dibaca commit per commit (11 commit koordinator e2e — laporan akhirnya hanya menyebut 4; 7 lainnya ditemukan parent dari disk dan ikut diverifikasi).
+- Lint 0 error, typecheck 0 error, **Vitest 132/132**, build lolos.
+- File probe koordinator (`probe-brand*.mjs`) tidak tersisa di repo; residu e2e hanya di database live (dibersihkan §8.1, lihat bawah).
+
+### Batas jujur — yang BELUM terbukti (tetap berlaku)
+
+1. Approval dua-peran TIDAK terbukti live (butuh akun approver kedua — tes SKIP seperti dirancang).
+2. Separation of duties TIDAK di-enforce di DB (sesuai desain; §10).
+3. QA visual tampilan `/persetujuan` di browser sungguhan belum dilakukan (tidak ada screenshot login).
+4. Kegagalan transien "Template (0)" 1× — hipotesis koneksi putus BELUM terbukti; hardening "tampilkan galat query" dicatat untuk Phase 9.
+5. Request basi tidak pernah tertutup otomatis: request v2 yang ditolak basi tetap `in_review` selamanya dan tampil di antrean "Menunggu saya". Itu perilaku desain RPC saat ini — keputusan penutupan otomatis ditunda ke fase berikut.
+6. Visual QA login + dua-peran tetap menunggu akun/cek yang sama seperti di §7.
+
+### Pembersihan residu (§8.1) — SELESAI, terverifikasi seed-only
+
+- 20:25–20:27 WIB: unset `is_default=false` (workspace `ws-p4-%` + `ws-probe-%`), lalu hapus org `org-p4-%` + `org-probe-%` — residu Phase 4 hilang (terverifikasi dari daftar slug). Namun hitungan akhir menunjukkan orgs 8 (ekspektasi 1): 7 organisasi kosong dari run lama masih ada — `org-e2e-mwnkoxot`, `org-e2e-mwnkufr1`, `org-p3-p3-mwnkp146`, `org-p3-p3-mwnks871`, `org-probe2-probe2-mwniec15`, `org-probe3-probe3-mwnig0ga`, `org-probe4-probe4-mwnihd82` — semuanya tanpa workspace maupun isi apa pun (workspaces 1, semua tabel konten 0).
+- 20:27–20:29 WIB: ketujuh org kosong itu dihapus dengan slug PERSIS (tanpa LIKE). Verifikasi akhir: **orgs 1, workspaces 1, org_members 1, ws_members 2, brands 0, content_items 0, approval_requests 0, brief_templates 0, notifications 0 — seed-only tercapai sepenuhnya.** Seed (`contoh-studio-sample`) dan pengguna Auth tidak disentuh.
+
+**Dampak deklarasi:** buku rencana 6/11 = 55% (`Rencana-MaTive-Lengkap-v2.md`); `MEMORY.md` diperbarui; satu baris `completions.jsonl` (agent "Braderz Plan Management"); pesan milestone ke user; lalu spawn koordinator Phase 5 (Campaign & Visual Planning).

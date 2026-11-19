@@ -121,7 +121,7 @@ lama hilang).** Detail lengkap + verifikasi per langkah + pembersihan data uji:
 ## RLS policy tests Phase 4 (pgTAP) — setelah migrasi 0013 + 0014
 
 ```bash
-# Jalankan tes Phase 4 (64 tes; ekspektasi: semua ok, tidak ada "not ok"):
+# Jalankan tes Phase 4 (64 tes v1.4; ekspektasi: semua ok, tidak ada "not ok"):
 psql "$DATABASE_URL" \
   -v user_a='<UUID-USER-A>' -v user_b='<UUID-USER-B>' \
   -f supabase/tests/04_rls_phase4.sql
@@ -129,7 +129,7 @@ psql "$DATABASE_URL" \
 # Lalu jalankan spek penerimaan Phase 4 (e2e live, butuh akun uji):
 E2E_TEST_EMAIL='<email-akun-uji>' E2E_TEST_PASSWORD='<redacted>' \
   npx playwright test --project=chromium e2e/approval.spec.ts
-# Ekspektasi: 1 penerimaan + 1 smoke lolos; 1 tes dua-peran SKIP kecuali
+# Ekspektasi: 2 lolos (1 penerimaan + 1 smoke); 1 tes dua-peran SKIP kecuali
 # E2E_APPROVER_EMAIL/E2E_APPROVER_PASSWORD diisi (akun approver kedua
 # harus sudah dibuat sebelumnya).
 # Juga jalankan ulang regresi Phase 2 + Phase 3:
@@ -141,11 +141,17 @@ E2E_TEST_EMAIL='<email-akun-uji>' E2E_TEST_PASSWORD='<redacted>' \
 **Urutan wajib Phase 4: 0013 dulu, lalu 0014** (0014 memakai tabel dari
 0013 dan mengganti `transition_content_item_status` dari 0008 — 0008
 tidak diubah kecuali guard itu; migrasi 0001–0012 tidak diubah).
-**0013 + 0014 BELUM diterapkan live (menunggu parent)** — lihat
-`docs/phase-4-report.md` §8 untuk instruksi apply lengkap (verifikasi
-per langkah, dialog SQL Editor, pgTAP 04 ditempel UTUH + Run SEKALI,
-pola slug residu `org-p4-*` / `ws-p4-*` / `brand-p4-*` / `Konten P4 *`
-untuk pembersihan).
+**0013 DITERAPKAN live 19 Nov 2026 17:40 WIB, 0014 DITERAPKAN live
+19 Nov 2026 17:54 WIB — keduanya terverifikasi** (4 tabel RLS ×4,
+16 policy, 7 fungsi, 0 grant helper ke authenticated, guard
+APPROVAL_REQUIRED). **Migrasi 0015 (perbaikan cacat produk: notifikasi
+target 'placement') DITERAPKAN live 19 Nov 2026 18:35 WIB,
+terverifikasi** (CHECK mencakup 'placement'; definisi
+`validate_notification_scope()` memuat cabang placement). **pgTAP 04
+v1.4: 64/64 PASS live 19 Nov 2026 18:42 WIB. E2E live 19 Nov 2026
+20:21 WIB: approval 2 passed + 1 skip, planning 4/4, production 3/3.**
+Detail lengkap + saga kegagalan + cacat yang ditemukan selama e2e:
+`docs/phase-4-report.md` §11 (deklarasi). **Migrasi kini 0001–0015.**
 
 ## Seed demo (local/preview SAJA — JANGAN di database produksi)
 
