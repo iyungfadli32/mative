@@ -91,6 +91,29 @@ E2E_TEST_EMAIL='<email-akun-uji>' E2E_TEST_PASSWORD='<password-akun-uji>' \
 # Ekspektasi: semua tes lolos (tidak lagi skip).
 ```
 
+## RLS policy tests Phase 3 (pgTAP) — setelah migrasi 0009 + 0010 + 0011
+
+```bash
+# Jalankan tes Phase 3 (34 tes; ekspektasi: semua ok, tidak ada "not ok"):
+psql "$DATABASE_URL" \
+  -v user_a='<UUID-USER-A>' -v user_b='<UUID-USER-B>' \
+  -f supabase/tests/03_rls_phase3.sql
+
+# Lalu jalankan spek penerimaan Phase 3 (e2e live, butuh akun uji):
+E2E_TEST_EMAIL='<email-akun-uji>' E2E_TEST_PASSWORD='<password-akun-uji>' \
+  npx playwright test --project=chromium e2e/production.spec.ts
+# Ekspektasi: 3/3 (1 tes penerimaan live + 2 smoke tanpa login).
+# Juga jalankan ulang regresi Phase 2 (editor bertab):
+E2E_TEST_EMAIL='<email-akun-uji>' E2E_TEST_PASSWORD='<password-akun-uji>' \
+  npx playwright test --project=chromium e2e/planning.spec.ts
+# Ekspektasi: 4/4.
+```
+
+**Urutan wajib Phase 3: 0009 dulu, lalu 0010, lalu 0011** (0010 memakai
+tabel dari 0009; 0011 mengganti fungsi trigger dari 0007 — 0007 tidak
+diubah). Detail lengkap + verifikasi per langkah + pembersihan data uji:
+`docs/phase-3-report.md` §8.
+
 ## Seed demo (local/preview SAJA — JANGAN di database produksi)
 
 ```bash

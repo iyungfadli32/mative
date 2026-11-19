@@ -3,7 +3,7 @@
 **Satu workspace untuk merencanakan, membuat, menyetujui, mempublikasikan, mengukur, dan meningkatkan konten.**
 Siklus: PLAN → CREATE → COLLABORATE → APPROVE → PUBLISH → ANALYZE → OPTIMIZE.
 
-> Status: **Phase 2 — Planning Core (DRAF, v0.2.0)**.
+> Status: **Phase 3 — Production Operations (DRAF, v0.3.0)**.
 > Rencana kanonis: `../plan/Rencana-MaTive-Lengkap-v2.md` (PLAN-MATIVE-001).
 > MaTive independen — bukan bagian OSL; jangan bawa branding/produk/logo OSL.
 
@@ -21,17 +21,25 @@ Siklus: PLAN → CREATE → COLLABORATE → APPROVE → PUBLISH → ANALYZE → 
 - Dashboard/Command Center shell — KPI dari record nyata saja (0/empty state bila belum ada data).
 - Client portal dasar (P1-16): login portal untuk `viewer_client`, hanya resource yang dibagikan eksplisit.
 
-## Yang sudah ada di Phase 2 (P2-01 s.d. P2-15 — kode tertulis, BELUM diterapkan ke live)
+## Yang sudah ada di Phase 2 (P2-01 s.d. P2-15 — LOLOS PENUH live 2026-11-19)
 
-- ERD Planning Core: 14 tabel (brands, social_channels, content_pillars, audiences, campaigns, campaign_brands, ideas, content_items, content_placements, content_versions, placement_versions, content_status_events, tags, content_tags) + 56 policy RLS — migrasi `0007_planning_core.sql` + pgTAP `02_rls_phase2.sql` (20 asersi).
+- ERD Planning Core: 14 tabel (brands, social_channels, content_pillars, audiences, campaigns, campaign_brands, ideas, content_items, content_placements, content_versions, placement_versions, content_status_events, tags, content_tags) + 56 policy RLS — migrasi `0007_planning_core.sql` + pgTAP `02_rls_phase2.sql` (20/20 live).
 - 6 fungsi RPC transaksional — migrasi `0008_planning_transactions.sql` (buat/edit konten + versi, transisi status, konversi ide, reschedule, ubah distribusi — masing-masing satu transaksi).
 - Halaman perencanaan: Merek, Channel (registry metadata — selalu "belum terhubung", tanpa OAuth), Pilar & Audiens, Campaign, Ide (tangkap minimal + konversi), Konten (daftar/buat/detail + riwayat status), Kalender Month + Agenda (drag/drop HTML5 + collision), Board Kanban (10 kolom, WIP tanpa batas), Pencarian global.
 - Pencarian ter-scope tenant; filter tercermin di URL; deep link lintas workspace → 404.
 - ADR-0007 (ERD) + ADR-0008 (kode aplikasi: drag/drop, enum terkunci, tabel transisi, JSONB, daftar polimorfik Phase 3).
+- e2e live: `auth.spec.ts` 2/2 + `planning.spec.ts` 4/4 (termasuk perbaikan defect Langkah 0 Phase 3 — hidden `socialChannelId` saat edit placement, commit `3485eb1`).
+
+## Yang sudah ada di Phase 3 (P3-01 s.d. P3-12 — kode selesai, gate lokal LOLOS; migrasi BELUM diterapkan ke live)
+
+- Production Operations: 9 tabel + bucket privat `mative-assets` (migrasi `0009_production_ops.sql`) + 5 RPC transaksional (migrasi `0010_production_transactions.sql`) + perbaikan trigger scope item tanpa brand (migrasi `0011_fix_content_item_brand_null.sql` — defect laten Phase 2, ditemukan saat e2e Phase 3) + pgTAP `03_rls_phase3.sql` (34 asersi, verifikasi statis 50/50).
+- Task Center (`/tugas` — Tugas Saya / Semua Task + notifikasi), Pustaka Aset (`/pustaka` — unggah + signed URL 1 jam), Template Brief (`/template-brief`), editor konten bertab (`/konten/[id]` — overview/brief/script/media/placements/tasks/comments/versions), Inbox Ide diperluas (filter + detail + konversi), toggle komentar klien di `/pengaturan`.
+- Tes: unit 107/107, Playwright chromium smoke + visual 29 lolos + 1 skip, planning.spec.ts live 4/4 (regresi editor bertab); spek e2e Phase 3 (`e2e/production.spec.ts`) menunggu migrasi live.
+- ADR-0009 + laporan `docs/phase-3-report.md` (bukti per langkah, defect, batas jujur, instruksi apply ke live).
 
 ## Yang BELUM ada (sengaja ditunda — tombolnya disabled dengan alasan, bukan palsu)
 
-Kalender Week/Day/List, brief editor, task, aset, komentar, version compare/restore, approval, publishing, analytics, AI, billing — masing-masing di fasenya (Phase 3–9). Channel TIDAK terhubung ke platform mana pun (metadata saja) sampai fase integrasi.
+Approval, publishing, analytics, AI, billing — masing-masing di fasenya (Phase 4–9). Channel TIDAK terhubung ke platform mana pun (metadata saja) sampai fase integrasi.
 
 ## Mulai (lokal)
 
@@ -73,5 +81,6 @@ log, atau chat; hanya dipegang koordinator/pemilik proyek.
 - `docs/decisions/ADR-*.md` — keputusan arsitektur material.
 - `docs/phase-1-report.md` — laporan fase + hasil gate + known limitations.
 - `docs/phase-2-report.md` — laporan Phase 2 (ERD + kode aplikasi + gate lokal + gate yang menunggu koordinator).
+- `docs/phase-3-report.md` — laporan Phase 3 (DB + kode aplikasi + gate lokal + defect laten Phase 2 + instruksi apply 0009–0011 ke live).
 - `docs/apply-migrations.md` — perintah migrasi/RLS test untuk koordinator.
 - `CHANGELOG.md` — riwayat perubahan per versi.
