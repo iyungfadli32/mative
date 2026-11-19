@@ -1,6 +1,11 @@
--- MaTive Phase 6 — RLS + RPC publishing foundation (pgTAP) — v1.0
+-- MaTive Phase 6 — RLS + RPC publishing foundation (pgTAP) — v1.1
 -- v1.0 (2026-11-20): file baru untuk migrasi 0020 v1.1 (publishing_jobs,
 -- publishing_attempts, published_posts + 7 RPC + preflight + backoff).
+-- v1.1 (2026-11-20): cleanup defensif diurutkan daun → akar — v1.0 gagal
+-- Run live 23503 karena brands dihapus sebelum content_items (brand_id
+-- ON DELETE RESTRICT); finish() tidak pernah tercapai, 109 asersi tak
+-- diketahui hasilnya. BUKAN cacat produk/migrasi — hanya urutan cleanup
+-- file tes. Tidak ada perubahan asersi (tetap plan(109)).
 -- 109 asersi. Menguji: preflight (blokir + peringatan), create (status +
 -- idempotency + snapshot), duplicate + slot bebas sesudah cancel, claim /
 -- process (handoff manual + PLACEMENT_CHANGED), confirm (satu-satunya jalan
@@ -956,8 +961,45 @@ select lives_ok(
 -- ---------------------------------------------------------------------------
 -- Cleanup defensif (rollback di akhir membersihkan semuanya; delete di sini
 -- hanya pengaman bila file dijalankan tanpa transaksi).
+-- Urutan WAJIB daun → akar (v1.1): brands TIDAK BOLEH dihapus sebelum
+-- content_items (brand_id ON DELETE RESTRICT — v1.0 gagal 23503 di sini).
 -- ---------------------------------------------------------------------------
+delete from public.published_posts where workspace_id in
+  ('b6000000-0000-0000-0000-000000000001', 'b6000000-0000-0000-0000-000000000002');
+delete from public.publishing_attempts where publishing_job_id in
+  (select id from public.publishing_jobs where workspace_id in
+  ('b6000000-0000-0000-0000-000000000001', 'b6000000-0000-0000-0000-000000000002'));
+delete from public.publishing_jobs where workspace_id in
+  ('b6000000-0000-0000-0000-000000000001', 'b6000000-0000-0000-0000-000000000002');
+delete from public.placement_versions where placement_id in
+  (select id from public.content_placements where content_item_id in
+  (select id from public.content_items where workspace_id in
+  ('b6000000-0000-0000-0000-000000000001', 'b6000000-0000-0000-0000-000000000002')));
+delete from public.content_placements where content_item_id in
+  (select id from public.content_items where workspace_id in
+  ('b6000000-0000-0000-0000-000000000001', 'b6000000-0000-0000-0000-000000000002'));
+delete from public.approval_requests where workspace_id in
+  ('b6000000-0000-0000-0000-000000000001', 'b6000000-0000-0000-0000-000000000002');
+delete from public.approval_steps where workflow_id in
+  (select id from public.approval_workflows where workspace_id in
+  ('b6000000-0000-0000-0000-000000000001', 'b6000000-0000-0000-0000-000000000002'));
+delete from public.approval_workflows where workspace_id in
+  ('b6000000-0000-0000-0000-000000000001', 'b6000000-0000-0000-0000-000000000002');
+delete from public.content_versions where content_item_id in
+  (select id from public.content_items where workspace_id in
+  ('b6000000-0000-0000-0000-000000000001', 'b6000000-0000-0000-0000-000000000002'));
+delete from public.content_items where workspace_id in
+  ('b6000000-0000-0000-0000-000000000001', 'b6000000-0000-0000-0000-000000000002');
+delete from public.social_channels where brand_id in
+  (select id from public.brands where workspace_id in
+  ('b6000000-0000-0000-0000-000000000001', 'b6000000-0000-0000-0000-000000000002'));
 delete from public.brands where workspace_id in
+  ('b6000000-0000-0000-0000-000000000001', 'b6000000-0000-0000-0000-000000000002');
+update public.brief_templates set is_default = false where workspace_id in
+  ('b6000000-0000-0000-0000-000000000001', 'b6000000-0000-0000-0000-000000000002');
+delete from public.brief_templates where workspace_id in
+  ('b6000000-0000-0000-0000-000000000001', 'b6000000-0000-0000-0000-000000000002');
+delete from public.workspace_settings where workspace_id in
   ('b6000000-0000-0000-0000-000000000001', 'b6000000-0000-0000-0000-000000000002');
 delete from public.workspace_members where workspace_id in
   ('b6000000-0000-0000-0000-000000000001', 'b6000000-0000-0000-0000-000000000002');
