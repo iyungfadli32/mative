@@ -6,7 +6,7 @@ import { StatusBadge } from "@/components/ui/Badges";
 import { Button } from "@/components/ui/Button";
 import { listBrands, listIdeas, listWorkspaceMembers } from "@/features/planning/queries";
 import { PLANNING_TABLES_UNAVAILABLE_ID } from "@/features/planning/context";
-import { canConvertIdea, canCreateIdeas } from "@/features/planning/transitions";
+import { canCreateIdeas } from "@/features/planning/transitions";
 import { IDEA_SOURCE_TYPE_LABELS, IDEA_STATUS_LABELS } from "@/features/planning/constants";
 import type { WorkspaceRole } from "@/lib/permissions";
 import { updateIdeaStatusAction } from "@/features/planning/actions";
@@ -187,12 +187,13 @@ async function IdeContent({
             <p className="mt-2 text-sm text-[var(--mt-text-muted)]">Tidak ada catatan.</p>
           )}
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            {canConvertIdea(detailIdea) && canCreate ? (
+            {canCreate ? (
               <ConvertIdeaButton
                 ideaId={detailIdea.id}
                 workspaceId={workspaceId}
                 brands={brands.data}
                 ideaBrandId={detailIdea.brand_id}
+                convertedContentItemId={detailIdea.converted_content_item_id}
               />
             ) : detailIdea.converted_content_item_id ? (
               <Link
@@ -226,7 +227,6 @@ async function IdeContent({
         ) : (
           <ul className="mt-3 flex flex-col gap-3">
             {filtered.map((idea) => {
-              const convertible = canConvertIdea(idea);
               const brandName = brands.data.find((b) => b.id === idea.brand_id)?.name ?? "—";
               return (
                 <li
@@ -260,12 +260,13 @@ async function IdeContent({
                     <p className="mt-1 text-sm text-[var(--mt-text-muted)]">{idea.notes}</p>
                   ) : null}
                   <div className="mt-3 flex flex-wrap items-center gap-2">
-                    {convertible && canCreate ? (
+                    {canCreate ? (
                       <ConvertIdeaButton
                         ideaId={idea.id}
                         workspaceId={workspaceId}
                         brands={brands.data}
                         ideaBrandId={idea.brand_id}
+                        convertedContentItemId={idea.converted_content_item_id}
                       />
                     ) : idea.converted_content_item_id ? (
                       <Link
