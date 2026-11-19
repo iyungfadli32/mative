@@ -24,15 +24,13 @@ export type AnalyticsSnapshot = {
   id: string;
   workspace_id: string;
   brand_id: string | null;
-  source_type: string;
+  source: string;
   period_start: string;
   period_end: string;
   retrieved_at: string;
   raw_payload_reference: string | null;
   created_by: string | null;
-  updated_by: string | null;
   created_at: string;
-  updated_at: string;
 };
 
 export type ContentMetric = {
@@ -62,9 +60,8 @@ export type CampaignMetric = {
   aggregation_rule: string;
   period_start: string;
   period_end: string;
-  source_snapshot_id: string | null;
+  snapshot_id: string | null;
   created_at: string;
-  updated_at: string;
 };
 
 export type IntegrationEvent = {

@@ -39,13 +39,19 @@ function wrap<T>(fn: () => Promise<T>): Promise<QueryOutcome<T>> {
 }
 
 const SNAPSHOT_COLUMNS =
-  "id, workspace_id, brand_id, source_type, period_start, period_end, retrieved_at, raw_payload_reference, created_by, updated_by, created_at, updated_at";
+  // Kolom WAJIB sama dengan migrasi 0021: analytics_snapshots punya
+  // `source` (bukan `source_type`) dan TIDAK punya updated_by/updated_at
+  // (PostgREST 400 bila salah — e2e Phase 7 Run 1: A7.1/A7.3 gagal).
+  "id, workspace_id, brand_id, source, period_start, period_end, retrieved_at, raw_payload_reference, created_by, created_at";
 
 const CONTENT_METRIC_COLUMNS =
   "id, snapshot_id, workspace_id, brand_id, subject_type, subject_id, metric_key, value, unit, period_start, period_end, source_notes, created_at";
 
 const CAMPAIGN_METRIC_COLUMNS =
-  "id, workspace_id, campaign_id, brand_id, metric_key, value, unit, aggregation_rule, period_start, period_end, source_snapshot_id, created_at, updated_at";
+  // Kolom WAJIB sama dengan migrasi 0021: campaign_metrics punya
+  // `snapshot_id` (bukan `source_snapshot_id`) dan TIDAK punya updated_at
+  // (PostgREST 400 bila salah — e2e Phase 7 Run 1: A7.3 gagal).
+  "id, workspace_id, campaign_id, brand_id, metric_key, value, unit, aggregation_rule, period_start, period_end, snapshot_id, created_at";
 
 const DEFINITION_COLUMNS =
   "id, workspace_id, source_platform, metric_key, label, unit, formula, notes, compatibility_group, is_derived, created_at";
