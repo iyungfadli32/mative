@@ -1,4 +1,14 @@
--- MaTive Phase 7 — RLS + RPC analytics foundation (pgTAP) — v1.2
+-- MaTive Phase 7 — RLS + RPC analytics foundation (pgTAP) — v1.3
+-- v1.3 (2026-11-20): perbaiki abort 21000 Run 4 (v1.2): subquery skalar
+--   T13b atas campaign_metrics tanpa filter periode mengembalikan 2 baris
+--   (Nov 1500 + Okt 3000 dari impor multi-brand T4h) — agregat RPC memang
+--   PER PERIODE (DELETE + re-INSERT period-scoped; baris Okt sah). Semua
+--   5 subquery skalar campaign_metrics (T2e, T2f, T13b, T13c, T14b) kini
+--   difilter period_start/period_end Nov 2026. Migrasi 0021 TIDAK berubah.
+--   Akarnya: di Run 3, T10f sebagai postgres MENGHAPUS semua snapshot
+--   WS-A7 sehingga campaign_metrics ikut terhapus CASCADE lewat
+--   snapshot_id — baris Okt tidak ada saat T13b; di v1.2 T10f benar
+--   ditolak 42501 sehingga baris Okt selamat dan T13b abort.
 -- v1.2 (2026-11-20): perbaiki 16 kegagalan Run 3 (diagnostik _tap_out):
 --   (a) _set_user HANYA mengubah klaim JWT, BUKAN role — sesudah tiap
 --   `reset role;`, tegaskan lagi `set local role authenticated;` sebelum
@@ -63,6 +73,14 @@
 --     `set local role authenticated;` lagi — WAJIB: _set_user HANYA mengubah
 --     klaim JWT, BUKAN role (pelajaran 36, pgTAP 07 Run 3: 11 dari 16 gagal
 --     karena _set_user sesudah reset role tetap berjalan sebagai postgres).
+--   - Subquery skalar atas campaign_metrics (dan agregat per-periode lain)
+--     WAJIB difilter periode (period_start + period_end): agregat dihitung
+--     PER PERIODE — impor periode lain (mis. Okt T4h) sah menambah baris
+--     untuk (campaign, metrik) yang sama; tanpa filter periode, subquery
+--     mengembalikan >1 baris dan seluruh skrip abort 21000 (pelajaran 38,
+--     pgTAP 07 Run 4 v1.2: T13b abort — baris Okt selamat karena T10f kini
+--     benar ditolak 42501, sedangkan di Run 3 baris itu ikut terhapus
+--     CASCADE lewat snapshot_id saat T10f menghapus snapshot).
 --   - Pola throws_ok = pesan galat lengkap (nama constraint terpotong 63
 --     byte bila perlu); pola pendek GAGAL walau galatnya benar (pelajaran 05).
 --   - Cleanup defensif diurutkan daun → akar (pelajaran 06 v1.0: brands
@@ -233,12 +251,12 @@ select is(
   'T2d lima baris content_metrics tercatat (4 + 1)'
 );
 select is(
-  (select value::text from public.campaign_metrics where campaign_id = 'f7000000-0000-0000-0000-000000000001' and metric_key = 'reach'),
+  (select value::text from public.campaign_metrics where campaign_id = 'f7000000-0000-0000-0000-000000000001' and metric_key = 'reach' and period_start = '2026-11-01' and period_end = '2026-11-30'),
   '1000',
   'T2e agregat campaign reach = 1000 (snapshot terbaru per subject)'
 );
 select is(
-  (select value::text from public.campaign_metrics where campaign_id = 'f7000000-0000-0000-0000-000000000001' and metric_key = 'engagement_rate'),
+  (select value::text from public.campaign_metrics where campaign_id = 'f7000000-0000-0000-0000-000000000001' and metric_key = 'engagement_rate' and period_start = '2026-11-01' and period_end = '2026-11-30'),
   '12.0000',
   'T2f agregat campaign engagement_rate = 120/1000x100 = 12.0000'
 );
@@ -698,12 +716,12 @@ select is(
   'T13a impor ulang slice yang sama lolos (bukan duplikat lintas snapshot)'
 );
 select is(
-  (select value::text from public.campaign_metrics where campaign_id = 'f7000000-0000-0000-0000-000000000001' and metric_key = 'reach'),
+  (select value::text from public.campaign_metrics where campaign_id = 'f7000000-0000-0000-0000-000000000001' and metric_key = 'reach' and period_start = '2026-11-01' and period_end = '2026-11-30'),
   '1500',
   'T13b agregat campaign reach = 1500 (snapshot terbaru menang)'
 );
 select is(
-  (select value::text from public.campaign_metrics where campaign_id = 'f7000000-0000-0000-0000-000000000001' and metric_key = 'engagement_rate'),
+  (select value::text from public.campaign_metrics where campaign_id = 'f7000000-0000-0000-0000-000000000001' and metric_key = 'engagement_rate' and period_start = '2026-11-01' and period_end = '2026-11-30'),
   '8.0000',
   'T13c agregat campaign engagement_rate = 120/1500x100 = 8.0000 (dihitung ulang)'
 );
@@ -726,7 +744,7 @@ select is(
   'T14a impor impressions menyusul lolos'
 );
 select is(
-  (select value::text from public.campaign_metrics where campaign_id = 'f7000000-0000-0000-0000-000000000001' and metric_key = 'impressions'),
+  (select value::text from public.campaign_metrics where campaign_id = 'f7000000-0000-0000-0000-000000000001' and metric_key = 'impressions' and period_start = '2026-11-01' and period_end = '2026-11-30'),
   '3000',
   'T14b agregat campaign impressions = 3000'
 );
