@@ -148,8 +148,13 @@ test.describe("penerimaan Phase 4 — review & approval @needs-db", () => {
     await expect(decisionForm.getByLabel("Minta revisi", { exact: true })).toBeVisible();
 
     // 6. Buat v2 (edit script) — request v1 kini menunjuk versi basi.
+    //    Ringkasan perubahan WAJIB diisi (HTML required + Zod min 2);
+    //    tanpa itu browser memblokir submit dan v2 tidak tercipta.
     await page.getByRole("tab", { name: "Script" }).click();
     await page.locator('textarea[name="script"]').fill(`Skrip v2 P4 ${slug} — direvisi.`);
+    await page
+      .getByLabel("Ringkasan perubahan (wajib — tercatat di versi baru)")
+      .fill("Revisi skrip (v2).");
     await page.getByRole("button", { name: "Simpan script (versi baru)" }).click();
     await expect(page.getByText(/versi v2/)).toBeVisible({ timeout: 30000 });
 
