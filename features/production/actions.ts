@@ -46,6 +46,7 @@ import { canEditSpecificContent } from "@/features/planning/transitions";
 import { isValidTaskTransition } from "./transitions";
 import { ASSET_BUCKET, DEFAULT_BRIEF_TEMPLATE_FIELDS } from "./constants";
 import { sanitizeFileName, validateAssetFile } from "./mime";
+import type { BriefTemplate } from "./types";
 
 export type ProductionActionResult = {
   ok: boolean;
@@ -291,32 +292,76 @@ export async function toggleChecklistItemAction(
 // P3-05 — Brief templates + brief
 // ============================================================================
 
-/** Buat template default bila workspace belum punya (lazy, idempotent). */
+const BRIEF_TEMPLATE_COLUMNS =
+  "id, workspace_id, name, is_default, schema_json, created_at, updated_at";
+
+/**
+ * Buat template default bila workspace belum punya (lazy, idempotent).
+ * MENGEMBALIKAN baris template-nya: pemanggil JANGAN membaca ulang
+ * dengan getDefaultBriefTemplate/listBriefTemplates sesudah memanggil
+ * ini — Next.js me-memoize fetch GET yang sama dalam SATU render,
+ * sehingga baca ulang mengembalikan daftar kosong dari sebelum insert
+ * (cacat e2e 2026-11-19, repro deterministik: template tercatat di DB
+ * live, tapi halaman tetap menampilkan "Belum ada template"). Baris
+ * dari insert (.select() sesudah insert = POST, tidak kena memoize)
+ * atau dari pemeriksaan awal adalah data segar yang bisa dipakai
+ * langsung.
+ */
 export async function ensureDefaultBriefTemplate(
   workspaceId: string,
-): Promise<{ ok: boolean; message: string }> {
+): Promise<{ ok: boolean; message: string; template?: BriefTemplate | null }> {
   const { supabase, user } = await requireUser();
   if (!supabase || !user) return { ok: false, message: "Anda harus masuk dulu." };
   const role = await requireRole(workspaceId, user.id);
   if (!role || !canManageTemplates(role)) return { ok: false, message: "Tidak berhak." };
   const { data: existing } = await supabase
     .from("brief_templates")
-    .select("id")
+    .select(BRIEF_TEMPLATE_COLUMNS)
     .eq("workspace_id", workspaceId)
     .eq("is_default", true)
     .single();
-  if (existing) return { ok: true, message: "Template default sudah ada." };
-  const { error } = await supabase.from("brief_templates").insert({
-    workspace_id: workspaceId,
-    name: "Template Brief Standar",
-    schema_json: { fields: DEFAULT_BRIEF_TEMPLATE_FIELDS },
-    is_default: true,
-  });
+  if (existing) {
+    return {
+      ok: true,
+      message: "Template default sudah ada.",
+      template: existing as BriefTemplate,
+    };
+  }
+  const { data: inserted, error } = await supabase
+    .from("brief_templates")
+    .insert({
+      workspace_id: workspaceId,
+      name: "Template Brief Standar",
+      schema_json: { fields: DEFAULT_BRIEF_TEMPLATE_FIELDS },
+      is_default: true,
+    })
+    .select(BRIEF_TEMPLATE_COLUMNS)
+    .single();
   if (error) {
-    if (error.code === "23505") return { ok: true, message: "Template default sudah ada." };
+    if (error.code === "23505") {
+      // Balapan: template dibuat pemuatan lain di saat bersamaan —
+      // baca dengan bentuk query berbeda (kolom penuh + order +
+      // limit, bukan .single()) agar tidak kena memoize GET render ini.
+      const { data: raced } = await supabase
+        .from("brief_templates")
+        .select(BRIEF_TEMPLATE_COLUMNS)
+        .eq("workspace_id", workspaceId)
+        .eq("is_default", true)
+        .order("created_at", { ascending: true })
+        .limit(1);
+      return {
+        ok: true,
+        message: "Template default sudah ada.",
+        template: (raced?.[0] as BriefTemplate | undefined) ?? null,
+      };
+    }
     return { ok: false, message: dbErrorMessage(error, "Gagal membuat template default") };
   }
-  return { ok: true, message: "Template default dibuat." };
+  return {
+    ok: true,
+    message: "Template default dibuat.",
+    template: inserted as BriefTemplate,
+  };
 }
 
 export async function createBriefTemplateAction(

@@ -393,8 +393,15 @@ async function BriefTab({
     );
   }
   if (!template.data && ["owner", "admin", "manager", "strategist"].includes(role)) {
-    await ensureDefaultBriefTemplate(workspaceId);
-    template = await getDefaultBriefTemplate(supabase, workspaceId);
+    // Pakai baris yang dikembalikan ensure — baca ulang
+    // getDefaultBriefTemplate memakai URL yang sama dengan baca di atas
+    // dan di-memoize Next.js dalam satu render (cacat e2e 2026-11-19).
+    const ensured = await ensureDefaultBriefTemplate(workspaceId);
+    if (ensured.template) {
+      template = { data: ensured.template, error: null, unavailable: false };
+    } else {
+      template = await getDefaultBriefTemplate(supabase, workspaceId);
+    }
   }
   if (!template.data) {
     return (

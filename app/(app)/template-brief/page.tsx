@@ -52,13 +52,22 @@ async function TemplateBriefContent({
   const canManage = ["owner", "admin", "manager", "strategist"].includes(role);
   const canDelete = ["owner", "admin", "manager"].includes(role);
   const templates = await listBriefTemplates(supabase, workspaceId);
+  // Lazy: buat template default standar bila belum ada (idempotent).
+  // Pakai baris yang dikembalikan ensure — JANGAN panggil
+  // listBriefTemplates lagi: GET yang sama dalam satu render di-memoize
+  // Next.js dan mengembalikan daftar kosong dari sebelum insert
+  // (cacat e2e 2026-11-19). Default selalu di urutan pertama.
+  let refreshed = templates;
   if (!templates.unavailable && !templates.data.some((t) => t.is_default) && canManage) {
-    // Lazy: buat template default standar bila belum ada (idempotent).
-    await ensureDefaultBriefTemplate(workspaceId);
+    const ensured = await ensureDefaultBriefTemplate(workspaceId);
+    const created = ensured.template;
+    if (created) {
+      refreshed = {
+        ...templates,
+        data: [created, ...templates.data.filter((t) => t.id !== created.id)],
+      };
+    }
   }
-  const refreshed = templates.data.some((t) => t.is_default)
-    ? templates
-    : await listBriefTemplates(supabase, workspaceId);
   return (
     <div className="flex flex-col gap-6">
       {refreshed.unavailable ? (
