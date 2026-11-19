@@ -147,7 +147,7 @@ test.describe("analytics — dashboard, impor CSV, laporan, integrasi", () => {
     });
 
     await gotoWs(page, "/analitik", wsId);
-    await expect(page.getByText("Lengkap")).toBeVisible({ timeout: 30000 });
+    await expect(page.getByText("Status data: Lengkap")).toBeVisible({ timeout: 30000 });
     await expect(page.getByText("1.000", { exact: true }).first()).toBeVisible({
       timeout: 30000,
     });
@@ -168,7 +168,7 @@ test.describe("analytics — dashboard, impor CSV, laporan, integrasi", () => {
       "Performa konten",
       "Volume publishing + kepatuhan jadwal",
     ]) {
-      await expect(page.getByRole("heading", { name: title })).toBeVisible({ timeout: 30000 });
+      await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible({ timeout: 30000 });
     }
     const downloadPromise = page.waitForEvent("download");
     await page.getByRole("link", { name: "Unduh CSV" }).first().click();
@@ -183,7 +183,7 @@ test.describe("analytics — dashboard, impor CSV, laporan, integrasi", () => {
     await gotoWs(page, "/integrasi", wsId);
     await expect(page.getByRole("heading", { name: "Integrasi", exact: true })).toBeVisible();
     await expect(page.getByText("Adapter integrasi: DISABLED")).toBeVisible({ timeout: 30000 });
-    await expect(page.getByText("Instagram")).toBeVisible({ timeout: 30000 });
+    await expect(page.getByRole("heading", { name: "Instagram", exact: true })).toBeVisible({ timeout: 30000 });
     await expect(page.getByText("DISABLED").first()).toBeVisible({ timeout: 30000 });
     // TIDAK ADA tombol hubungkan (P1-13 — dilarang tombol palsu).
     await expect(page.getByRole("button", { name: /Hubungkan|Connect/i })).toHaveCount(0);
