@@ -82,7 +82,7 @@ export const DEFAULT_BRIEF_TEMPLATE_FIELDS = [
   { key: "cta", label: "Ajakan (CTA)", type: "text", required: false },
 ] as const;
 
-/** Tab Content Workspace / Editor (P3-11). Default: overview. */
+/** Tab Content Workspace / Editor (P3-11, P4-04). Default: overview. */
 export const EDITOR_TABS = [
   "overview",
   "brief",
@@ -92,6 +92,7 @@ export const EDITOR_TABS = [
   "tasks",
   "comments",
   "versions",
+  "approval",
 ] as const;
 export type EditorTab = (typeof EDITOR_TABS)[number];
 
@@ -104,4 +105,5 @@ export const EDITOR_TAB_LABELS: Record<EditorTab, string> = {
   tasks: "Task",
   comments: "Komentar",
   versions: "Versi",
+  approval: "Approval",
 };

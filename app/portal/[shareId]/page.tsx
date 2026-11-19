@@ -5,13 +5,15 @@ import { getCurrentUser } from "@/lib/supabase/server";
 import { EmptyState } from "@/components/ui/States";
 import { StatusBadge } from "@/components/ui/Badges";
 import { formatInTimezone } from "@/lib/time";
+import { ClientReviewPanel } from "@/features/approval/components/ClientReviewPanel";
 
 /**
- * Detail share portal — P1-16.
+ * Detail share portal — P1-16 + P4-14.
  * RLS menolak bila share ini bukan milik pemanggil (getPortalShare → null).
  * Isi konten (judul, caption, aset) dirender penuh di Phase 2, saat tabel
- * content_items + placements ada; di fase ini tampilkan metadata share
- * + status yang jujur — JANGAN menampilkan isi karangan.
+ * content_items + placements ada. Panel review klien (status client review
+ * + komentar) hadir mulai Phase 4 — komentar klien TIDAK PERNAH menjadi
+ * keputusan approval (Keputusan #12).
  */
 export default async function PortalDetailPage({
   params,
@@ -75,11 +77,13 @@ export default async function PortalDetailPage({
           tabel content tersedia. Di fase ini portal menampilkan metadata share yang sudah
           terverifikasi — tanpa isi karangan.
         </p>
-        <p className="mt-3 text-sm text-[var(--mt-text-muted)]">
-          Komentar klien tidak diizinkan secara default (Keputusan #12). Bila workspace mengizinkan
-          komentar klien di Phase 4, tombol komentar akan muncul di sini.
-        </p>
       </div>
+      <ClientReviewPanel
+        shareId={share.id}
+        resourceType={share.resource_type}
+        resourceId={share.resource_id}
+        workspaceId={share.workspace_id}
+      />
     </main>
   );
 }

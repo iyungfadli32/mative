@@ -15,7 +15,7 @@ export function MobileBottomNav({ onQuickCreate }: { onQuickCreate: () => void }
     { href: "/dashboard", label: "Home", icon: "🏠", available: true },
     { href: "/kalender", label: "Kalender", icon: "📅", available: true },
     { href: null, label: "Buat", icon: "＋", available: true, action: true },
-    { href: "/persetujuan", label: "Approval", icon: "✔️", available: false },
+    { href: "/persetujuan", label: "Approval", icon: "✔️", available: true },
     { href: "/lainnya", label: "Lainnya", icon: "⋯", available: true },
   ];
   return (

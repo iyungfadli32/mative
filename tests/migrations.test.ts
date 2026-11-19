@@ -22,7 +22,7 @@ function migrationFiles(): Array<{ name: string; sql: string }> {
 }
 
 describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
-  it("memiliki 12 migrasi berversi berurutan 0001–0012", () => {
+  it("memiliki 14 migrasi berversi berurutan 0001–0014", () => {
     const files = migrationFiles();
     expect(files.map((f) => f.name)).toEqual([
       "0001_profiles.sql",
@@ -37,6 +37,8 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
       "0010_production_transactions.sql",
       "0011_fix_content_item_brand_null.sql",
       "0012_convert_idea_brand_param.sql",
+      "0013_approval_core.sql",
+      "0014_approval_transactions.sql",
     ]);
   });
 
@@ -47,12 +49,14 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
       // 0008 dan 0010 hanya berisi fungsi RPC transaksional (tanpa
       // tabel/policy baru); 0011 hanya mengganti satu fungsi trigger
       // (tanpa tabel/policy baru); 0012 hanya mengganti satu fungsi RPC
+      // (tanpa tabel/policy baru); 0014 hanya berisi fungsi approval
       // (tanpa tabel/policy baru).
       if (
         name === "0008_planning_transactions.sql" ||
         name === "0010_production_transactions.sql" ||
         name === "0011_fix_content_item_brand_null.sql" ||
-        name === "0012_convert_idea_brand_param.sql"
+        name === "0012_convert_idea_brand_param.sql" ||
+        name === "0014_approval_transactions.sql"
       ) {
         expect(sql, `${name} tidak boleh membuat tabel`).not.toMatch(/create table/i);
         expect(sql, `${name} harus berisi fungsi RPC`).toMatch(/create or replace function/i);
@@ -245,6 +249,74 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
     const m3 = migrationFiles().find((f) => f.name === "0003_workspaces.sql")?.sql ?? "";
     expect(m3).toContain("token_hash");
     expect(m3).not.toMatch(/token\s+text not null,$/m);
+  });
+
+  it("migrasi 0013 membuat 4 tabel approval + RLS aktif untuk keempatnya", () => {
+    const m13 =
+      migrationFiles().find((f) => f.name === "0013_approval_core.sql")?.sql ?? "";
+    for (const table of [
+      "approval_workflows",
+      "approval_steps",
+      "approval_requests",
+      "approval_decisions",
+    ]) {
+      expect(m13, `0013 harus membuat tabel ${table}`).toContain(
+        `create table if not exists public.${table}`,
+      );
+      expect(m13, `0013 harus mengaktifkan RLS untuk ${table}`).toMatch(
+        new RegExp(`alter table public\\.${table} enable row level security`, "i"),
+      );
+    }
+    // Status request 6 nilai (Keputusan #8) + komentar wajib non-approval.
+    expect(m13).toMatch(/'submitted', 'in_review', 'approved', 'changes_requested',/);
+    expect(m13).toContain("'rejected', 'reapproval_required'");
+    expect(m13).toContain(
+      "check (decision = 'approved' or (comment is not null and btrim(comment) <> ''))",
+    );
+    // Requests/decisions no-write di GRANT + policy.
+    expect(m13).toContain("revoke all on public.approval_requests from anon, authenticated");
+    expect(m13).toContain("grant select on public.approval_requests to authenticated");
+    // Trigger append-only UPDATE-only (tanpa trigger DELETE — pelajaran P0001).
+    expect(m13).toContain("create trigger trg_prevent_approval_decision_update");
+    expect(m13).not.toMatch(
+      /create\s+trigger\s+\w+\s+before\s+delete\s+on\s+public\.approval_decisions/i,
+    );
+  });
+
+  it("migrasi 0014 menutup bypass internal_review -> approved + 5 trigger critical-change", () => {
+    const m14 =
+      migrationFiles().find((f) => f.name === "0014_approval_transactions.sql")?.sql ?? "";
+    expect(m14).toContain("APPROVAL_REQUIRED");
+    expect(m14).toContain("Konten ini belum disetujui. Minta persetujuan dulu di Approval Center");
+    for (const fn of [
+      "check_critical_change_on_version",
+      "check_critical_change_on_placement_version",
+      "check_critical_change_on_asset_link",
+      "check_critical_change_on_placement",
+    ]) {
+      expect(m14, `0014 harus berisi trigger ${fn}`).toContain(fn);
+    }
+    // Helper internal TIDAK di-grant ke authenticated (hanya untuk trigger).
+    expect(m14).not.toContain(
+      "grant execute on function public.approval_critical_fields",
+    );
+    expect(m14).not.toContain(
+      "grant execute on function public.flag_request_reapproval",
+    );
+    expect(m14).toContain("revoke all on function public.approval_critical_fields(uuid) from public");
+    // Guard 0014 = salinan 0008 + satu blok guard (bukan fungsi baru dari nol).
+    expect(m14).toContain("create or replace function public.transition_content_item_status(");
+  });
+
+  it("pgTAP 04 ada dengan plan(64) + pola placeholder yang benar", () => {
+    const test04 = readFileSync(
+      path.join(APP_ROOT, "supabase/tests/04_rls_phase4.sql"),
+      "utf8",
+    );
+    expect(test04).toContain("select plan(64);");
+    expect(test04).not.toContain("094e8752-eef4-4f0e-b6ae-2d5813445018");
+    expect(test04).not.toContain("aabb1dab-77c1-4659-af0e-c703c9de279c");
+    expect(test04).toContain("select * from finish();");
   });
 });
 

@@ -47,6 +47,7 @@ import { BriefEditor } from "@/features/production/components/BriefEditor";
 import { ScriptEditor } from "@/features/production/components/ScriptEditor";
 import { VersionCompare } from "@/features/production/components/VersionCompare";
 import { CommentThread } from "@/features/production/components/CommentThread";
+import { ApprovalTab } from "@/features/approval/components/ApprovalTab";
 import { TaskForm } from "@/features/production/components/TaskForm";
 import { TaskStatusForm } from "@/features/production/components/TaskStatusForm";
 import { TaskChecklist } from "@/features/production/components/TaskChecklist";
@@ -59,11 +60,8 @@ import type { WorkspaceRole } from "@/lib/permissions";
 import type { BriefSnapshot } from "@/lib/validation/schemas";
 import { formatInTimezone } from "@/lib/time";
 
-/**
- * Content Workspace / Editor (P3-11): tab server-rendered (?tab=).
- * Default overview. Approval/publishing HANYA ringkasan "belum tersedia
- * di fase ini" (Phase 4) — bukan fitur.
- */
+/** Tab Content Workspace / Editor (P3-11, P4-04): tab server-rendered (?tab=).
+ * Default overview. Approval hadir sebagai tab penuh mulai Phase 4. */
 export default async function KontenDetailPage({
   params,
   searchParams,
@@ -82,7 +80,7 @@ export default async function KontenDetailPage({
     <PlanningShell
       requestedWorkspaceId={workspaceParam}
       title="Detail konten"
-      description="Content Workspace: ringkasan, brief, script, media, placement, task, komentar, dan versi."
+      description="Content Workspace: ringkasan, brief, script, media, placement, task, komentar, versi, dan approval."
     >
       {(ctx) => (
         <KontenDetailContent
@@ -259,6 +257,19 @@ async function KontenDetailContent({
             />
           </div>
         </section>
+      ) : null}
+      {tab === "approval" ? (
+        <ApprovalTab
+          contentItemId={item.id}
+          contentTitle={item.title}
+          workspaceId={workspaceId}
+          role={role}
+          userId={userId}
+          canEdit={canEdit}
+          latestVersionId={latestVersion?.id ?? ""}
+          latestVersionNumber={latestVersion?.version_number ?? 0}
+          productionStatus={item.production_status}
+        />
       ) : null}
     </div>
   );

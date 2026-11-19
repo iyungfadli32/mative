@@ -478,3 +478,84 @@ export const clientCommentsSettingSchema = z.object({
 export const markNotificationReadSchema = z.object({
   notificationId: z.string().uuid("notification_id tidak valid."),
 });
+
+// ============================================================================
+// Approval (Phase 4 — ADR-0010, migrasi 0013/0014)
+// ============================================================================
+
+export const APPROVAL_REQUEST_STATUSES = [
+  "submitted",
+  "in_review",
+  "approved",
+  "changes_requested",
+  "rejected",
+  "reapproval_required",
+] as const;
+
+export const APPROVAL_DECISIONS = ["approved", "changes_requested", "rejected"] as const;
+
+export const APPROVAL_ROLES = [
+  "owner",
+  "admin",
+  "manager",
+  "strategist",
+  "creator",
+  "editor",
+  "approver",
+  "analyst",
+  "viewer_client",
+] as const;
+
+export const submitApprovalSchema = z.object({
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  contentItemId: z.string().uuid("content_item_id tidak valid."),
+  contentVersionId: z.string().uuid("content_version_id tidak valid."),
+  placementVersionId: optionalUuid.default(null),
+});
+
+export const decideApprovalSchema = z
+  .object({
+    requestId: z.string().uuid("request_id tidak valid."),
+    workspaceId: z.string().uuid("workspace_id tidak valid."),
+    decision: z.enum(APPROVAL_DECISIONS),
+    comment: z.string().trim().max(5000, "Komentar maksimal 5000 karakter.").default(""),
+  })
+  .refine(
+    (v) => v.decision === "approved" || v.comment.length > 0,
+    "Minta revisi / tolak wajib disertai komentar.",
+  );
+
+export const submitClientReviewSchema = z.object({
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  contentItemId: z.string().uuid("content_item_id tidak valid."),
+  contentVersionId: z.string().uuid("content_version_id tidak valid."),
+});
+
+export const assignWorkflowStepSchema = z
+  .object({
+    workspaceId: z.string().uuid("workspace_id tidak valid."),
+    stepId: z.string().uuid("step_id tidak valid."),
+    assigneeRole: z
+      .string()
+      .trim()
+      .transform((v) => (v === "" ? null : v))
+      .pipe(z.enum(APPROVAL_ROLES).nullable())
+      .default(null),
+    assigneeUserId: optionalUuid.default(null),
+  })
+  .refine(
+    (v) => v.assigneeRole !== null || v.assigneeUserId !== null,
+    "Pilih role atau pengguna yang ditugaskan (minimal satu terisi).",
+  );
+
+export const updateApprovalSettingsSchema = z.object({
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  clientReviewEnabled: z.enum(["true", "false", ""]).default(""),
+  clientCanComment: z.enum(["true", "false", ""]).default(""),
+  criticalFields: z.string().default(""),
+});
+
+export const clientCommentSchema = z.object({
+  shareId: z.string().uuid("share_id tidak valid."),
+  body: z.string().trim().min(1, "Isi komentar wajib diisi.").max(5000),
+});
