@@ -52,16 +52,29 @@ describe("Skema Zod Planning Core — P2-04 s.d. P2-11", () => {
     expect(parsed.success).toBe(true);
   });
 
-  it("campaign: target_metrics harus pemetaan kunci → angka", () => {
+  it("campaign: target_metrics bentuk minimal 3 field (ASUMSI-5.3, ADR-0011 §3)", () => {
     const base = {
       workspaceId: "11111111-1111-4111-8111-111111111111",
       name: "Launch",
-      targetMetrics: { reach: 10000 },
+      targetMetrics: { target_deliverables: 10, target_date: "2026-12-31", notes: "Q4" },
     };
     expect(campaignSchema.safeParse(base).success).toBe(true);
-    expect(campaignSchema.safeParse({ ...base, targetMetrics: { reach: "banyak" } }).success).toBe(
+    // Bentuk lama (peta metrik bebas) DITOLAK sejak Phase 5.
+    expect(campaignSchema.safeParse({ ...base, targetMetrics: { reach: 10000 } }).success).toBe(
       false,
     );
+    expect(
+      campaignSchema.safeParse({ ...base, targetMetrics: { target_deliverables: -1 } }).success,
+    ).toBe(false);
+    expect(
+      campaignSchema.safeParse({ ...base, targetMetrics: { target_date: "31-12-2026" } }).success,
+    ).toBe(false);
+    expect(
+      campaignSchema.safeParse({
+        ...base,
+        targetMetrics: { notes: "x".repeat(501) },
+      }).success,
+    ).toBe(false);
     expect(campaignSchema.safeParse({ ...base, status: "live" }).success).toBe(false);
   });
 

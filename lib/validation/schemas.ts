@@ -176,8 +176,134 @@ export const audienceSchema = z.object({
   attributes: audienceAttributesSchema.default({}),
 });
 
-/** target_metrics: pemetaan kunci metrik → angka target (ADR-0007 §5). */
-export const campaignTargetMetricsSchema = z.record(z.string(), z.number()).default({});
+/** target_metrics: bentuk minimal ASUMSI-5.3 (ADR-0011 §3) — hanya 3 field;
+ * field lain DITOLAK. Menggantikan pemetaan kunci-metrik → angka bebas
+ * (ADR-0007 §5 / ADR-0008 §5) yang membuat tiap campaign isinya berbeda.
+ * CHECK database ditunda (preseden ADR-0008); pembacaan tetap toleran
+ * terhadap baris lama lewat parseTargetMetricsLenient di bawah. */
+export const campaignTargetMetricsSchema = z
+  .object({
+    target_deliverables: z
+      .number()
+      .int("Target deliverables harus bilangan bulat.")
+      .min(0, "Target deliverables tidak boleh negatif.")
+      .optional(),
+    target_date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Target date harus format YYYY-MM-DD.")
+      .optional(),
+    notes: z.string().trim().max(500, "Catatan target maksimal 500 karakter.").optional(),
+  })
+  .strict()
+  .default({});
+
+export type CampaignTargetMetrics = z.infer<typeof campaignTargetMetricsSchema>;
+
+/** Baca target_metrics secara toleran (baris lama peta-metrik / {} tetap tampil). */
+export function parseTargetMetricsLenient(value: unknown): CampaignTargetMetrics {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return {};
+  const v = value as Record<string, unknown>;
+  const out: CampaignTargetMetrics = {};
+  if (typeof v.target_deliverables === "number" && Number.isInteger(v.target_deliverables) && v.target_deliverables >= 0) {
+    out.target_deliverables = v.target_deliverables;
+  }
+  if (typeof v.target_date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v.target_date)) {
+    out.target_date = v.target_date;
+  }
+  if (typeof v.notes === "string" && v.notes.trim().length > 0) {
+    out.notes = v.notes.trim().slice(0, 500);
+  }
+  return out;
+}
+
+/** Brand scope (P1-A7, 0016): null = semua brand; array UUID = hanya brand itu. */
+export const brandScopeSchema = z
+  .array(z.string().uuid("Brand scope harus berisi UUID brand."))
+  .max(50, "Brand scope maksimal 50 brand.")
+  .nullable();
+
+/** Update campaign (tanpa status — status hanya lewat transisi). */
+export const campaignUpdateSchema = z.object({
+  campaignId: z.string().uuid("campaign_id tidak valid."),
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  name: z.string().trim().min(2, "Nama campaign minimal 2 karakter.").max(120),
+  objective: z.string().trim().max(500).optional().default(""),
+  audienceId: optionalUuid,
+  startAt: optionalDatetime,
+  endAt: optionalDatetime,
+  targetMetrics: campaignTargetMetricsSchema,
+  brandIds: z.array(z.string().uuid()).max(20).default([]),
+});
+
+/** Transisi status campaign (ASUMSI-5.5; cancelled wajib alasan). */
+export const campaignStatusTransitionSchema = z.object({
+  campaignId: z.string().uuid("campaign_id tidak valid."),
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  toStatus: z.enum(["draft", "active", "completed", "archived", "cancelled"]),
+  reason: z.string().trim().max(500).optional().default(""),
+});
+
+/** Urutan visual: daftar placement (UUID) untuk satu (brand, channel). */
+export const visualOrderSchema = z.object({
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  brandId: z.string().uuid("brand_id tidak valid."),
+  channelId: z.string().uuid("channel_id tidak valid."),
+  placementIds: z.array(z.string().uuid()).max(200).default([]),
+});
+
+/** Template campaign (simpan) + buat campaign dari template. */
+export const campaignTemplateSchema = z.object({
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  name: z.string().trim().min(2, "Nama template minimal 2 karakter.").max(120),
+  sourceCampaignId: optionalUuid,
+  objective: z.string().trim().max(500).optional().default(""),
+  audienceId: optionalUuid,
+  targetMetrics: campaignTargetMetricsSchema,
+  brandIds: z.array(z.string().uuid()).max(20).default([]),
+});
+
+export const createCampaignFromTemplateSchema = z.object({
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  templateId: z.string().uuid("template_id tidak valid."),
+  name: z.string().trim().min(2, "Nama campaign minimal 2 karakter.").max(120),
+});
+
+/** Template konten (simpan) + buat konten dari template.
+ * Bila sourceContentItemId diisi, judul/brand/naskah/caption/channel
+ * diambil dari konten sumber di server (form hanya mengirim nama template)
+ * — field form menjadi opsional. Bila tidak ada sumber, field form wajib. */
+export const contentTemplateSchema = z.object({
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  name: z.string().trim().min(2, "Nama template minimal 2 karakter.").max(120),
+  sourceContentItemId: optionalUuid,
+  title: z.string().trim().min(2, "Judul template minimal 2 karakter.").max(200).optional(),
+  brandId: z.string().uuid("brand_id tidak valid.").optional(),
+  pillarId: optionalUuid,
+  script: z.string().trim().max(20000).optional().default(""),
+  caption: z.string().trim().max(5000).optional().default(""),
+  placementChannels: z
+    .array(
+      z.object({
+        channelId: z.string().uuid(),
+        format: z.string().trim().max(60).optional().default(""),
+      }),
+    )
+    .max(20)
+    .default([]),
+});
+
+export const createContentFromTemplateSchema = z.object({
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  templateId: z.string().uuid("template_id tidak valid."),
+  title: z.string().trim().min(2, "Judul konten minimal 2 karakter.").max(200),
+});
+
+/** Atur brand scope anggota (hanya owner/admin; null = semua brand). */
+export const memberBrandScopeSchema = z.object({
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  memberUserId: z.string().uuid("member_user_id tidak valid."),
+  brandScope: brandScopeSchema,
+});
 
 export const campaignSchema = z.object({
   workspaceId: z.string().uuid("workspace_id tidak valid."),

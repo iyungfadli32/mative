@@ -37,6 +37,7 @@ export const NAV_SECTIONS: Array<{ title: string; items: NavItem[] }> = [
       { href: "/channel", label: "Channel", icon: "📣", available: true },
       { href: "/pilar", label: "Pilar & Audiens", icon: "🧱", available: true },
       { href: "/kampanye", label: "Campaign", icon: "🎯", available: true },
+      { href: "/template", label: "Template", icon: "📋", available: true },
       { href: "/konten", label: "Konten", icon: "📝", available: true },
       { href: "/ide", label: "Ide", icon: "💡", available: true },
     ],

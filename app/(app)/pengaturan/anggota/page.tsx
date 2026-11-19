@@ -6,6 +6,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import AnggotaClient, {
   type MemberRow,
   type InvitationRow,
+  type BrandRow,
 } from "@/app/(app)/pengaturan/anggota/AnggotaClient";
 import { canInvite, type WorkspaceRole } from "@/lib/permissions";
 import { EmptyState } from "@/components/ui/States";
@@ -18,10 +19,11 @@ export default async function PengaturanAnggotaPage() {
 
   let members: MemberRow[] = [];
   let invitations: InvitationRow[] = [];
+  let brands: BrandRow[] = [];
   if (supabase && user && ws) {
     const { data: memberRows } = await supabase
       .from("workspace_members")
-      .select("id, user_id, workspace_role, membership_status, profiles(display_name)")
+      .select("id, user_id, workspace_role, membership_status, brand_scope, profiles(display_name)")
       .eq("workspace_id", ws.workspace.id)
       .order("created_at", { ascending: true });
     members = (memberRows ?? []).map((m) => ({
@@ -32,7 +34,14 @@ export default async function PengaturanAnggotaPage() {
         (m.user_id as string),
       role: m.workspace_role as WorkspaceRole,
       status: m.membership_status as string,
+      brandScope: (m.brand_scope as string[] | null) ?? null,
     }));
+    const { data: brandRows } = await supabase
+      .from("brands")
+      .select("id, name")
+      .eq("workspace_id", ws.workspace.id)
+      .order("name", { ascending: true });
+    brands = (brandRows ?? []).map((b) => ({ id: b.id as string, name: b.name as string }));
     const { data: invRows } = await supabase
       .from("workspace_invitations")
       .select("id, email, role, status, expires_at")
@@ -70,7 +79,9 @@ export default async function PengaturanAnggotaPage() {
             workspaceName={ws.workspace.name}
             members={members}
             invitations={invitations}
+            brands={brands}
             canInvite={canInvite(ws.role as WorkspaceRole)}
+            canManageScope={canInvite(ws.role as WorkspaceRole)}
           />
         )}
       </div>

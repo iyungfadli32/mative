@@ -2,6 +2,7 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { PlanningShell } from "@/features/planning/components/PlanningShell";
 import { EmptyState } from "@/components/ui/States";
 import { StatusBadge } from "@/components/ui/Badges";
+import Link from "next/link";
 import {
   listAudiences,
   listBrands,
@@ -13,7 +14,9 @@ import { canManagePillarsCampaigns } from "@/features/planning/transitions";
 import { CAMPAIGN_STATUS_LABELS } from "@/features/planning/constants";
 import type { WorkspaceRole } from "@/lib/permissions";
 import { formatInTimezone } from "@/lib/time";
+import { parseTargetMetricsLenient } from "@/lib/validation/schemas";
 import { CampaignForm } from "./CampaignForm";
+import { CampaignCsvExportButton, CampaignCsvImportForm } from "./CampaignCsvForms";
 
 /** Campaign dasar (P2-07) + tautan campaign_brands. */
 export default async function KampanyePage({
@@ -89,6 +92,20 @@ async function KampanyeContent({
         </p>
       )}
 
+      {canManage ? (
+        <section className="rounded-2xl border border-[var(--mt-border)] bg-[var(--mt-surface)] p-4">
+          <h2 className="font-semibold">Impor / Ekspor CSV</h2>
+          <p className="mt-1 text-sm text-[var(--mt-text-muted)]">
+            Ekspor menghasilkan file yang bisa diimpor kembali. Impor menolak baris yang tidak
+            valid satu per satu — baris lain tetap masuk.
+          </p>
+          <div className="mt-3 flex max-w-xl flex-col gap-4">
+            <CampaignCsvExportButton workspaceId={workspaceId} />
+            <CampaignCsvImportForm workspaceId={workspaceId} />
+          </div>
+        </section>
+      ) : null}
+
       <section>
         <h2 className="font-semibold">Daftar campaign ({campaigns.data.length})</h2>
         {campaigns.data.length === 0 && !unavailable ? (
@@ -104,13 +121,19 @@ async function KampanyeContent({
             {campaigns.data.map((c) => {
               const audienceName = audiences.data.find((a) => a.id === c.audience_id)?.name ?? "—";
               const brandNames = links.get(c.id) ?? [];
+              const metrics = parseTargetMetricsLenient(c.target_metrics);
               return (
                 <li
                   key={c.id}
                   className="rounded-2xl border border-[var(--mt-border)] bg-[var(--mt-surface)] p-4"
                 >
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-semibold">{c.name}</span>
+                    <Link
+                      href={`/kampanye/${c.id}`}
+                      className="font-semibold text-[var(--mt-teal-700)] underline"
+                    >
+                      {c.name}
+                    </Link>
                     <StatusBadge
                       label={`● ${CAMPAIGN_STATUS_LABELS[c.status as keyof typeof CAMPAIGN_STATUS_LABELS] ?? c.status}`}
                       tone={c.status === "active" ? "success" : "neutral"}
@@ -125,12 +148,20 @@ async function KampanyeContent({
                     {c.start_at ? formatInTimezone(c.start_at) : "—"} s.d.{" "}
                     {c.end_at ? formatInTimezone(c.end_at) : "—"}
                   </p>
-                  {Object.keys(c.target_metrics ?? {}).length > 0 ? (
+                  {metrics.target_deliverables !== undefined ||
+                  metrics.target_date ||
+                  metrics.notes ? (
                     <p className="mt-1 text-xs text-[var(--mt-text-muted)]">
                       Target:{" "}
-                      {Object.entries(c.target_metrics)
-                        .map(([k, v]) => `${k}: ${String(v)}`)
-                        .join(", ")}
+                      {[
+                        metrics.target_deliverables !== undefined
+                          ? `${metrics.target_deliverables} deliverable`
+                          : null,
+                        metrics.target_date ? `selesai ${metrics.target_date}` : null,
+                        metrics.notes ?? null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
                     </p>
                   ) : null}
                 </li>

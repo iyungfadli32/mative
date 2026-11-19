@@ -78,18 +78,34 @@ export function CampaignForm({
           ))
         )}
       </fieldset>
-      <label className="flex flex-col gap-1.5 text-sm font-medium">
-        Target metrik (JSON, opsional)
-        <textarea
-          name="targetMetricsJson"
-          defaultValue="{}"
-          rows={2}
-          className="rounded-[10px] border border-[var(--mt-border)] bg-[var(--mt-surface)] px-3 py-2 font-mono text-sm font-normal"
-        />
-        <span className="text-[13px] font-normal text-[var(--mt-text-muted)]">
-          Contoh: {`{"reach": 10000, "leads": 50}`} — kunci metrik → angka target.
-        </span>
-      </label>
+      <fieldset className="rounded-xl border border-[var(--mt-border)] p-3">
+        <legend className="px-1 text-sm font-medium">Target (opsional — ASUMSI-5.3)</legend>
+        <div className="grid gap-3 md:grid-cols-2">
+          <Input
+            id="campaign-target-deliverables"
+            name="targetDeliverables"
+            type="number"
+            min={0}
+            step={1}
+            label="Target deliverable (jumlah konten)"
+          />
+          <Input
+            id="campaign-target-date"
+            name="targetDate"
+            type="date"
+            label="Target tanggal selesai"
+          />
+        </div>
+        <label className="mt-3 flex flex-col gap-1.5 text-sm font-medium">
+          Catatan target
+          <textarea
+            name="targetNotes"
+            rows={2}
+            maxLength={500}
+            className="rounded-[10px] border border-[var(--mt-border)] bg-[var(--mt-surface)] px-3 py-2 text-sm font-normal"
+          />
+        </label>
+      </fieldset>
       {state.message ? (
         <p role={state.ok ? "status" : "alert"} className="text-sm">
           {state.message}

@@ -63,6 +63,33 @@ export async function getCallerRole(workspaceId: string, userId: string): Promis
   return (data?.workspace_role as string | undefined) ?? null;
 }
 
+/**
+ * Brand scope pemanggil di satu workspace (P1-A7, 0016).
+ * null = semua brand (default, termasuk bila bukan member — pemanggil
+ * tanpa keanggotaan ditolak di tempat lain); array = hanya brand itu
+ * ([] = tidak ada brand). Elemen bukan UUID diabaikan (fail-closed).
+ */
+export async function getCallerBrandScope(
+  workspaceId: string,
+  userId: string,
+): Promise<string[] | null> {
+  const supabase = await getSupabaseServerClient();
+  if (!supabase) return null;
+  const { data } = await supabase
+    .from("workspace_members")
+    .select("brand_scope")
+    .eq("workspace_id", workspaceId)
+    .eq("user_id", userId)
+    .eq("membership_status", "active")
+    .single();
+  const scope = (data as { brand_scope?: unknown } | null)?.brand_scope;
+  if (!Array.isArray(scope)) return null;
+  return scope.filter(
+    (v): v is string =>
+      typeof v === "string" && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(v),
+  );
+}
+
 /** Pesan jujur bila tabel Planning Core belum tersedia di database live. */
 export const PLANNING_TABLES_UNAVAILABLE_ID =
   "Tabel Planning Core (migrasi 0007) belum diterapkan ke database ini — minta koordinator menjalankan docs/phase-2-report.md §7, lalu muat ulang halaman ini.";

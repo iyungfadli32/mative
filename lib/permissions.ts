@@ -2,7 +2,8 @@
  * RBAC dasar — lib/permissions.ts
  * Sumber: Dok 06 §2 (9 role baseline) + §3 (matriks izin) + P1-A6/P1-A7
  * (Keputusan #9: "limited" = lihat + edit yang ditugaskan saja;
- *  brand scope BELUM ditegakkan sebagai filter terpisah di fase ini).
+ *  brand scope DITEGAKKAN sejak 0016 — lihat brandInScope di bawah;
+ *  penegakan sesungguhnya di RLS, di sini cermin + pre-validasi).
  *
  * ATURAN KERAS: matriks ini adalah cermin UI/server-action SAJA.
  * Penegakan sesungguhnya ada di RLS database (supabase/migrations/).
@@ -248,6 +249,20 @@ export function canInvite(role: WorkspaceRole): boolean {
 /** Role yang boleh diberi lewat undangan (semua 9 role baseline; custom role TIDAK ada). */
 export function isInvitableRole(role: string): role is WorkspaceRole {
   return (WORKSPACE_ROLES as readonly string[]).includes(role);
+}
+
+/**
+ * Brand scope (P1-A7, ditegakkan 0016, ADR-0011 §2).
+ * `null` = semua brand di workspace; array UUID = hanya brand itu
+ * (array kosong = tidak ada brand). `brandId` null = baris tanpa brand
+ * (ide/pilar tanpa brand) — selalu terlihat semua member.
+ */
+export type BrandScope = string[] | null;
+
+export function brandInScope(scope: BrandScope, brandId: string | null | undefined): boolean {
+  if (!brandId) return true;
+  if (scope === null) return true;
+  return scope.includes(brandId);
 }
 
 /** Label Bahasa Indonesia untuk role (UI). */

@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { inviteMemberAction, revokeInvitationAction } from "@/features/tenancy/actions";
+import { setMemberBrandScopeAction } from "@/features/campaign/actions";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
@@ -15,6 +16,13 @@ export type MemberRow = {
   email: string;
   role: WorkspaceRole;
   status: string;
+  /** null = semua brand; array = hanya brand itu ([] = tidak ada brand). */
+  brandScope: string[] | null;
+};
+
+export type BrandRow = {
+  id: string;
+  name: string;
 };
 
 export type InvitationRow = {
@@ -25,18 +33,108 @@ export type InvitationRow = {
   expiresAt: string;
 };
 
+/** Editor brand scope per anggota (P1-A7) — hanya owner/admin. */
+function MemberScopeForm({
+  workspaceId,
+  member,
+  brands,
+  canManageScope,
+}: {
+  workspaceId: string;
+  member: MemberRow;
+  brands: BrandRow[];
+  canManageScope: boolean;
+}) {
+  const [mode, setMode] = useState<"all" | "custom">(
+    member.brandScope === null ? "all" : "custom",
+  );
+  const [state, formAction, pending] = useActionState(setMemberBrandScopeAction, {
+    ok: false,
+    message: "",
+  });
+  const scopeLabel =
+    member.brandScope === null
+      ? "Semua brand"
+      : member.brandScope.length === 0
+        ? "Tidak ada brand"
+        : member.brandScope
+            .map((id) => brands.find((b) => b.id === id)?.name ?? id)
+            .join(", ");
+  if (!canManageScope) return <span className="text-sm">{scopeLabel}</span>;
+  return (
+    <details className="text-sm">
+      <summary className="cursor-pointer">{scopeLabel}</summary>
+      <form action={formAction} className="mt-2 flex flex-col gap-2">
+        <input type="hidden" name="workspaceId" value={workspaceId} />
+        <input type="hidden" name="memberUserId" value={member.userId} />
+        <label className="flex items-center gap-2">
+          <input
+            type="radio"
+            name="scopeMode"
+            value="all"
+            checked={mode === "all"}
+            onChange={() => setMode("all")}
+          />
+          Semua brand
+        </label>
+        <label className="flex items-center gap-2">
+          <input
+            type="radio"
+            name="scopeMode"
+            value="custom"
+            checked={mode === "custom"}
+            onChange={() => setMode("custom")}
+          />
+          Hanya brand terpilih
+        </label>
+        {mode === "custom" ? (
+          <div className="ml-6 flex flex-col gap-1">
+            {brands.length === 0 ? (
+              <span className="text-[var(--mt-text-muted)]">Belum ada brand di workspace ini.</span>
+            ) : (
+              brands.map((b) => (
+                <label key={b.id} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    name="brandIds"
+                    value={b.id}
+                    defaultChecked={member.brandScope?.includes(b.id) ?? false}
+                  />
+                  {b.name}
+                </label>
+              ))
+            )}
+          </div>
+        ) : null}
+        {state.message ? (
+          <p role={state.ok ? "status" : "alert"} className="text-[13px]">
+            {state.message}
+          </p>
+        ) : null}
+        <Button type="submit" variant="secondary" size="sm" loading={pending}>
+          Simpan scope
+        </Button>
+      </form>
+    </details>
+  );
+}
+
 export default function AnggotaClient({
   workspaceId,
   workspaceName,
   members,
   invitations,
+  brands,
   canInvite,
+  canManageScope,
 }: {
   workspaceId: string;
   workspaceName: string;
   members: MemberRow[];
   invitations: InvitationRow[];
+  brands: BrandRow[];
   canInvite: boolean;
+  canManageScope: boolean;
 }) {
   const [state, formAction, pending] = useActionState(inviteMemberAction, {
     ok: false,
@@ -126,6 +224,18 @@ export default function AnggotaClient({
                     label={r.status}
                     tone={r.status === "active" ? "success" : "neutral"}
                     icon={r.status === "active" ? "✔️" : "•"}
+                  />
+                ),
+              },
+              {
+                key: "scope",
+                header: "Brand scope (P1-A7)",
+                render: (r) => (
+                  <MemberScopeForm
+                    workspaceId={workspaceId}
+                    member={r}
+                    brands={brands}
+                    canManageScope={canManageScope}
                   />
                 ),
               },

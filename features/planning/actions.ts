@@ -15,7 +15,7 @@
 import { revalidatePath } from "next/cache";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { SUPABASE_NOT_CONFIGURED_ID } from "@/lib/env";
-import { can } from "@/lib/permissions";
+import { brandInScope, can } from "@/lib/permissions";
 import type { WorkspaceRole } from "@/lib/permissions";
 import {
   audienceSchema,
@@ -33,7 +33,7 @@ import {
   tagSchema,
   transitionContentSchema,
 } from "@/lib/validation/schemas";
-import { getCallerRole, PLANNING_TABLES_UNAVAILABLE_ID } from "./context";
+import { getCallerBrandScope, getCallerRole, PLANNING_TABLES_UNAVAILABLE_ID } from "./context";
 import {
   canConvertIdea,
   canEditSpecificContent,
@@ -396,12 +396,16 @@ export async function createCampaignAction(
   _prev: PlanningActionResult,
   formData: FormData,
 ): Promise<PlanningActionResult> {
-  let targetMetrics: unknown = {};
-  try {
-    targetMetrics = JSON.parse(String(formData.get("targetMetricsJson") ?? "{}"));
-  } catch {
-    return fail("Target metrik bukan JSON yang valid.");
+  // Target: bentuk minimal 3 field (ASUMSI-5.3) — bukan lagi JSON bebas.
+  const targetMetrics: Record<string, unknown> = {};
+  const targetDeliverablesRaw = String(formData.get("targetDeliverables") ?? "").trim();
+  if (targetDeliverablesRaw !== "") {
+    targetMetrics.target_deliverables = Number(targetDeliverablesRaw);
   }
+  const targetDateRaw = String(formData.get("targetDate") ?? "").trim();
+  if (targetDateRaw !== "") targetMetrics.target_date = targetDateRaw;
+  const targetNotesRaw = String(formData.get("targetNotes") ?? "").trim();
+  if (targetNotesRaw !== "") targetMetrics.notes = targetNotesRaw;
   const parsed = campaignSchema.safeParse({
     workspaceId: formData.get("workspaceId"),
     name: formData.get("name"),
@@ -423,6 +427,12 @@ export async function createCampaignAction(
   const role = await requireRole(parsed.data.workspaceId, user.id);
   if (!role || !can(role, "manage_pillars_campaigns"))
     return fail("Hanya owner/admin/manager/strategist yang boleh membuat campaign.");
+  const scope = await getCallerBrandScope(parsed.data.workspaceId, user.id);
+  for (const brandId of parsed.data.brandIds) {
+    if (!brandInScope(scope, brandId)) {
+      return fail("Salah satu brand yang dipilih di luar scope Anda.");
+    }
+  }
   const { data: campaign, error } = await supabase
     .from("campaigns")
     .insert({
