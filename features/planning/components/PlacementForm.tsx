@@ -19,6 +19,13 @@ export function PlacementForm({
   initial,
   action,
   submitLabel,
+  // Form SENGAJA tetap dirender walau disabled — bila di-unmount tepat
+  // saat aksinya berhasil, pesan sukses useActionState hilang sebelum
+  // dibaca (pola Phase 3/4; cacat e2e 2026-11-19: pesan "Placement
+  // ditambahkan (versi v1)." lenyap karena form tambah di-unmount saat
+  // freeChannels jadi kosong sesudah revalidasi). Saat disabled, tombol
+  // kirim + select channel nonaktif; penjelasannya dirender pemanggil.
+  disabled = false,
 }: {
   workspaceId: string;
   contentItemId: string;
@@ -26,6 +33,7 @@ export function PlacementForm({
   initial: ContentPlacement | null;
   action: (prev: PlanningActionResult, formData: FormData) => Promise<PlanningActionResult>;
   submitLabel: string;
+  disabled?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(action, {
     ok: false,
@@ -57,7 +65,7 @@ export function PlacementForm({
           name="socialChannelId"
           defaultValue={initial?.social_channel_id ?? ""}
           required
-          disabled={Boolean(initial)}
+          disabled={disabled || Boolean(initial)}
           className="h-10 rounded-[10px] border border-[var(--mt-border)] bg-[var(--mt-surface)] px-3 text-sm font-normal"
         >
           <option value="">— Pilih channel —</option>
@@ -123,7 +131,7 @@ export function PlacementForm({
           {state.message}
         </p>
       ) : null}
-      <Button type="submit" loading={pending}>
+      <Button type="submit" loading={pending} disabled={disabled}>
         {submitLabel}
       </Button>
     </form>

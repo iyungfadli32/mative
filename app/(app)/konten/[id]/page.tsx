@@ -655,7 +655,13 @@ async function PlacementsTab({
           })}
         </ul>
       )}
-      {canEdit && freeChannels.length > 0 ? (
+      {/* Form tambah placement SENGAJA tetap dirender walau tidak ada channel
+          bebas — bila di-unmount saat placement tercipta (freeChannels jadi
+          kosong sesudah revalidasi), pesan sukses "Placement ditambahkan
+          (versi v1)." hilang sebelum dibaca (pola Phase 3/4; cacat e2e
+          2026-11-19). Saat tidak ada channel bebas form dirender disabled
+          dan penjelasannya tampil di bawahnya. */}
+      {canEdit ? (
         <details className="mt-4">
           <summary className="cursor-pointer text-sm font-medium text-[var(--mt-teal-700)]">
             ＋ Tambah placement
@@ -668,13 +674,15 @@ async function PlacementsTab({
               initial={null}
               action={createPlacementAction}
               submitLabel="Tambah placement"
+              disabled={freeChannels.length === 0}
             />
           </div>
+          {freeChannels.length === 0 ? (
+            <p className="mt-3 text-sm text-[var(--mt-text-muted)]">
+              Semua channel brand ini sudah punya placement untuk konten ini.
+            </p>
+          ) : null}
         </details>
-      ) : canEdit ? (
-        <p className="mt-3 text-sm text-[var(--mt-text-muted)]">
-          Semua channel brand ini sudah punya placement untuk konten ini.
-        </p>
       ) : null}
     </section>
   );
