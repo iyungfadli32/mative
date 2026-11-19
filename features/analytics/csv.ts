@@ -105,6 +105,16 @@ export function validateAnalyticsCsvRow(
   }
   const sourceNotesRaw = (row.source_notes ?? "").trim();
   if (sourceNotesRaw.length > 500) return fail("source_notes maksimal 500 karakter.");
+  // ASUMSI-7C: video_views/conversions hanya bermakna bila ambang/window
+  // attribution-nya dicatat — tanpa itu nilainya tidak ditampilkan.
+  if (
+    (metricKey === "video_views" || metricKey === "conversions") &&
+    sourceNotesRaw === ""
+  ) {
+    return fail(
+      `metric_key '${metricKey}' wajib menyebut ambang/window attribution di source_notes.`,
+    );
+  }
   return {
     ok: true,
     data: {

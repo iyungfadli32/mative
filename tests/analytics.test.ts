@@ -259,6 +259,25 @@ describe("CSV analytics (ASUMSI-7E)", () => {
     ).toMatchObject({ ok: false });
   });
 
+  it("video_views/conversions tanpa source_notes ditolak (ASUMSI-7C)", () => {
+    expect(
+      validateAnalyticsCsvRow(
+        { ...validRow, metric_key: "video_views", unit: "tayangan", source_notes: "" },
+        "2026-11-01",
+        "2026-11-30",
+        2,
+      ),
+    ).toMatchObject({ ok: false, error: expect.stringContaining("ambang/window") });
+    expect(
+      validateAnalyticsCsvRow(
+        { ...validRow, metric_key: "conversions", unit: "konversi", source_notes: "window 7 hari" },
+        "2026-11-01",
+        "2026-11-30",
+        2,
+      ),
+    ).toMatchObject({ ok: true });
+  });
+
   it("duplikat dalam satu file ditolak dengan nomor baris", () => {
     const parsed = parseAnalyticsCsv(
       [
