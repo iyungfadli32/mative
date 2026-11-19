@@ -206,14 +206,17 @@ test.describe("penerimaan Phase 4 — review & approval @needs-db", () => {
     await expect(page.getByText("Status produksi: approved")).toBeVisible({ timeout: 30000 });
 
     // 11. Approval Center: antrean Disetujui memuat konten ini; antrean
-    //     Menunggu saya kosong.
+    //     Menunggu saya memuat request v2 yang masih in_review (ditolak
+    //     sebagai basi, belum diputuskan) — BUKAN kosong. Antrean tidak
+    //     pernah kosong di akun ini karena residu run sebelumnya juga
+    //     masih in_review; yang di-assert adalah konten run ini ada.
     await page.goto("/persetujuan?tab=disetujui");
     await expect(page.getByRole("heading", { name: "Approval Center" })).toBeVisible();
     await expect(page.getByRole("link", { name: `Konten P4 ${slug}` })).toBeVisible({
       timeout: 30000,
     });
     await page.goto("/persetujuan?tab=menunggu_saya");
-    await expect(page.getByText("Tidak ada request di antrean menunggu saya")).toBeVisible({
+    await expect(page.getByRole("link", { name: `Konten P4 ${slug}` })).toBeVisible({
       timeout: 30000,
     });
 
@@ -288,7 +291,9 @@ test.describe("penerimaan Phase 4 — review & approval @needs-db", () => {
     await ownerPage.locator("#brand-name-new").fill(`Brand P4 ${slug}`);
     await ownerPage.locator("#brand-slug-new").fill(`brand-p4-${slug}`);
     await ownerPage.getByRole("button", { name: "Buat brand" }).click();
-    await expect(ownerPage.getByText("Brand dibuat.", { exact: true })).toBeVisible({ timeout: 30000 });
+    await expect(ownerPage.getByText("Brand dibuat.", { exact: true })).toBeVisible({
+      timeout: 30000,
+    });
     await ownerPage.goto("/konten/baru");
     await ownerPage.getByLabel(/Brand/).selectOption({ label: `Brand P4 ${slug}` });
     await ownerPage.getByLabel("Judul konten").fill(`Konten P4 ${slug}`);
