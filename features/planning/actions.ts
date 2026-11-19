@@ -99,6 +99,7 @@ function revalidatePlanning() {
     "/kampanye",
     "/ide",
     "/konten",
+    "/konten/baru",
     "/kalender",
     "/board",
     "/cari",
