@@ -118,7 +118,7 @@ test.describe("analytics — dashboard, impor CSV, laporan, integrasi", () => {
     await gotoWs(page, "/analitik", wsId);
     await expect(page.getByRole("heading", { name: "Analitik" })).toBeVisible();
     await expect(page.getByText("Belum terhubung")).toBeVisible({ timeout: 30000 });
-    await expect(page.getByText("Belum ada data analytics")).toBeVisible({ timeout: 30000 });
+    await expect(page.getByRole("heading", { name: "Belum ada data analytics" })).toBeVisible({ timeout: 30000 });
   });
 
   test("A7.2 impor CSV → dashboard menampilkan reach, engagements, engagement rate", async ({
