@@ -188,7 +188,12 @@ async function IdeContent({
           )}
           <div className="mt-3 flex flex-wrap items-center gap-2">
             {canConvertIdea(detailIdea) && canCreate ? (
-              <ConvertIdeaButton ideaId={detailIdea.id} workspaceId={workspaceId} />
+              <ConvertIdeaButton
+                ideaId={detailIdea.id}
+                workspaceId={workspaceId}
+                brands={brands.data}
+                ideaBrandId={detailIdea.brand_id}
+              />
             ) : detailIdea.converted_content_item_id ? (
               <Link
                 href={`/konten/${detailIdea.converted_content_item_id}`}
@@ -256,7 +261,12 @@ async function IdeContent({
                   ) : null}
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     {convertible && canCreate ? (
-                      <ConvertIdeaButton ideaId={idea.id} workspaceId={workspaceId} />
+                      <ConvertIdeaButton
+                        ideaId={idea.id}
+                        workspaceId={workspaceId}
+                        brands={brands.data}
+                        ideaBrandId={idea.brand_id}
+                      />
                     ) : idea.converted_content_item_id ? (
                       <Link
                         href={`/konten/${idea.converted_content_item_id}`}

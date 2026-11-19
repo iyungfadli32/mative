@@ -546,6 +546,7 @@ export async function convertIdeaAction(
   const ideaId = String(formData.get("ideaId") ?? "");
   const workspaceId = String(formData.get("workspaceId") ?? "");
   const title = String(formData.get("title") ?? "").trim() || undefined;
+  const brandIdRaw = String(formData.get("brandId") ?? "").trim();
   if (!ideaId || !workspaceId) return fail("Data tidak valid.");
   const { supabase, user } = await requireUser();
   if (!supabase || !user)
@@ -567,6 +568,7 @@ export async function convertIdeaAction(
   const { data, error } = await supabase.rpc("convert_idea_to_content", {
     p_idea_id: ideaId,
     p_title: title ?? null,
+    p_brand_id: brandIdRaw || null,
   });
   if (error) return fail(dbErrorMessage(error, "Gagal mengonversi ide"));
   const result = data as { ok: boolean; message?: string; content_item_id?: string } | null;
