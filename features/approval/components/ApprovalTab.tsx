@@ -93,7 +93,8 @@ export async function ApprovalTab({
     canDecide =
       activeRequest.status === "in_review" &&
       atOrder.some(
-        (s) => s.assignee_user_id === userId || (s.assignee_role !== null && s.assignee_role === role),
+        (s) =>
+          s.assignee_user_id === userId || (s.assignee_role !== null && s.assignee_role === role),
       );
   }
   const isStale =
@@ -124,7 +125,10 @@ export async function ApprovalTab({
       </div>
 
       {isStale ? (
-        <p role="alert" className="rounded-xl border border-[var(--mt-amber-500)] bg-[var(--mt-canvas)] p-3 text-sm">
+        <p
+          role="alert"
+          className="rounded-xl border border-[var(--mt-amber-500)] bg-[var(--mt-canvas)] p-3 text-sm"
+        >
           ⚠️ Request aktif ini menunjuk versi lama (bukan v{latestVersionNumber}). Keputusan atas
           versi basi akan ditolak server — ajukan ulang versi terbaru bila perlu.
         </p>
@@ -179,8 +183,8 @@ export async function ApprovalTab({
         <div className="rounded-xl border border-[var(--mt-border)] bg-[var(--mt-canvas)] p-3">
           <p className="text-sm font-medium">Client review</p>
           <p className="mt-1 text-sm text-[var(--mt-text-muted)]">
-            Review internal sudah disetujui dan gerbang client_review aktif di workspace ini.
-            Klien akan melihat konten ini di portal; keputusan tetap dibuat approver internal.
+            Review internal sudah disetujui dan gerbang client_review aktif di workspace ini. Klien
+            akan melihat konten ini di portal; keputusan tetap dibuat approver internal.
           </p>
           <div className="mt-2">
             <SubmitClientReviewForm
@@ -219,9 +223,7 @@ export async function ApprovalTab({
 
       {workflow && canManage ? (
         <div>
-          <h3 className="text-sm font-semibold">
-            Penugasan workflow default ({workflow.name})
-          </h3>
+          <h3 className="text-sm font-semibold">Penugasan workflow default ({workflow.name})</h3>
           <p className="mt-1 text-sm text-[var(--mt-text-muted)]">
             Step default menugaskan role “approver”. Bila workspace belum punya member approver,
             tugaskan step ke role lain atau pengguna eksplisit di sini — tanpa penugasan, request

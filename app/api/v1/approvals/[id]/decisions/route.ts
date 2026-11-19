@@ -11,10 +11,7 @@ import { errorJson, requireContext } from "../../helpers";
  * Identitas (user/role/workspace) dari sesi + DB, BUKAN dari body.
  * Keputusan append-only; penugasan + stale + kuorum ditegakkan RPC.
  */
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   let body: unknown = null;
   try {

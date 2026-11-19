@@ -29,7 +29,10 @@ export function DecisionForm({
     message: "",
   });
   return (
-    <form action={formAction} className="mt-3 flex flex-col gap-2 rounded-xl border border-[var(--mt-border)] bg-[var(--mt-canvas)] p-3">
+    <form
+      action={formAction}
+      className="mt-3 flex flex-col gap-2 rounded-xl border border-[var(--mt-border)] bg-[var(--mt-canvas)] p-3"
+    >
       <input type="hidden" name="requestId" value={requestId} />
       <input type="hidden" name="workspaceId" value={workspaceId} />
       <fieldset className="flex flex-wrap gap-2" disabled={disabled || pending}>
@@ -39,7 +42,13 @@ export function DecisionForm({
             key={d}
             className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-[var(--mt-border)] bg-[var(--mt-surface)] px-3 py-1 text-sm"
           >
-            <input type="radio" name="decision" value={d} required defaultChecked={d === "approved"} />
+            <input
+              type="radio"
+              name="decision"
+              value={d}
+              required
+              defaultChecked={d === "approved"}
+            />
             {APPROVAL_DECISION_LABELS[d]}
           </label>
         ))}

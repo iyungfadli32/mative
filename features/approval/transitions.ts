@@ -36,7 +36,10 @@ export function isCurrentVersionRequest(
   latestPlacementVersionId: string | null,
 ): boolean {
   if (request.content_version_id !== latestContentVersionId) return false;
-  if (request.placement_version_id !== null && request.placement_version_id !== latestPlacementVersionId)
+  if (
+    request.placement_version_id !== null &&
+    request.placement_version_id !== latestPlacementVersionId
+  )
     return false;
   return true;
 }

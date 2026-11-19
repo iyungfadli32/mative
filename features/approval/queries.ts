@@ -104,7 +104,9 @@ export async function listWorkflowSteps(
   return runQuery(
     supabase
       .from("approval_steps")
-      .select("id, workflow_id, step_order, step_type, assignee_role, assignee_user_id, required_count")
+      .select(
+        "id, workflow_id, step_order, step_type, assignee_role, assignee_user_id, required_count",
+      )
       .eq("workflow_id", workflowId)
       .order("step_order", { ascending: true })
       .order("created_at", { ascending: true }),
@@ -166,7 +168,9 @@ export async function listApprovalQueue(
   const workflowIds = [...new Set(requests.map((r) => r.workflow_id))];
   const { data: steps } = await supabase
     .from("approval_steps")
-    .select("id, workflow_id, step_order, step_type, assignee_role, assignee_user_id, required_count")
+    .select(
+      "id, workflow_id, step_order, step_type, assignee_role, assignee_user_id, required_count",
+    )
     .in("workflow_id", workflowIds);
   const stepsByWorkflow = new Map<string, ApprovalStep[]>();
   for (const s of (steps ?? []) as ApprovalStep[]) {
@@ -179,7 +183,8 @@ export async function listApprovalQueue(
       (s) => s.step_order === r.current_step_order,
     );
     return atOrder.some(
-      (s) => s.assignee_user_id === userId || (s.assignee_role !== null && s.assignee_role === role),
+      (s) =>
+        s.assignee_user_id === userId || (s.assignee_role !== null && s.assignee_role === role),
     );
   });
   return { data: mine, error: null, unavailable: false };

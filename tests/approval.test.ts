@@ -62,11 +62,7 @@ describe("versi basi (stale)", () => {
   });
   it("content version lama = basi", () => {
     expect(
-      isCurrentVersionRequest(
-        { content_version_id: "v1", placement_version_id: null },
-        "v2",
-        null,
-      ),
+      isCurrentVersionRequest({ content_version_id: "v1", placement_version_id: null }, "v2", null),
     ).toBe(false);
   });
   it("placement version lama = basi", () => {
@@ -145,9 +141,9 @@ describe("critical change (ASUMSI-4.6)", () => {
     expect(needsReapproval(v1, { ...v1 }, null, null, 1, 1)).toBe(false);
   });
   it("caption berubah = butuh reapproval", () => {
-    expect(
-      criticalFieldsChanged(v1, { ...v1, caption: "C2" }, null, null, 1, 1),
-    ).toEqual(["caption"]);
+    expect(criticalFieldsChanged(v1, { ...v1, caption: "C2" }, null, null, 1, 1)).toEqual([
+      "caption",
+    ]);
   });
   it("script + cta berubah = dua field", () => {
     expect(

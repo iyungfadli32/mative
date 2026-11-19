@@ -73,11 +73,7 @@ export type ApprovalDecision = {
 };
 
 export type ApprovalQueueTab =
-  | "menunggu_saya"
-  | "semua_tertunda"
-  | "disetujui"
-  | "minta_revisi"
-  | "ditolak";
+  "menunggu_saya" | "semua_tertunda" | "disetujui" | "minta_revisi" | "ditolak";
 
 /** Hasil RPC approval (jsonb {ok, code, message, ...} dari 0014). */
 export type ApprovalRpcResult = {

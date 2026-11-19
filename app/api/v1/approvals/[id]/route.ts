@@ -1,12 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getApprovalRequest, listApprovalDecisions, listWorkflowSteps } from "@/features/approval/queries";
+import {
+  getApprovalRequest,
+  listApprovalDecisions,
+  listWorkflowSteps,
+} from "@/features/approval/queries";
 import { errorJson, requireContext } from "../helpers";
 
 /** GET /api/v1/approvals/:id — detail request + keputusan + step (Dok 07 §6). */
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { supabase, ctx } = await requireContext(null);
   if (!supabase) return errorJson("UNAVAILABLE", "Supabase belum dikonfigurasi.", 503);

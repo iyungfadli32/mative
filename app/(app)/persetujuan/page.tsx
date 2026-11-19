@@ -108,15 +108,21 @@ async function PersetujuanContent({
       .in("content_item_id", itemIds)
       .order("version_number", { ascending: false });
     for (const v of (latest ?? []) as { id: string; content_item_id: string }[]) {
-      if (!latestVersionByItem.has(v.content_item_id)) latestVersionByItem.set(v.content_item_id, v.id);
+      if (!latestVersionByItem.has(v.content_item_id))
+        latestVersionByItem.set(v.content_item_id, v.id);
     }
   }
   // Penugasan step saat ini (untuk form keputusan inline).
   const workflowIds = [...new Set(requests.map((r) => r.workflow_id))];
   const { data: steps } = await supabase
     .from("approval_steps")
-    .select("id, workflow_id, step_order, step_type, assignee_role, assignee_user_id, required_count")
-    .in("workflow_id", workflowIds.length > 0 ? workflowIds : ["00000000-0000-0000-0000-000000000000"]);
+    .select(
+      "id, workflow_id, step_order, step_type, assignee_role, assignee_user_id, required_count",
+    )
+    .in(
+      "workflow_id",
+      workflowIds.length > 0 ? workflowIds : ["00000000-0000-0000-0000-000000000000"],
+    );
   const stepsByWorkflow = new Map<
     string,
     { step_order: number; assignee_role: string | null; assignee_user_id: string | null }[]
@@ -176,8 +182,8 @@ async function PersetujuanContent({
         />
       ) : null}
       <p className="text-xs text-[var(--mt-text-muted)]">
-        Keputusan approval tercatat permanen dan tidak bisa diubah. Komentar klien di portal
-        tidak pernah menjadi keputusan approval.
+        Keputusan approval tercatat permanen dan tidak bisa diubah. Komentar klien di portal tidak
+        pernah menjadi keputusan approval.
       </p>
     </div>
   );

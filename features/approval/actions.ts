@@ -44,10 +44,7 @@ const ok = (message: string, extra?: Partial<ApprovalActionResult>): ApprovalAct
   message,
   ...extra,
 });
-const fail = (
-  message: string,
-  extra?: Partial<ApprovalActionResult>,
-): ApprovalActionResult => ({
+const fail = (message: string, extra?: Partial<ApprovalActionResult>): ApprovalActionResult => ({
   ok: false,
   message,
   ...extra,

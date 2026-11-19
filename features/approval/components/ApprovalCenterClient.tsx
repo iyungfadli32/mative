@@ -1,7 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { APPROVAL_QUEUE_TABS, APPROVAL_QUEUE_TAB_LABELS, APPROVAL_STATUS_LABELS } from "@/features/approval/constants";
+import {
+  APPROVAL_QUEUE_TABS,
+  APPROVAL_QUEUE_TAB_LABELS,
+  APPROVAL_STATUS_LABELS,
+} from "@/features/approval/constants";
 import type { ApprovalQueueTab, ApprovalRequest } from "@/features/approval/types";
 import { DecisionForm } from "./DecisionForm";
 
@@ -55,48 +59,61 @@ export function ApprovalCenterClient({
         </p>
       ) : (
         <ul className="flex flex-col gap-3">
-          {rows.map(({ request, contentTitle, contentProductionStatus, versionNumber, submittedByName, canDecide, isStale }) => (
-            <li
-              key={request.id}
-              className="rounded-2xl border border-[var(--mt-border)] bg-[var(--mt-surface)] p-4"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <Link
-                    href={`/konten/${request.target_id}?workspace=${workspaceId}&tab=approval`}
-                    className="font-semibold underline"
-                  >
-                    {contentTitle}
-                  </Link>
-                  <p className="mt-1 text-sm text-[var(--mt-text-muted)]">
-                    {versionNumber !== null ? `Versi v${versionNumber}` : "Versi tidak diketahui"} •{" "}
-                    {request.request_type === "client" ? "Client review" : "Review internal"} •{" "}
-                    Status produksi: {contentProductionStatus}
-                  </p>
-                  <p className="mt-1 text-sm text-[var(--mt-text-muted)]">
-                    Diajukan oleh {submittedByName} •{" "}
-                    {new Date(request.submitted_at).toLocaleString("id-ID")}
-                  </p>
+          {rows.map(
+            ({
+              request,
+              contentTitle,
+              contentProductionStatus,
+              versionNumber,
+              submittedByName,
+              canDecide,
+              isStale,
+            }) => (
+              <li
+                key={request.id}
+                className="rounded-2xl border border-[var(--mt-border)] bg-[var(--mt-surface)] p-4"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <Link
+                      href={`/konten/${request.target_id}?workspace=${workspaceId}&tab=approval`}
+                      className="font-semibold underline"
+                    >
+                      {contentTitle}
+                    </Link>
+                    <p className="mt-1 text-sm text-[var(--mt-text-muted)]">
+                      {versionNumber !== null ? `Versi v${versionNumber}` : "Versi tidak diketahui"}{" "}
+                      • {request.request_type === "client" ? "Client review" : "Review internal"} •{" "}
+                      Status produksi: {contentProductionStatus}
+                    </p>
+                    <p className="mt-1 text-sm text-[var(--mt-text-muted)]">
+                      Diajukan oleh {submittedByName} •{" "}
+                      {new Date(request.submitted_at).toLocaleString("id-ID")}
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-[var(--mt-border)] bg-[var(--mt-canvas)] px-3 py-1 text-sm font-medium">
+                    {APPROVAL_STATUS_LABELS[request.status]}
+                  </span>
                 </div>
-                <span className="rounded-full border border-[var(--mt-border)] bg-[var(--mt-canvas)] px-3 py-1 text-sm font-medium">
-                  {APPROVAL_STATUS_LABELS[request.status]}
-                </span>
-              </div>
-              {isStale ? (
-                <p role="alert" className="mt-2 rounded-xl border border-[var(--mt-amber-500)] bg-[var(--mt-canvas)] p-2 text-sm">
-                  ⚠️ Request ini menunjuk versi lama — keputusan atas versi basi akan ditolak
-                  server. Buka konten untuk melihat versi terbaru.
-                </p>
-              ) : null}
-              {request.status === "in_review" && canDecide ? (
-                <DecisionForm requestId={request.id} workspaceId={workspaceId} />
-              ) : request.status === "in_review" ? (
-                <p className="mt-2 text-sm text-[var(--mt-text-muted)]">
-                  Anda tidak ditugaskan di step saat ini.
-                </p>
-              ) : null}
-            </li>
-          ))}
+                {isStale ? (
+                  <p
+                    role="alert"
+                    className="mt-2 rounded-xl border border-[var(--mt-amber-500)] bg-[var(--mt-canvas)] p-2 text-sm"
+                  >
+                    ⚠️ Request ini menunjuk versi lama — keputusan atas versi basi akan ditolak
+                    server. Buka konten untuk melihat versi terbaru.
+                  </p>
+                ) : null}
+                {request.status === "in_review" && canDecide ? (
+                  <DecisionForm requestId={request.id} workspaceId={workspaceId} />
+                ) : request.status === "in_review" ? (
+                  <p className="mt-2 text-sm text-[var(--mt-text-muted)]">
+                    Anda tidak ditugaskan di step saat ini.
+                  </p>
+                ) : null}
+              </li>
+            ),
+          )}
         </ul>
       )}
     </div>

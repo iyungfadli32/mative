@@ -34,13 +34,13 @@ submitted → in_review → approved | changes_requested | rejected | reapproval
 
 ## 2. Pemetaan hasil keputusan → production_status
 
-| Keputusan request | `approval_requests.status` | `content_items.production_status` |
-| --- | --- | --- |
-| Approve (semua step selesai, tipe internal) | `approved` | `approved` |
-| Approve (tipe client) | `approved` | tetap `approved` (sudah disetujui internal) |
-| Request changes | `changes_requested` | `editing` (ASUMSI-4.3) |
-| Reject | `rejected` | `editing` (kreator harus rework + submit ulang) |
-| Critical change sesudah approval | `reapproval_required` | tetap `approved`, TAPI request tidak lagi `approved` |
+| Keputusan request                           | `approval_requests.status` | `content_items.production_status`                    |
+| ------------------------------------------- | -------------------------- | ---------------------------------------------------- |
+| Approve (semua step selesai, tipe internal) | `approved`                 | `approved`                                           |
+| Approve (tipe client)                       | `approved`                 | tetap `approved` (sudah disetujui internal)          |
+| Request changes                             | `changes_requested`        | `editing` (ASUMSI-4.3)                               |
+| Reject                                      | `rejected`                 | `editing` (kreator harus rework + submit ulang)      |
+| Critical change sesudah approval            | `reapproval_required`      | tetap `approved`, TAPI request tidak lagi `approved` |
 
 Alasan tabel ini: `reapproval_required` adalah sinyal di tingkat request,
 bukan status produksi. Phase 6 (publishing) WAJIB memeriksa status
@@ -60,10 +60,10 @@ Default bila workspace belum mengonfigurasi (disimpan di
 
 Pemetaan ke data (ditegakkan trigger di migrasi 0014):
 
-| Field kritis | Sumber perbandingan |
-| --- | --- |
-| `script`, `caption`, `cta` | `content_versions.script/caption/cta` (versi baru vs versi yang disetujui) |
-| `asset` | `content_assets` (lampiran aset baru / lepas sesudah approval) |
+| Field kritis                          | Sumber perbandingan                                                                            |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `script`, `caption`, `cta`            | `content_versions.script/caption/cta` (versi baru vs versi yang disetujui)                     |
+| `asset`                               | `content_assets` (lampiran aset baru / lepas sesudah approval)                                 |
 | `channel`, `format`, `scheduled_time` | `placement_versions.payload_snapshot` (versi placement baru vs versi placement yang disetujui) |
 
 Perubahan field non-kritis (mis. typo metadata internal, `change_summary`)
@@ -103,15 +103,17 @@ append-only). Satu approver = satu keputusan per step per request
 ## 6. Otorisasi keputusan — 7 poin Dok 06 §4
 
 Setiap keputusan (`decide_approval_request`) memvalidasi, berurutan:
+
 1. pemanggil terautentikasi; 2. member workspace pemilik request;
-3. membership aktif; 4. role punya kapabilitas `approve_assigned`
+2. membership aktif; 4. role punya kapabilitas `approve_assigned`
    (`approver` penuh; `owner`/`admin`/`manager` HANYA bila ditugaskan
    eksplisit sebagai `assignee_user_id` di step — matriks "limited");
-5. akses tingkat resource (step saat ini menugaskan pemanggil — lewat
+3. akses tingkat resource (step saat ini menugaskan pemanggil — lewat
    `assignee_user_id` ATAU `assignee_role` yang cocok dengan role
    pemanggil); 6. resource di dalam batas tenant (request milik
    workspace pemanggil); 7. transisi state valid (request `in_review`,
    versi yang ditinjau adalah versi TERBARU — stale ditolak).
+
 - Request-changes / reject WAJIB komentar (ditolak server bila kosong).
 - Keputusan append-only: TIDAK ADA UPDATE/DELETE pada
   `approval_decisions` (trigger + tanpa policy UPDATE/DELETE).
@@ -155,10 +157,10 @@ byte-identik kecuali guard ini (pola yang sama dengan migrasi 0012).
   `approval_requests`, `approval_decisions` (0013); RPC
   `create_approval_request`, `decide_approval_request`,
   `submit_content_for_client_review`, `get_or_create_default_workflow`
-  + trigger critical-change + guard transisi (0014); Approval Center
-  desktop + mobile (`/persetujuan`); tab Approval di editor konten;
-  portal review klien (4.14); API `POST /api/v1/approvals/:id/decisions`
-  (+ GET antrean/detail) dengan kode error Dok 07 §6.
+  - trigger critical-change + guard transisi (0014); Approval Center
+    desktop + mobile (`/persetujuan`); tab Approval di editor konten;
+    portal review klien (4.14); API `POST /api/v1/approvals/:id/decisions`
+    (+ GET antrean/detail) dengan kode error Dok 07 §6.
 - Phase 5 memakai: hanya konten approved yang dihitung "siap" di
   campaign. Phase 6 memakai: hanya versi approved/current yang boleh
   dijadwalkan + gerbang client bila aktif.

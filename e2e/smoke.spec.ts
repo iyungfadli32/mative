@@ -67,7 +67,12 @@ test.describe("smoke — dashboard shell (belum masuk)", () => {
     await expect(
       page.getByRole("link", { name: "Board Produksi", exact: true }).first(),
     ).toBeVisible();
-    // Modul Phase 3+ masih disabled dengan alasan.
+    // Modul Phase 3+ masih disabled dengan alasan. Tombolnya ada di dalam
+    // dialog "Buat cepat" (Topbar) — Dialog hanya me-render isinya bila
+    // dibuka, jadi buka dialog dulu (perbaikan 2026-11-19: tes lama
+    // mengharapkan tombol tanpa membuka dialog, sehingga gagal
+    // "element(s) not found" walau aplikasinya benar).
+    await page.getByRole("button", { name: /Buat cepat/ }).click();
     const tugas = page.getByTitle("Belum tersedia di fase ini (Phase 3).");
     await expect(tugas.first()).toBeVisible();
   });

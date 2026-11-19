@@ -58,6 +58,13 @@ for (const vp of VIEWPORTS) {
     await page.screenshot({ path: `docs/visual-qa/konten-${vp.name}.png`, fullPage: true });
   });
 
+  test(`visual — approval center (belum masuk) @ ${vp.name}`, async ({ page }) => {
+    await page.setViewportSize({ width: vp.width, height: vp.height });
+    await page.goto("/persetujuan");
+    await expect(page.getByRole("heading", { name: "Approval Center" })).toBeVisible();
+    await page.screenshot({ path: `docs/visual-qa/persetujuan-${vp.name}.png`, fullPage: true });
+  });
+
   test(`visual — tugas (belum masuk) @ ${vp.name}`, async ({ page }) => {
     await page.setViewportSize({ width: vp.width, height: vp.height });
     await page.goto("/tugas");

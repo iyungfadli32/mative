@@ -252,8 +252,7 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
   });
 
   it("migrasi 0013 membuat 4 tabel approval + RLS aktif untuk keempatnya", () => {
-    const m13 =
-      migrationFiles().find((f) => f.name === "0013_approval_core.sql")?.sql ?? "";
+    const m13 = migrationFiles().find((f) => f.name === "0013_approval_core.sql")?.sql ?? "";
     for (const table of [
       "approval_workflows",
       "approval_steps",
@@ -297,22 +296,17 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
       expect(m14, `0014 harus berisi trigger ${fn}`).toContain(fn);
     }
     // Helper internal TIDAK di-grant ke authenticated (hanya untuk trigger).
-    expect(m14).not.toContain(
-      "grant execute on function public.approval_critical_fields",
+    expect(m14).not.toContain("grant execute on function public.approval_critical_fields");
+    expect(m14).not.toContain("grant execute on function public.flag_request_reapproval");
+    expect(m14).toContain(
+      "revoke all on function public.approval_critical_fields(uuid) from public",
     );
-    expect(m14).not.toContain(
-      "grant execute on function public.flag_request_reapproval",
-    );
-    expect(m14).toContain("revoke all on function public.approval_critical_fields(uuid) from public");
     // Guard 0014 = salinan 0008 + satu blok guard (bukan fungsi baru dari nol).
     expect(m14).toContain("create or replace function public.transition_content_item_status(");
   });
 
   it("pgTAP 04 ada dengan plan(64) + pola placeholder yang benar", () => {
-    const test04 = readFileSync(
-      path.join(APP_ROOT, "supabase/tests/04_rls_phase4.sql"),
-      "utf8",
-    );
+    const test04 = readFileSync(path.join(APP_ROOT, "supabase/tests/04_rls_phase4.sql"), "utf8");
     expect(test04).toContain("select plan(64);");
     expect(test04).not.toContain("094e8752-eef4-4f0e-b6ae-2d5813445018");
     expect(test04).not.toContain("aabb1dab-77c1-4659-af0e-c703c9de279c");
