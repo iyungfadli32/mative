@@ -592,3 +592,81 @@ di ADR-0009):
    diam-diam: tidak ada layanan pemindaian gratis yang terverifikasi
    tersedia di tier ini; klaim keamanan tidak pernah dibuat. Bila nanti
    ada kebutuhan, itu keputusan Phase 8/9 dengan layanan yang jelas.
+
+## 11. Addendum — Kegagalan pgTAP 03 live (T15, 23502) + perbaikan 0012 (2026-11-19)
+
+### 11.1 Yang terjadi live
+
+- Migrasi 0009 (19/19 bagian), 0010 (6/6), 0011 (2/2) diterapkan live dan
+  terverifikasi (9 tabel + RLS aktif + bucket privat; 5 RPC; guard NULL di
+  definisi fungsi).
+- pgTAP 03 v1 dijalankan live sebagai SATU Run (seluruh 477 baris ditempel
+  lalu Run sekali — SQL Editor TIDAK mempertahankan transaksi antar-Run;
+  run per bagian gagal FK 23503 di BAGIAN 2 karena `begin;` tidak bertahan).
+- Run GAGAL di TES 15 dengan error persis: `ERROR: 23502: null value in
+  column "brand_id" of relation "content_items" violates not-null
+  constraint` — RPC `convert_idea_to_content` (0008) meng-insert content
+  item dengan `brand_id` NULL (ide tanpa brand). Transaksi abort;
+  `finish()` tidak jalan; tidak ada hasil 34/34; tidak ada data uji
+  tersisa (rollback otomatis).
+
+### 11.2 Diagnosis — premis lama SALAH
+
+T15 v1 mengasumsikan `content_items.brand_id` NULLABLE dengan alasan
+"kolom NULLABLE menurut skema 0007". Itu salah baca: yang dibaca adalah
+**komentar header 0007 baris 191** ("workspace_id, brand_id, campaign_id
+nullable, ..."), bukan DDL-nya. Empat sumber sepakat brand itu WAJIB:
+
+1. **DDL 0007 baris 200:** `brand_id uuid not null references
+   public.brands (id) on delete restrict`.
+2. **Dok 05 §3 (kanonis, Keputusan #7):** `content_items` mencantumkan
+   `brand_id` TANPA penanda "nullable" — berbeda dengan `campaign_id` /
+   `pillar_id` / `audience_id` / `origin_idea_id` yang eksplisit
+   nullable, dan berbeda dengan `ideas` / `content_pillars` yang
+   eksplisit "brand_id nullable".
+3. **ERD §5:** `BRANDS ||--o{ CONTENT_ITEMS : owns` = tiap item wajib
+   tepat satu brand.
+4. **Skema aplikasi** (`lib/validation/schemas.ts`): `contentItemSchema`
+   `brandId = z.string().uuid()` WAJIB; hanya `ideaSchema` yang
+   `brandId: optionalUuid`.
+
+Migrasi 0011 (guard trigger) tidak cukup: constraint NOT NULL pada
+kolomnya sendiri yang memblokir INSERT. 0011 tetap dipertahankan apa
+adanya sebagai defense-in-depth (tidak pernah terpicu selama kolom
+NOT NULL).
+
+### 11.3 Keputusan (dikunci parent 2026-11-19)
+
+`content_items.brand_id` TETAP NOT NULL. Konversi ide tanpa brand harus
+bisa memilih brand **saat konversi** (bukan memaksa brand di tangkapan
+ide — ide tetap boleh tanpa brand sesuai Dok 05), dan kegagalan tanpa
+brand harus berupa pesan bersih, bukan crash database.
+
+### 11.4 Perubahan yang dibuat (commit terpisah)
+
+| # | Perubahan | Commit |
+| - | --------- | ------ |
+| 1 | Migrasi baru `0012_convert_idea_brand_param.sql`: DROP fungsi lama `(uuid, text)` (agar tak tersisa overload yang crash) + CREATE ulang `(uuid, text, uuid)` — brand efektif `coalesce(p_brand_id, brand ide)`; NULL → `ok:false` "Ide ini belum punya brand. Pilih brand dulu sebelum dikonversi."; `p_brand_id` lintas workspace → `ok:false` "Brand tidak ditemukan di workspace ini."; sisa logika byte-identik 0008; SECURITY DEFINER + `search_path` terkunci + revoke/grant EXECUTE hanya ke `authenticated`. pglast 5 statement OK. | `dfc79b8` |
+| 2 | UI: `ConvertIdeaButton` + `page.tsx` (`/ide`, 2 titik pakai) — select "Brand (wajib untuk konversi)" di form konversi, terisi awal brand ide bila ada, `required`; `convertIdeaAction` meneruskan `p_brand_id` ke RPC. Pesan sukses tidak berubah. Lint + typecheck lolos. | `a95430f` |
+| 3 | pgTAP 03 v1.1 — HANYA file `03_rls_phase3.sql`: T15–T15c → T15–T15d, `plan(34)` → `plan(35)`: T15 = tanpa `p_brand_id` → `ok=false` + pesan persis; T15b = dengan `p_brand_id` Brand A → `ok=true`; T15c = item memakai Brand A; T15d = ide `converted`. Header diperbarui (migrasi 0001–0012, cara run satu kali). Verifier statis diperluas (+10 pemeriksaan 0012): pglast 114 statement OK, 35 asersi == `plan(35)`, verifier 60/60. | `5e07f3c` |
+| 4 | `e2e/production.spec.ts`: buat brand dulu di `/merek` (locator `#brand-name-new` / `#brand-slug-new`, pola `planning.spec.ts`), tangkap ide TANPA brand, pilih brand di form konversi (pola stale-retry: muat ulang bila opsi belum muncul), lalu konversi. Sisa alur tidak berubah. tsc lolos; `playwright --list`: 6 tes. | `48b5ed5` |
+
+### 11.5 Batas jujur tambahan (di luar §7)
+
+- Perbaikan 0012 + T15 v1.1 + spek e2e baru **BELUM terbukti live** saat
+  addendum ini ditulis: 0012 belum diterapkan live, pgTAP 03 v1.1 belum
+  dijalankan ulang, e2e belum dijalankan ulang. Gate live Phase 3 tetap
+  MENUNGGU ketiga langkah itu (urutan: terapkan 0012 → pgTAP 03 v1.1
+  35/35 → e2e production 3/3 + planning 4/4).
+- Komentar lama di 0011 ("Item tanpa brand baru bisa diberi placement
+  setelah brand diisi lewat edit konten") TIDAK AKURAT untuk UI saat
+  ini: select Brand di edit konten di-`disabled` (defect #5 Phase 2),
+  jadi brand item tidak bisa diubah lewat edit. Item tanpa brand tidak
+  bisa dibuat lagi (jalur konversi kini wajib brand; jalur buat konten
+  memang wajib brand), tetapi item tanpa brand tidak lagi mungkin
+  terbentuk — kalimat itu tidak lagi relevan dan tidak dipakai sebagai
+  dasar keputusan apa pun.
+- Dialog "Potential issue detected" DIHARAPKAN saat menerapkan 0012
+  live (karena `drop function ... convert_idea_to_content(uuid, text)`):
+  DROP itu langsung diikuti CREATE ulang signatur baru dalam file yang
+  sama — fungsi diganti, bukan dihapus.
