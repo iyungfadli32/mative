@@ -116,7 +116,13 @@ async function setupContent(page: import("@playwright/test").Page, slug: string)
 async function openContentDetail(page: import("@playwright/test").Page, slug: string) {
   await page.goto("/konten");
   await page.getByRole("link", { name: `Konten P6 ${slug}` }).click();
-  await expect(page.getByRole("heading", { name: `Konten P6 ${slug}` })).toBeVisible();
+  // Timeout eksplisit (bukan andalkan expect.configure): navigasi pertama
+  // sesudah server produksi baru start bisa lambat (cold start) — tanpa ini
+  // heading expect memakai default 5 dtk dan pernah gagal 1× di run penuh
+  // padahal run ulang solo lolos (flake cold-start, bukan cacat produk).
+  await expect(page.getByRole("heading", { name: `Konten P6 ${slug}` })).toBeVisible({
+    timeout: 30000,
+  });
 }
 
 /** Setujui v1: walk ke editing → tugaskan step ke diri sendiri → submit → setujui. */
