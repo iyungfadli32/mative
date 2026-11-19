@@ -23,6 +23,11 @@ import { test, expect } from "@playwright/test";
  * Alur A6.2/A6.3/A6.5: job terjadwal masa depan → Scheduled locally (BUKAN
  * "Scheduled (provider)"), tanpa status Published/Uploaded palsu; buat
  * ulang waktu sama diblokir preflight (duplikat); batal sebelum kirim aman.
+ * SYARAT A6.2: jadwal placement diisi wall-clock yang SAMA dengan job —
+ * write-back create_publishing_job lalu menjadi no-op (guard trigger 0014
+ * `is not distinct from`) sehingga approval v1 bertahan; tanpa itu
+ * write-back NULL → jadwal job adalah perubahan nyata dan approval batal
+ * (cacat `new Date(v)` Phase 6, diperbaiki a2ed6cb).
  *
  * BUTUH database live + migrasi 0020 diterapkan + akun uji
  * (E2E_TEST_EMAIL/PASSWORD). Tes ini di-SKIP otomatis bila akun uji
@@ -140,8 +145,16 @@ async function approveV1(page: import("@playwright/test").Page, slug: string) {
   await expect(page.getByText("Status produksi: approved")).toBeVisible({ timeout: 30000 });
 }
 
-/** Tambah placement Instagram di tab Platform placements. */
-async function addPlacement(page: import("@playwright/test").Page) {
+/**
+ * Tambah placement Instagram di tab Platform placements.
+ * Bila wallClock diisi ("YYYY-MM-DDTHH:mm"), jadwal placement diisi dengan
+ * nilai yang SAMA — supaya write-back create_publishing_job menjadi no-op
+ * (trigger 0014 punya guard `is not distinct from`) dan approval v1
+ * bertahan sampai cek DUPLIKAT (A6.2). Tanpa jadwal yang sama, write-back
+ * NULL → jadwal job adalah perubahan nyata dan approval batal (cacat
+ * `new Date(v)` Phase 6 — lihat perbaikan a2ed6cb).
+ */
+async function addPlacement(page: import("@playwright/test").Page, wallClock?: string) {
   await page.getByRole("tab", { name: "Platform placements" }).click();
   const placementDetails = page.locator("details", {
     has: page.locator("summary", { hasText: "Tambah placement" }),
@@ -149,6 +162,9 @@ async function addPlacement(page: import("@playwright/test").Page) {
   await placementDetails.locator("summary", { hasText: "Tambah placement" }).click();
   await placementDetails.locator('select[name="socialChannelId"]').selectOption({ index: 1 });
   await placementDetails.getByLabel("Caption per channel").fill("Caption IG P6");
+  if (wallClock) {
+    await placementDetails.locator("#placement-scheduledAt").fill(wallClock);
+  }
   await placementDetails.getByRole("button", { name: "Tambah placement" }).click();
   await expect(page.getByText("Placement ditambahkan (versi v1).")).toBeVisible({
     timeout: 30000,
@@ -234,18 +250,20 @@ test.describe("penerimaan Phase 6 — publishing manual @needs-db", () => {
     const slug = `p6b-${Date.now().toString(36)}`;
 
     await setupContent(page, slug);
-    // Placement SEBELUM approval (ASUMSI-4.6 — lihat header file).
+    // Placement SEBELUM approval (ASUMSI-4.6 — lihat header file), dengan
+    // jadwal wall-clock yang SAMA dengan job nanti — supaya write-back job
+    // menjadi no-op dan approval bertahan sampai cek DUPLIKAT.
+    const future = new Date(Date.now() + 7 * 24 * 3600 * 1000);
+    const wall = future.toISOString().slice(0, 16);
     await openContentDetail(page, slug);
-    await addPlacement(page);
+    await addPlacement(page, wall);
     await approveV1(page, slug);
 
-    // Buat job terjadwal 7 hari ke depan (wall-clock; dibaca sebagai WIB).
+    // Buat job terjadwal 7 hari ke depan (wall-clock yang sama; dibaca sebagai WIB).
     // Tautan "Jadwalkan publikasi" ada di kartu placement, tab Platform placements.
     await page.getByRole("tab", { name: "Platform placements" }).click();
     await page.getByRole("link", { name: "Jadwalkan publikasi" }).click();
     await expect(page.getByRole("heading", { name: "Buat job publikasi" })).toBeVisible();
-    const future = new Date(Date.now() + 7 * 24 * 3600 * 1000);
-    const wall = future.toISOString().slice(0, 16);
     await page.locator("#pub-scheduled-at").fill(wall);
     await page.getByRole("button", { name: "Buat job publikasi" }).click();
     await expect(
