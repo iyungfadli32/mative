@@ -144,7 +144,7 @@ values ('f6000000-0000-0000-0000-000000000001', 'b1000000-0000-0000-0000-0000000
        ('f6000000-0000-0000-0000-000000000002', 'b1000000-0000-0000-0000-000000000002', 'Template Konten B5 (sample test)', 'd1000000-0000-0000-0000-000000000004', 'Konten Template B5', 'e1000000-0000-0000-0000-000000000003', null, 'Skrip template', 'Caption template', :'user_b')
 on conflict (id) do nothing;
 
-insert into public.content_template_placements (template_id, social_channel_id, format)
+insert into public.content_template_placements (template_id, social_channel_id, platform_format)
 values ('f6000000-0000-0000-0000-000000000001', 'e1100000-0000-0000-0000-000000000001', 'reel'),
        ('f6000000-0000-0000-0000-000000000002', 'e1100000-0000-0000-0000-000000000003', 'reel')
 on conflict (template_id, social_channel_id) do nothing;
@@ -569,7 +569,7 @@ select throws_ok(
   'T13d DENY: tautan template campaign ke brand workspace lain ditolak trigger'
 );
 select throws_ok(
-  $$ insert into public.content_template_placements (template_id, social_channel_id, format)
+  $$ insert into public.content_template_placements (template_id, social_channel_id, platform_format)
      values ('f6000000-0000-0000-0000-000000000001', 'e1100000-0000-0000-0000-000000000002', 'reel') $$,
   'P0001',
   'scope mismatch',

@@ -399,6 +399,19 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
     expect(m17).toContain(
       "on public.visual_orders for insert to authenticated with check (false);",
     );
+    // Regresi pgTAP 05 (Run live 2026-11-19 gagal 42703): kolom
+    // content_template_placements adalah platform_format (sesuai 0017),
+    // bukan format — file tes sempat memakai nama kolom yang salah.
+    const pgtap05 = readFileSync(
+      path.resolve(TESTS_DIR, "../supabase/tests/05_rls_phase5.sql"),
+      "utf8",
+    );
+    expect(pgtap05).not.toContain(
+      "content_template_placements (template_id, social_channel_id, format)",
+    );
+    expect(pgtap05).toContain(
+      "content_template_placements (template_id, social_channel_id, platform_format)",
+    );
     // 5 trigger scope (pola 0007) + 2 helper template-member.
     for (const fn of [
       "validate_visual_order_scope",
