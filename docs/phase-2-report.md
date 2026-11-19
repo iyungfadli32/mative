@@ -324,3 +324,23 @@ Jangan pernah menulis kredensial akun uji ke file/repo — hanya lewat environme
 - **Blocker:** akses jaringan ke domain Supabase proyek membutuhkan persetujuan pengguna ("Share info with kwyqtlxglhlvtghfrnhr.supabase.co", diminta 10:50 WIB, masih menunggu keputusan). Beberapa permintaan persetujuan jaringan dari run e2e kedaluwarsa tanpa dijawab, sehingga request menggantung. Tanpa persetujuan itu, e2e TIDAK bisa diloloskan dari VM ini.
 - **Tidak ada perubahan kode, tidak ada commit, tidak ada data uji tertinggal di live** (kedua spek gagal sebelum membuat organisasi/workspace apa pun). Server lokal sudah dimatikan.
 - **Langkah lanjut:** setelah persetujuan diberikan, jalankan ulang kedua perintah e2e yang sama (`e2e/auth.spec.ts`, lalu `e2e/planning.spec.ts`). Bila keduanya lolos, Phase 2 dinyatakan lolos penuh dan Phase 3 boleh mulai. Tidak ada perbaikan kode yang bisa mengatasi ini.
+
+## 16. Addendum e2e run ulang — LOLOS 6/6, PHASE 2 LOLOS PENUH (2026-11-19 12:26 WIB)
+
+- **Kartu persetujuan jaringan DISETUJUI user** (allow_always, saat run ulang). Setelah itu jaringan VM → Supabase Auth normal: `GET /auth/v1/settings` 200 dalam ~1,5 dtk, `POST /auth/v1/token` 200 dalam ~1,4 dtk dengan JWT valid.
+- **`e2e/auth.spec.ts` (gate 6 Phase 1): 2/2 LOLOS, exit 0 (16,7 dtk).** Login + buat organisasi/workspace + halaman anggota.
+- **`e2e/planning.spec.ts` (spek penerimaan Phase 2): 4/4 LOLOS, exit 0 (1,1 mnt).** 3 smoke tanpa login + alur penerimaan penuh: brand → 2 channel → konten → placement → kalender + board → edit v2 → pindah stage → reload.
+- **Defect yang ditemukan & diperbaiki koordinator e2e ke-2 (commit 4cb24a0, +156/−28, 4 file; parent verifikasi: lint 0 error, vitest 84/84, build 23 route):**
+  1. `features/tenancy/actions.ts` — `createOrganizationAction` tidak membuat baris `organization_members` owner → organisasi tak muncul di daftar, tombol buat workspace nonaktif. Perbaikan: insert membership owner.
+  2. `features/tenancy/actions.ts` — `createWorkspaceAction` tidak membuat baris `workspace_members` owner → workspace orphan tak terlihat. Perbaikan: id server-side `randomUUID()`, insert workspace + membership owner (`.select()` gagal 42501 via PostgREST karena policy SELECT; `return=minimal` lolos 201).
+  3. `features/tenancy/actions.ts` — `listMyWorkspaces()` tanpa ORDER BY → workspace "pertama" nondeterministik. Perbaikan: `.order("created_at", {ascending: true})`.
+  4. `OrganisasiClient.tsx` — `selectedOrg` tidak ikut berubah setelah organisasi dibuat. Perbaikan: `selectedOrg || organizations[0]?.id || ""`.
+  5. **KRITIS — `ContentForm.tsx`: edit konten TIDAK PERNAH bisa menyimpan.** Select Brand di-`disabled` saat edit, kontrol disabled tidak ikut terkirim → `brandId` null → validasi Zod gagal ("expected string, received null") → v2 tak pernah tercipta (DB hanya punya v1). Perbaikan: input tersembunyi `brandId` saat edit. Terverifikasi: probe menampilkan "Perubahan disimpan sebagai versi v2", run penerimaan lolos penuh.
+  6. Defect tes di `e2e/planning.spec.ts` (berkomentar di file): heading Channel `exact: true`; signIn 15 dtk; lokator `#brand-name-new`/`#brand-slug-new`; reload-retry `/channel`; form channel dibatasi ke `<details>` brand yang dibuka; klik "Tambah placement" ke `<summary>`; `select[name="socialChannelId"]`; `expect.configure({timeout: 30000})` + `test.setTimeout(180000)`; channel TikTok kedua (tanpa itu form placement hilang setelah placement pertama karena `freeChannels` kosong).
+- **Isu terbuka (dicatat jujur, bukan gate Phase 2):**
+  - `PlacementForm` punya pola defect yang sama dengan #5 (select Channel di-`disabled` saat edit, `updatePlacementAction` mewajibkan `socialChannelId` UUID) — belum dibuktikan lewat run. **Langkah 0 Phase 3: buktikan lewat probe, perbaiki bila terbukti, verifikasi dengan run ulang planning.spec.ts.**
+  - Pesan sukses placement hilang bila channel terakhir terpakai (form lenyap karena `freeChannels` kosong) — cacat UX.
+  - Stale render `/channel` intermiten: brand baru kadang tidak muncul di pemuatan pertama (4 dari ~7 percobaan), reload selalu memperbaiki; mekanisme belum teridentifikasi.
+  - `auth.spec.ts` tes 2 bergantung pada workspace tes 1 bila dijalankan paralel di environment fresh (race paralel, bukan defect app).
+- **Data uji tertinggal di live:** 10 organisasi, 3 workspace, 24 brand, 15 channel, 10 konten, 6 placement (slug `org-e2e-*`, `org-probe*`, termasuk orphan pra-perbaikan). Pembersihan via SQL Editor diluncurkan 12:26 WIB (hapus organisasi uji saja; seed "Contoh Studio (sample)" + akun e2e + user pgTAP A/B tidak disentuh).
+- **Kesimpulan: PHASE 2 LOLOS PENUH** — pgTAP 01 14/14 + pgTAP 02 20/20 + e2e 6/6. **Phase 3 boleh mulai.** (Progres buku rencana: 4/11 = 36%.)
