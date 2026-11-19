@@ -51,6 +51,20 @@ test.describe("penerimaan Phase 3 — production operations @needs-db", () => {
     await signIn(page);
     const slug = `p3-${Date.now().toString(36)}`;
 
+    // 0a. Setup: akun uji baru belum punya organisasi/workspace — tanpa
+    //     workspace, /merek menampilkan empty state "Belum ada workspace"
+    //     dan form brand tidak ada (bukan defect aplikasi; tes harus
+    //     mandiri). Buat org + workspace dulu (pola auth.spec.ts).
+    await page.goto("/pengaturan/organisasi");
+    await page.getByLabel("Nama organisasi").fill(`Organisasi P3 ${slug}`);
+    await page.getByLabel(/Slug \(huruf kecil/).fill(`org-p3-${slug}`);
+    await page.getByRole("button", { name: "Buat organisasi" }).click();
+    await expect(page.getByText("Organisasi dibuat.")).toBeVisible({ timeout: 30000 });
+    await page.getByLabel("Nama workspace").fill(`Workspace P3 ${slug}`);
+    await page.getByLabel("Slug", { exact: true }).fill(`ws-p3-${slug}`);
+    await page.getByRole("button", { name: "Buat workspace" }).click();
+    await expect(page.getByText("Workspace dibuat.")).toBeVisible({ timeout: 30000 });
+
     // 0. Buat brand dulu — konversi wajib punya brand (0012).
     // Lokator form buat-baru sama seperti planning.spec.ts:
     // #brand-name-new / #brand-slug-new (getByLabel ambigu bila sudah
