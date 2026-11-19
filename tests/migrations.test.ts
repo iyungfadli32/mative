@@ -22,7 +22,7 @@ function migrationFiles(): Array<{ name: string; sql: string }> {
 }
 
 describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
-  it("memiliki 17 migrasi berversi berurutan 0001–0017", () => {
+  it("memiliki 18 migrasi berversi berurutan 0001–0018", () => {
     const files = migrationFiles();
     expect(files.map((f) => f.name)).toEqual([
       "0001_profiles.sql",
@@ -42,6 +42,7 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
       "0015_notification_scope_placement.sql",
       "0016_brand_scope.sql",
       "0017_visual_planner_templates.sql",
+      "0018_set_visual_order_fixes.sql",
     ]);
   });
 
@@ -55,7 +56,9 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
       // (tanpa tabel/policy baru); 0014 hanya berisi fungsi approval
       // (tanpa tabel/policy baru); 0015 hanya memperluas satu CHECK +
       // mengganti satu fungsi trigger (tanpa tabel/policy baru); 0016
-      // hanya menulis ulang policy + helper (tanpa tabel baru).
+      // hanya menulis ulang policy + helper (tanpa tabel baru); 0018
+      // hanya menimpa satu fungsi RPC + memperketat satu CHECK (tanpa
+      // tabel/policy baru).
       if (
         name === "0008_planning_transactions.sql" ||
         name === "0010_production_transactions.sql" ||
@@ -63,7 +66,8 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
         name === "0012_convert_idea_brand_param.sql" ||
         name === "0014_approval_transactions.sql" ||
         name === "0015_notification_scope_placement.sql" ||
-        name === "0016_brand_scope.sql"
+        name === "0016_brand_scope.sql" ||
+        name === "0018_set_visual_order_fixes.sql"
       ) {
         expect(sql, `${name} tidak boleh membuat tabel`).not.toMatch(/create table/i);
         expect(sql, `${name} harus berisi fungsi RPC`).toMatch(/create or replace function/i);
@@ -444,6 +448,72 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
     // Unik ganda visual_orders: per placement + per posisi.
     expect(m17).toContain("unique (workspace_id, brand_id, social_channel_id, placement_id)");
     expect(m17).toContain("unique (workspace_id, brand_id, social_channel_id, position)");
+  });
+
+  it("migrasi 0018 memperbaiki set_visual_order (regresi diagnosis pgTAP 05)", () => {
+    const m18 =
+      migrationFiles().find((f) => f.name === "0018_set_visual_order_fixes.sql")?.sql ?? "";
+    // Regresi (1) — diagnosis 2026-11-19 (T10c/T10d gagal): posisi harus
+    // 1-based, bukan 0-based; count = panjang daftar (bukan v_pos seusai
+    // loop, yang akan bernilai N+1 bila mulai dari 1).
+    expect(m18).toContain("v_pos int := 1;");
+    expect(m18).not.toContain("v_pos int := 0;");
+    expect(m18).toContain("coalesce(array_length(p_placement_ids, 1), 0)");
+    // Regresi (2) — diagnosis 2026-11-19 (T11a2/T11c2 gagal): placement
+    // di luar (workspace, brand, channel) yang diminta ditolak dengan
+    // INVALID_STATE_TRANSITION, bukan FORBIDDEN.
+    expect(m18).toContain(
+      "'code', 'INVALID_STATE_TRANSITION', 'message', 'Placement tidak ditemukan di workspace/brand/channel ini.'",
+    );
+    // Regresi (3): CHECK position diperketat 0 -> 1 (menegakkan 1-based).
+    expect(m18).toContain("check (position >= 1)");
+    // 0018 menimpa fungsi yang sama (bukan fungsi baru) + grant tetap.
+    expect(m18).toContain("create or replace function public.set_visual_order(");
+    expect(m18).toContain(
+      "grant execute on function public.set_visual_order(uuid, uuid, uuid, uuid[]) to authenticated",
+    );
+    const fnBody =
+      m18.match(
+        /create or replace function public\.set_visual_order\([\s\S]*?^end;\n\$\$;/m,
+      )?.[0] ?? "";
+    expect(fnBody.length).toBeGreaterThan(0);
+    expect(fnBody).not.toContain("scheduled_at");
+    expect(fnBody).not.toMatch(/update\s+public\.content_placements/i);
+    expect(fnBody).not.toMatch(/insert\s+into\s+public\.content_placements/i);
+    // Regresi pgTAP 05 v1.1 (diagnosis 2026-11-19): pola throws_ok harus
+    // PESAN LENGKAP (bukti Phase 4: pola lengkap lolos; pola pendek gagal)
+    // + nama constraint terpotong Postgres (batas 63 byte) + B adalah
+    // manager WS-A (approver hanya "view" untuk manage_pillars_campaigns
+    // per Dok 06 §3, jadi T11e sebagai approver tidak mungkin lolos).
+    const test05 = readFileSync(path.join(APP_ROOT, "supabase/tests/05_rls_phase5.sql"), "utf8");
+    expect(test05).not.toContain(":'user_b', 'approver'");
+    expect(test05).toContain(":'user_b', 'manager'");
+    expect(test05).not.toContain("\n  'scope mismatch',\n");
+    expect(test05).toContain(
+      "'scope mismatch: visual_orders.placement_id belongs to a different workspace/brand/channel'",
+    );
+    expect(test05).toContain(
+      "'scope mismatch: campaign_template_brands template and brand belong to different workspaces'",
+    );
+    expect(test05).toContain(
+      "'scope mismatch: content_template_placements channel belongs to a different workspace/brand than its template'",
+    );
+    expect(test05).not.toContain("\n  'workspace_members_brand_scope_check',\n");
+    expect(test05).toContain(
+      "'new row for relation \"workspace_members\" violates check constraint \"workspace_members_brand_scope_check\"'",
+    );
+    expect(test05).not.toContain(
+      "visual_orders_workspace_id_brand_id_social_channel_id_placement_id_key",
+    );
+    expect(test05).not.toContain(
+      "visual_orders_workspace_id_brand_id_social_channel_id_position_key",
+    );
+    expect(test05).toContain(
+      "'duplicate key value violates unique constraint \"visual_orders_workspace_id_brand_id_social_channel_id_place_key\"'",
+    );
+    expect(test05).toContain(
+      "'duplicate key value violates unique constraint \"visual_orders_workspace_id_brand_id_social_channel_id_posit_key\"'",
+    );
   });
 
   it("pgTAP 04 ada dengan plan(64) + pola placeholder yang benar", () => {

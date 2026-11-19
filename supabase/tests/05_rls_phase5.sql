@@ -1,15 +1,19 @@
--- MaTive Phase 5 — RLS + RPC brand scope / visual planner / template (pgTAP) — v1.0
+-- MaTive Phase 5 — RLS + RPC brand scope / visual planner / template (pgTAP) — v1.1
 -- v1.0 (2026-11-19): file baru untuk migrasi 0016 (brand scope, P1-A7) +
 -- 0017 (visual planner + template). 59 asersi.
+-- v1.1 (2026-11-19): perbaikan diagnosis live (47/59): B WS-A = manager
+-- (bukan approver); pola throws_ok = pesan lengkap + nama constraint
+-- terpotong 63 byte; butuh migrasi 0018 (posisi 1-based + kode
+-- INVALID_STATE_TRANSITION untuk placement di luar scope).
 -- ============================================================================
 -- CARA MENJALANKAN (oleh koordinator — butuh DATABASE_URL / service role):
---   1. Terapkan migrasi 0001–0017 ke database BERSIH (lihat
+--   1. Terapkan migrasi 0001–0018 ke database BERSIH (lihat
 --      docs/phase-5-report.md §8; urutan: 0016 lalu 0017).
 --   2. Aktifkan ekstensi pgTAP di proyek Supabase (Dashboard → Database →
 --      Extensions → pgtap), atau jalankan:  create extension if not exists pgtap;
 --   3. Buat 2 pengguna auth uji (mis. lewat Dashboard → Authentication →
 --      Add user) dan catat UUID-nya; ganti placeholder di bawah.
---      User A = owner Workspace A. User B = approver di Workspace A dengan
+--      User A = owner Workspace A. User B = manager di Workspace A dengan
 --      brand_scope = [Brand A] (TERBATAS), admin di Workspace B (tanpa scope).
 --   4. Jalankan:  psql "$DATABASE_URL" -v user_a='<UUID-USER-A>' \
 --        -v user_b='<UUID-USER-B>' \
@@ -64,7 +68,7 @@ $$;
 -- ---------------------------------------------------------------------------
 -- Setup: org + workspace + member + brand + channel + campaign + item +
 -- placement + template (sebagai postgres, bypass RLS).
--- User B = approver WS-A dengan brand_scope [Brand A]; admin WS-B (tanpa scope).
+-- User B = manager WS-A dengan brand_scope [Brand A]; admin WS-B (tanpa scope).
 -- ---------------------------------------------------------------------------
 insert into public.organizations (id, name, slug, owner_user_id)
 values ('a1000000-0000-0000-0000-000000000001', 'Org A5 (sample test)', 'org-a5-test', :'user_a'),
@@ -83,7 +87,7 @@ on conflict (organization_id, slug) do nothing;
 
 insert into public.workspace_members (workspace_id, user_id, workspace_role, membership_status, joined_at)
 values ('b1000000-0000-0000-0000-000000000001', :'user_a', 'owner', 'active', now()),
-       ('b1000000-0000-0000-0000-000000000001', :'user_b', 'approver', 'active', now()),
+       ('b1000000-0000-0000-0000-000000000001', :'user_b', 'manager', 'active', now()),
        ('b1000000-0000-0000-0000-000000000002', :'user_b', 'admin', 'active', now())
 on conflict (workspace_id, user_id) do nothing;
 
@@ -523,7 +527,7 @@ select throws_ok(
   $$ insert into public.visual_orders (workspace_id, brand_id, social_channel_id, placement_id, position)
      values ('b1000000-0000-0000-0000-000000000002', 'e1000000-0000-0000-0000-000000000001', 'e1100000-0000-0000-0000-000000000001', 'c1100000-0000-0000-0000-000000000001', 1) $$,
   'P0001',
-  'scope mismatch',
+  'scope mismatch: visual_orders.placement_id belongs to a different workspace/brand/channel',
   'T12a DENY: visual_order dengan workspace salah (WS-B untuk placement WS-A) ditolak trigger'
 );
 insert into public.visual_orders (workspace_id, brand_id, social_channel_id, placement_id, position)
@@ -565,14 +569,14 @@ select throws_ok(
   $$ insert into public.campaign_template_brands (template_id, brand_id)
      values ('f5000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-000000000003') $$,
   'P0001',
-  'scope mismatch',
+  'scope mismatch: campaign_template_brands template and brand belong to different workspaces',
   'T13d DENY: tautan template campaign ke brand workspace lain ditolak trigger'
 );
 select throws_ok(
   $$ insert into public.content_template_placements (template_id, social_channel_id, platform_format)
      values ('f6000000-0000-0000-0000-000000000001', 'e1100000-0000-0000-0000-000000000002', 'reel') $$,
   'P0001',
-  'scope mismatch',
+  'scope mismatch: content_template_placements channel belongs to a different workspace/brand than its template',
   'T13e DENY: placement template ke channel brand lain ditolak trigger'
 );
 set local role authenticated;
@@ -586,14 +590,14 @@ select throws_ok(
   format($f$insert into public.workspace_members (workspace_id, user_id, workspace_role, membership_status, brand_scope, joined_at)
     values ('b1000000-0000-0000-0000-000000000002', %L, 'creator', 'active', '"bukan-array"'::jsonb, now())$f$, :'user_a'),
   '23514',
-  'workspace_members_brand_scope_check',
+  'new row for relation "workspace_members" violates check constraint "workspace_members_brand_scope_check"',
   'T14a DENY: brand_scope string (bukan array) ditolak CHECK'
 );
 select throws_ok(
   format($f$insert into public.workspace_members (workspace_id, user_id, workspace_role, membership_status, brand_scope, joined_at)
     values ('b1000000-0000-0000-0000-000000000002', %L, 'creator', 'active', '{"a":1}'::jsonb, now())$f$, :'user_a'),
   '23514',
-  'workspace_members_brand_scope_check',
+  'new row for relation "workspace_members" violates check constraint "workspace_members_brand_scope_check"',
   'T14b DENY: brand_scope objek (bukan array) ditolak CHECK'
 );
 insert into public.workspace_members (workspace_id, user_id, workspace_role, membership_status, brand_scope, joined_at)
@@ -621,14 +625,14 @@ select throws_ok(
   $$ insert into public.visual_orders (workspace_id, brand_id, social_channel_id, placement_id, position)
      values ('b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-000000000001', 'e1100000-0000-0000-0000-000000000001', 'c1100000-0000-0000-0000-000000000001', 2) $$,
   '23505',
-  'visual_orders_workspace_id_brand_id_social_channel_id_placement_id_key',
+  'duplicate key value violates unique constraint "visual_orders_workspace_id_brand_id_social_channel_id_place_key"',
   'T15b DENY: placement yang sama tidak boleh dua kali dalam satu scope'
 );
 select throws_ok(
   $$ insert into public.visual_orders (workspace_id, brand_id, social_channel_id, placement_id, position)
      values ('b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-000000000001', 'e1100000-0000-0000-0000-000000000001', 'c1100000-0000-0000-0000-000000000002', 1) $$,
   '23505',
-  'visual_orders_workspace_id_brand_id_social_channel_id_position_key',
+  'duplicate key value violates unique constraint "visual_orders_workspace_id_brand_id_social_channel_id_posit_key"',
   'T15c DENY: posisi yang sama tidak boleh dipakai dua placement dalam satu scope'
 );
 delete from public.visual_orders where placement_id = 'c1100000-0000-0000-0000-000000000001';
