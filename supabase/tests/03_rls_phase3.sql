@@ -49,6 +49,16 @@
 -- hapus template is_default=true. UPDATE is_default=false dulu membuat
 -- cascade menghapus template non-default dan lolos. plan TETAP 35, jumlah
 -- asersi TETAP 35.
+--
+-- v1.4 (2026-11-19): T4 ditulis ulang — ekspektasi 23514 (CHECK
+-- tasks_parent_type_check) SALAH. Run diagnostik live 15:57 WIB (34/35)
+-- membuktikan insert parent_type='idea' ditolak lebih dulu oleh trigger
+-- BEFORE validate_task_scope() (0009 baris 317–349): tidak ada cabang IF
+-- untuk 'idea' → v_ws NULL → P0001 'scope mismatch: ...'. Di PostgreSQL
+-- trigger BEFORE berjalan SEBELUM CHECK dievaluasi, jadi CHECK tidak pernah
+-- sempat menolak. Perilaku produk BENAR (baris tidak valid tetap ditolak);
+-- hanya mekanisme penolakannya trigger, bukan CHECK. T4 kini mengharapkan
+-- P0001 + pesan scope mismatch. plan TETAP 35, jumlah asersi TETAP 35.
 -- CATATAN: tes ini TIDAK BOLEH dijalankan di database produksi berisi data
 -- nyata — hanya database bersih/preview. Tes memakai JWT claims palsu lewat
 -- set_config('request.jwt.claims') untuk mensimulasikan tiap pengguna.
@@ -213,16 +223,18 @@ select is(
 );
 
 -- ============================================================================
--- TES 4 (P3-A1): parent_type task dikunci CHECK — 'idea' bukan parent sah.
+-- TES 4 (P3-A1): parent_type task di luar (content_item, campaign) ditolak.
+-- Mekanisme penolaknya trigger BEFORE validate_task_scope() (P0001), BUKAN
+-- CHECK — trigger berjalan sebelum CHECK dievaluasi (v1.4).
 -- Dijalankan sebagai user A (owner A).
 -- ============================================================================
 select _set_user(:'user_a');
 select throws_ok(
   $$insert into public.tasks (workspace_id, parent_type, parent_id, title)
      values ('b0000000-0000-0000-0000-000000000001', 'idea', 'd0000000-0000-0000-0000-000000000001', 'Task Parent Salah')$$,
-  '23514',
-  'new row for relation "tasks" violates check constraint "tasks_parent_type_check"',
-  'T4 DENY: parent_type task di luar (content_item, campaign) ditolak CHECK'
+  'P0001',
+  'scope mismatch: tasks.parent_id belongs to a different workspace or does not exist',
+  'T4 DENY: parent_type task di luar (content_item, campaign) ditolak trigger scope (BEFORE CHECK)'
 );
 
 -- ============================================================================
