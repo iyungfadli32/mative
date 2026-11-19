@@ -101,10 +101,28 @@ export async function ApprovalTab({
     activeRequest !== undefined && activeRequest.content_version_id !== latestVersionId;
 
   // Penugasan workflow default (owner/admin/manager saja).
-  const workflow = workflowRes.data;
+  // Workflow default dibuat LAZY oleh RPC 0014 (baru ada saat submit
+  // pertama) — tanpa langkah ini, form penugasan TIDAK PERNAH muncul
+  // sebelum submit pertama, padahal penugasan harus bisa dilakukan
+  // SEBELUM submit agar request bisa diputuskan (R4.3; cacat e2e
+  // 2026-11-19: tab Approval workspace baru tanpa form penugasan).
+  // Pastikan workflow ada dulu (RPC idempotent); abaikan galat RPC
+  // (mis. balapan dengan pembuat lain — indeks unik satu-default
+  // menjaga hanya satu baris) lalu baca ulang apa pun hasilnya.
+  let workflow = workflowRes.data;
+  const canManage = ["owner", "admin", "manager"].includes(role);
+  if (!workflow && canManage) {
+    try {
+      await supabase.rpc("get_or_create_default_workflow", {
+        p_workspace_id: workspaceId,
+      });
+    } catch {
+      // Abaikan — baca ulang di bawah menentukan ada/tidaknya workflow.
+    }
+    workflow = (await getDefaultWorkflow(supabase, workspaceId)).data;
+  }
   let workflowSteps: Awaited<ReturnType<typeof listWorkflowSteps>>["data"] = [];
   let members: Awaited<ReturnType<typeof listWorkspaceMembers>> = [];
-  const canManage = ["owner", "admin", "manager"].includes(role);
   if (workflow && canManage) {
     const [stepsRes, memRes] = await Promise.all([
       listWorkflowSteps(supabase, workflow.id),
