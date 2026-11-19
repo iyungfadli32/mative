@@ -22,7 +22,7 @@ function migrationFiles(): Array<{ name: string; sql: string }> {
 }
 
 describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
-  it("memiliki 11 migrasi berversi berurutan 0001–0011", () => {
+  it("memiliki 12 migrasi berversi berurutan 0001–0012", () => {
     const files = migrationFiles();
     expect(files.map((f) => f.name)).toEqual([
       "0001_profiles.sql",
@@ -36,6 +36,7 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
       "0009_production_ops.sql",
       "0010_production_transactions.sql",
       "0011_fix_content_item_brand_null.sql",
+      "0012_convert_idea_brand_param.sql",
     ]);
   });
 
@@ -45,11 +46,13 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
       // tabel baru — RLS tabelnya sudah aktif sejak 0001–0005.
       // 0008 dan 0010 hanya berisi fungsi RPC transaksional (tanpa
       // tabel/policy baru); 0011 hanya mengganti satu fungsi trigger
+      // (tanpa tabel/policy baru); 0012 hanya mengganti satu fungsi RPC
       // (tanpa tabel/policy baru).
       if (
         name === "0008_planning_transactions.sql" ||
         name === "0010_production_transactions.sql" ||
-        name === "0011_fix_content_item_brand_null.sql"
+        name === "0011_fix_content_item_brand_null.sql" ||
+        name === "0012_convert_idea_brand_param.sql"
       ) {
         expect(sql, `${name} tidak boleh membuat tabel`).not.toMatch(/create table/i);
         expect(sql, `${name} harus berisi fungsi RPC`).toMatch(/create or replace function/i);
@@ -209,6 +212,33 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
     // disebut di komentar (sengaja tidak diubah), bukan diganti.
     expect(m11.match(/create or replace function/g)?.length).toBe(1);
     expect(m11).not.toContain("create or replace function public.validate_content_placement_scope");
+  });
+
+  it("migrasi 0012 mengganti convert_idea_to_content: p_brand_id + guard brand NULL", () => {
+    const m12 =
+      migrationFiles().find((f) => f.name === "0012_convert_idea_brand_param.sql")?.sql ?? "";
+    // Fungsi lama (uuid, text) di-drop agar tak tersisa overload yang crash
+    // pada brand NULL; fungsi baru (uuid, text, uuid) menggantikannya.
+    expect(m12).toMatch(
+      /drop\s+function\s+if\s+exists\s+public\.convert_idea_to_content\(uuid,\s*text\)/,
+    );
+    expect(m12).toContain("create or replace function public.convert_idea_to_content(");
+    expect(m12).toContain("p_brand_id uuid default null");
+    // Brand efektif = coalesce(p_brand_id, brand ide); NULL → pesan bersih.
+    expect(m12).toMatch(/v_brand_id\s*:=\s*coalesce\(p_brand_id,\s*v_idea\.brand_id\)/);
+    expect(m12).toContain("Ide ini belum punya brand. Pilih brand dulu sebelum dikonversi.");
+    // p_brand_id lintas workspace ditolak.
+    expect(m12).toContain("Brand tidak ditemukan di workspace ini.");
+    expect(m12).toMatch(/security definer/i);
+    expect(m12).toMatch(/search_path = public, pg_temp/);
+    // Tanpa tabel/policy baru; GRANT EXECUTE hanya ke authenticated.
+    expect(m12).not.toMatch(/create table/i);
+    expect(m12).not.toMatch(/create policy/i);
+    expect(m12).toMatch(
+      /grant execute on function public\.convert_idea_to_content\(uuid,\s*text,\s*uuid\) to authenticated/,
+    );
+    // Tepat satu fungsi diganti; fungsi 0008 tidak disentuh (0012 yang baru).
+    expect(m12.match(/create or replace function/g)?.length).toBe(1);
   });
 
   it("token undangan disimpan sebagai hash, bukan token mentah", () => {
