@@ -1,4 +1,7 @@
--- MaTive Phase 7 — First Official Integration + Analytics (migrasi 0021)
+-- MaTive Phase 7 — First Official Integration + Analytics (migrasi 0021 v1.1)
+-- v1.1 (2026-11-20): perbaiki max(brand_id) -> subquery skalar di
+-- import_analytics_snapshot (max(uuid) tidak ada di Postgres; pgTAP 07
+-- live gagal 42883 di T2a). Selain itu identik dengan v1.0.
 -- ADR-0013. Adapter DISABLED (Keputusan #3): TIDAK ADA platform yang
 -- dipilih, TIDAK ADA akses apa pun — langkah 7.1/7.3 belum terpenuhi.
 -- Yang dibangun: capability registry (di atas social_channels 0007) +
@@ -764,7 +767,12 @@ begin
     where c ->> 'campaign_id' is not null
   loop
     -- Brand agregat: satu brand bila campaign hanya punya satu brand.
-    select case when count(*) = 1 then max(brand_id) end into v_campaign_brand
+    -- v1.1 (2026-11-20): max(uuid) TIDAK ADA di Postgres (42883, ketemu
+    -- pgTAP 07 live T2a) — pakai subquery skalar; semantik sama persis:
+    -- 1 baris -> brand itu; 0 atau >1 baris -> NULL (multi-brand).
+    select case when count(*) = 1
+      then (select brand_id from public.campaign_brands where campaign_id = v_campaign_id limit 1)
+    end into v_campaign_brand
     from public.campaign_brands where campaign_id = v_campaign_id;
 
     delete from public.campaign_metrics
