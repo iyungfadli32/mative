@@ -604,8 +604,8 @@ di ADR-0009):
   lalu Run sekali — SQL Editor TIDAK mempertahankan transaksi antar-Run;
   run per bagian gagal FK 23503 di BAGIAN 2 karena `begin;` tidak bertahan).
 - Run GAGAL di TES 15 dengan error persis: `ERROR: 23502: null value in
-  column "brand_id" of relation "content_items" violates not-null
-  constraint` — RPC `convert_idea_to_content` (0008) meng-insert content
+column "brand_id" of relation "content_items" violates not-null
+constraint` — RPC `convert_idea_to_content` (0008) meng-insert content
   item dengan `brand_id` NULL (ide tanpa brand). Transaksi abort;
   `finish()` tidak jalan; tidak ada hasil 34/34; tidak ada data uji
   tersisa (rollback otomatis).
@@ -618,7 +618,7 @@ T15 v1 mengasumsikan `content_items.brand_id` NULLABLE dengan alasan
 nullable, ..."), bukan DDL-nya. Empat sumber sepakat brand itu WAJIB:
 
 1. **DDL 0007 baris 200:** `brand_id uuid not null references
-   public.brands (id) on delete restrict`.
+public.brands (id) on delete restrict`.
 2. **Dok 05 §3 (kanonis, Keputusan #7):** `content_items` mencantumkan
    `brand_id` TANPA penanda "nullable" — berbeda dengan `campaign_id` /
    `pillar_id` / `audience_id` / `origin_idea_id` yang eksplisit
@@ -644,12 +644,12 @@ brand harus berupa pesan bersih, bukan crash database.
 
 ### 11.4 Perubahan yang dibuat (commit terpisah)
 
-| # | Perubahan | Commit |
-| - | --------- | ------ |
-| 1 | Migrasi baru `0012_convert_idea_brand_param.sql`: DROP fungsi lama `(uuid, text)` (agar tak tersisa overload yang crash) + CREATE ulang `(uuid, text, uuid)` — brand efektif `coalesce(p_brand_id, brand ide)`; NULL → `ok:false` "Ide ini belum punya brand. Pilih brand dulu sebelum dikonversi."; `p_brand_id` lintas workspace → `ok:false` "Brand tidak ditemukan di workspace ini."; sisa logika byte-identik 0008; SECURITY DEFINER + `search_path` terkunci + revoke/grant EXECUTE hanya ke `authenticated`. pglast 5 statement OK. | `dfc79b8` |
-| 2 | UI: `ConvertIdeaButton` + `page.tsx` (`/ide`, 2 titik pakai) — select "Brand (wajib untuk konversi)" di form konversi, terisi awal brand ide bila ada, `required`; `convertIdeaAction` meneruskan `p_brand_id` ke RPC. Pesan sukses tidak berubah. Lint + typecheck lolos. | `a95430f` |
-| 3 | pgTAP 03 v1.1 — HANYA file `03_rls_phase3.sql`: T15–T15c → T15–T15d, `plan(34)` → `plan(35)`: T15 = tanpa `p_brand_id` → `ok=false` + pesan persis; T15b = dengan `p_brand_id` Brand A → `ok=true`; T15c = item memakai Brand A; T15d = ide `converted`. Header diperbarui (migrasi 0001–0012, cara run satu kali). Verifier statis diperluas (+10 pemeriksaan 0012): pglast 114 statement OK, 35 asersi == `plan(35)`, verifier 60/60. | `5e07f3c` |
-| 4 | `e2e/production.spec.ts`: buat brand dulu di `/merek` (locator `#brand-name-new` / `#brand-slug-new`, pola `planning.spec.ts`), tangkap ide TANPA brand, pilih brand di form konversi (pola stale-retry: muat ulang bila opsi belum muncul), lalu konversi. Sisa alur tidak berubah. tsc lolos; `playwright --list`: 6 tes. | `48b5ed5` |
+| #   | Perubahan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Commit    |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| 1   | Migrasi baru `0012_convert_idea_brand_param.sql`: DROP fungsi lama `(uuid, text)` (agar tak tersisa overload yang crash) + CREATE ulang `(uuid, text, uuid)` — brand efektif `coalesce(p_brand_id, brand ide)`; NULL → `ok:false` "Ide ini belum punya brand. Pilih brand dulu sebelum dikonversi."; `p_brand_id` lintas workspace → `ok:false` "Brand tidak ditemukan di workspace ini."; sisa logika byte-identik 0008; SECURITY DEFINER + `search_path` terkunci + revoke/grant EXECUTE hanya ke `authenticated`. pglast 5 statement OK. | `dfc79b8` |
+| 2   | UI: `ConvertIdeaButton` + `page.tsx` (`/ide`, 2 titik pakai) — select "Brand (wajib untuk konversi)" di form konversi, terisi awal brand ide bila ada, `required`; `convertIdeaAction` meneruskan `p_brand_id` ke RPC. Pesan sukses tidak berubah. Lint + typecheck lolos.                                                                                                                                                                                                                                                                  | `a95430f` |
+| 3   | pgTAP 03 v1.1 — HANYA file `03_rls_phase3.sql`: T15–T15c → T15–T15d, `plan(34)` → `plan(35)`: T15 = tanpa `p_brand_id` → `ok=false` + pesan persis; T15b = dengan `p_brand_id` Brand A → `ok=true`; T15c = item memakai Brand A; T15d = ide `converted`. Header diperbarui (migrasi 0001–0012, cara run satu kali). Verifier statis diperluas (+10 pemeriksaan 0012): pglast 114 statement OK, 35 asersi == `plan(35)`, verifier 60/60.                                                                                                     | `5e07f3c` |
+| 4   | `e2e/production.spec.ts`: buat brand dulu di `/merek` (locator `#brand-name-new` / `#brand-slug-new`, pola `planning.spec.ts`), tangkap ide TANPA brand, pilih brand di form konversi (pola stale-retry: muat ulang bila opsi belum muncul), lalu konversi. Sisa alur tidak berubah. tsc lolos; `playwright --list`: 6 tes.                                                                                                                                                                                                                 | `48b5ed5` |
 
 ### 11.5 Batas jujur tambahan (di luar §7)
 
