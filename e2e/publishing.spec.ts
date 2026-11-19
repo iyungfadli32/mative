@@ -2,11 +2,23 @@ import { test, expect } from "@playwright/test";
 
 /**
  * Spek penerimaan Phase 6 — Publishing Foundation (P6-10).
- * Alur A6.1: buat brand → channel → konten → pindah stage idea → editing
- * → tab Approval → tugaskan step ke diri sendiri → submit v1 → setujui v1
- * → tambah placement → Jadwalkan publikasi (segera) → antrean memproses
- * otomatis saat dimuat (worker lokal) → job Needs manual action →
- * konfirmasi manual (URL + waktu) → Published + bukti terbit.
+ * Alur A6.1: buat brand → channel → konten → tambah placement → pindah
+ * stage idea → editing → tab Approval → tugaskan step ke diri sendiri →
+ * submit v1 → setujui v1 → Jadwalkan publikasi (segera) → antrean
+ * memproses otomatis saat dimuat (worker lokal) → job Needs manual
+ * action → konfirmasi manual (URL + waktu) → Published + bukti terbit.
+ *
+ * URUTAN WAJIB — placement DULU, approval KEMUDIAN (ASUMSI-4.6):
+ * 'channel' adalah field kritis — placement baru yang ditambahkan
+ * SESUDAH approval membatalkan approval itu (trigger 0014
+ * check_critical_change_on_placement → request jadi
+ * reapproval_required), sehingga preflight menolak dengan
+ * APPROVAL_REQUIRED. Urutan lama (approve → placement → jadwalkan)
+ * gagal deterministik di keempat run pertama (Chromium + mobile,
+ * A6.1 + A6.2) dengan pesan preflight "Konten ini belum disetujui
+ * (versi terbaru v1 belum approved)". BUKAN cacat produk — trigger
+ * dan preflight bekerja sesuai desain kanonis; speknya yang salah
+ * urutan. Perbaikan: pindahkan addPlacement sebelum approveV1.
  *
  * Alur A6.2/A6.3/A6.5: job terjadwal masa depan → Scheduled locally (BUKAN
  * "Scheduled (provider)"), tanpa status Published/Uploaded palsu; buat
@@ -95,11 +107,16 @@ async function setupContent(page: import("@playwright/test").Page, slug: string)
   await expect(page.getByText("Konten dibuat beserta versi v1.")).toBeVisible({ timeout: 30000 });
 }
 
-/** Setujui v1: walk ke editing → tugaskan step ke diri sendiri → submit → setujui. */
-async function approveV1(page: import("@playwright/test").Page, slug: string) {
+/** Buka halaman detail konten dari daftar /konten. */
+async function openContentDetail(page: import("@playwright/test").Page, slug: string) {
   await page.goto("/konten");
   await page.getByRole("link", { name: `Konten P6 ${slug}` }).click();
   await expect(page.getByRole("heading", { name: `Konten P6 ${slug}` })).toBeVisible();
+}
+
+/** Setujui v1: walk ke editing → tugaskan step ke diri sendiri → submit → setujui. */
+async function approveV1(page: import("@playwright/test").Page, slug: string) {
+  await openContentDetail(page, slug);
   await walkToEditing(page);
   await page.getByRole("tab", { name: "Approval" }).click();
   await expect(page.getByText("Belum ada request approval aktif")).toBeVisible({
@@ -150,10 +167,14 @@ test.describe("penerimaan Phase 6 — publishing manual @needs-db", () => {
     const slug = `p6-${Date.now().toString(36)}`;
 
     await setupContent(page, slug);
-    await approveV1(page, slug);
+    // Placement SEBELUM approval (ASUMSI-4.6 — lihat header file).
+    await openContentDetail(page, slug);
     await addPlacement(page);
+    await approveV1(page, slug);
 
-    // Buat job segera (jadwal dikosongkan → Ready) dari tautan placement.
+    // Buat job segera (jadwal dikosongkan → Ready) dari tautan placement
+    // (tautan ada di kartu placement, tab Platform placements).
+    await page.getByRole("tab", { name: "Platform placements" }).click();
     await page.getByRole("link", { name: "Jadwalkan publikasi" }).click();
     await expect(page.getByRole("heading", { name: "Buat job publikasi" })).toBeVisible();
     await expect(page.getByText("Preflight lolos — job bisa dibuat.")).toBeVisible({
@@ -213,10 +234,14 @@ test.describe("penerimaan Phase 6 — publishing manual @needs-db", () => {
     const slug = `p6b-${Date.now().toString(36)}`;
 
     await setupContent(page, slug);
-    await approveV1(page, slug);
+    // Placement SEBELUM approval (ASUMSI-4.6 — lihat header file).
+    await openContentDetail(page, slug);
     await addPlacement(page);
+    await approveV1(page, slug);
 
     // Buat job terjadwal 7 hari ke depan (wall-clock; dibaca sebagai WIB).
+    // Tautan "Jadwalkan publikasi" ada di kartu placement, tab Platform placements.
+    await page.getByRole("tab", { name: "Platform placements" }).click();
     await page.getByRole("link", { name: "Jadwalkan publikasi" }).click();
     await expect(page.getByRole("heading", { name: "Buat job publikasi" })).toBeVisible();
     const future = new Date(Date.now() + 7 * 24 * 3600 * 1000);
