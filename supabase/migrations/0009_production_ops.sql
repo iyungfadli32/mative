@@ -206,21 +206,6 @@ create table if not exists public.comments (
 comment on table public.comments is 'Thread komentar (P3-09). parent_comment_id = balasan (harus satu target dengan induknya — trigger BAGIAN 3). Edit mengisi edited_at; hapus = soft-delete (deleted_at/deleted_by), isi tampil sebagai "Komentar ini dihapus".';
 comment on column public.comments.deleted_at is 'Soft-delete. Baris TIDAK pernah dihapus fisik (P3-A4).';
 
--- --- mentions ---------------------------------------------------------------
--- Dok 05 §3: comment_id, mentioned_user_id, notification_id.
--- notification_id nullable: notifikasi dibuat RPC yang sama (0010) dan
--- id-nya ditulis kembali ke baris mention ini.
-create table if not exists public.mentions (
-  id uuid primary key default gen_random_uuid(),
-  comment_id uuid not null references public.comments (id) on delete cascade,
-  mentioned_user_id uuid not null references auth.users (id) on delete cascade,
-  notification_id uuid references public.notifications (id) on delete set null,
-  created_at timestamptz not null default now(),
-  unique (comment_id, mentioned_user_id)
-);
-
-comment on table public.mentions is 'Mention eksplisit per komentar (P3-09, ADR-0009 §5). Dipilih lewat pemilih anggota — BUKAN parsing teks. Satu mention = satu anggota per komentar.';
-
 -- --- notifications ----------------------------------------------------------
 -- Dok 05 §3: workspace_id, recipient_user_id, type, title, body,
 -- target_type, target_id, read_at.
@@ -246,6 +231,21 @@ create table if not exists public.notifications (
 );
 
 comment on table public.notifications is 'Notifikasi dasar dalam aplikasi (P3-A6). Hanya dibuat RPC SECURITY DEFINER (0010); pengguna hanya membaca miliknya + menandai read_at. Tidak ada email/SMS di fase ini.';
+
+-- --- mentions ---------------------------------------------------------------
+-- Dok 05 §3: comment_id, mentioned_user_id, notification_id.
+-- notification_id nullable: notifikasi dibuat RPC yang sama (0010) dan
+-- id-nya ditulis kembali ke baris mention ini.
+create table if not exists public.mentions (
+  id uuid primary key default gen_random_uuid(),
+  comment_id uuid not null references public.comments (id) on delete cascade,
+  mentioned_user_id uuid not null references auth.users (id) on delete cascade,
+  notification_id uuid references public.notifications (id) on delete set null,
+  created_at timestamptz not null default now(),
+  unique (comment_id, mentioned_user_id)
+);
+
+comment on table public.mentions is 'Mention eksplisit per komentar (P3-09, ADR-0009 §5). Dipilih lewat pemilih anggota — BUKAN parsing teks. Satu mention = satu anggota per komentar.';
 
 -- --- FK yang dijanjikan 0007 ------------------------------------------------
 -- brands.logo_asset_id -> assets(id). Ditambahkan SEKARANG karena tabel
