@@ -299,6 +299,11 @@ reset role;
 set local role authenticated;
 
 -- ============================================================================
+-- PERBAIKAN v1.2 (2026-11-19): pola throws_ok T8/T9 kini pesan LENGKAP PostgreSQL
+-- (`new row for relation "..." violates check constraint ...`) — pola lama tanpa frasa
+-- `for relation` gagal dicocokkan pgTAP padahal CHECK bekerja (23514 tertangkap benar).
+-- Diagnosis via file diagnostik: 18/20, gagal no. 19 (T8) dan no. 20 (T9) saja; semua
+-- policy/RLS lain lolos. Cacat redaksi ekspektasi tes, bukan policy — TIDAK perlu migrasi 0009.
 -- TES 8 (P2-10): remote_post_id / published_url HARUS tetap null di fase ini
 -- (CHECK content_placements_remote_post_id_null_check). User A mencoba
 -- mengisi remote_post_id → ditolak 23514.
@@ -308,7 +313,7 @@ select throws_ok(
   $$insert into public.content_placements (content_item_id, social_channel_id, platform_format, distribution_status, remote_post_id)
      values ('d0000000-0000-0000-0000-000000000001', 'f0000000-0000-0000-0000-000000000001', 'feed', 'draft', 'post-123')$$,
   '23514',
-  'new row violates check constraint "content_placements_remote_post_id_null_check"',
+  'new row for relation "content_placements" violates check constraint "content_placements_remote_post_id_null_check"',
   'T8 DENY: remote_post_id tidak boleh diisi di Phase 2 (belum ada publishing)'
 );
 
@@ -321,7 +326,7 @@ select throws_ok(
   format($f$insert into public.content_items (workspace_id, brand_id, title, production_status, owner_user_id)
      values ('b0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000001', 'Item Client Review', 'client_review', %L)$f$, :'user_a'),
   '23514',
-  'new row violates check constraint "content_items_production_status_check"',
+  'new row for relation "content_items" violates check constraint "content_items_production_status_check"',
   'T9 DENY: production_status client_review ditolak CHECK (client_review = gerbang approval Phase 4, bukan tahap produksi)'
 );
 
