@@ -48,6 +48,7 @@ export const NAV_SECTIONS: Array<{ title: string; items: NavItem[] }> = [
       { href: "/tugas", label: "Tugas Saya", icon: "✅", available: true },
       { href: "/pustaka", label: "Pustaka Aset", icon: "🖼️", available: true },
       { href: "/template-brief", label: "Template Brief", icon: "📝", available: true },
+      { href: "/publishing", label: "Publishing", icon: "🚀", available: true },
     ],
   },
   {

@@ -170,7 +170,14 @@ async function KontenDetailContent({
           </p>
         ) : null}
         <p className="mt-2 text-xs text-[var(--mt-text-muted)]">
-          Approval &amp; publishing: belum tersedia di fase ini (Phase 4).
+          Approval: lihat tab Approval. Publishing:{" "}
+          <Link
+            href={`/publishing?workspace=${workspaceId}`}
+            className="underline underline-offset-2"
+          >
+            antrean publishing
+          </Link>
+          .
         </p>
       </section>
 
@@ -222,7 +229,7 @@ async function KontenDetailContent({
         <MediaTab contentItemId={item.id} workspaceId={workspaceId} canEdit={canEdit} />
       ) : null}
       {tab === "placements" ? (
-        <PlacementsTab item={item} workspaceId={workspaceId} canEdit={canEdit} />
+        <PlacementsTab item={item} workspaceId={workspaceId} canEdit={canEdit} role={role} />
       ) : null}
       {tab === "tasks" ? (
         <TasksTab
@@ -558,10 +565,12 @@ async function PlacementsTab({
   item,
   workspaceId,
   canEdit,
+  role,
 }: {
   item: NonNullable<Awaited<ReturnType<typeof getContentItemDetail>>["item"]["data"]>;
   workspaceId: string;
   canEdit: boolean;
+  role: WorkspaceRole;
 }) {
   const supabase = await getSupabaseServerClient();
   if (!supabase) return <p className="text-sm">Supabase belum dikonfigurasi.</p>;
@@ -573,6 +582,7 @@ async function PlacementsTab({
   const brandChannels = channels.data.filter((c) => c.brand_id === item.brand_id);
   const usedChannelIds = new Set((item.placements ?? []).map((p) => p.social_channel_id));
   const freeChannels = brandChannels.filter((c) => !usedChannelIds.has(c.id));
+  const canSchedulePublish = can(role, "schedule_publish");
   return (
     <section className="rounded-2xl border border-[var(--mt-border)] bg-[var(--mt-surface)] p-4">
       <h2 className="font-semibold">
@@ -623,9 +633,33 @@ async function PlacementsTab({
                     Hashtag: {p.platform_hashtags.map((h) => `#${h}`).join(" ")}
                   </p>
                 ) : null}
-                <p className="mt-1 text-xs text-[var(--mt-text-muted)]">
-                  remote_post_id / published_url: belum ada (belum ada publishing di fase ini).
-                </p>
+                {p.published_url ? (
+                  <p className="mt-1 text-xs text-[var(--mt-text-muted)]">
+                    Terbit:{" "}
+                    <a
+                      href={p.published_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="break-all underline underline-offset-2"
+                    >
+                      {p.published_url}
+                    </a>
+                  </p>
+                ) : (
+                  <p className="mt-1 text-xs text-[var(--mt-text-muted)]">
+                    Belum terbit (belum ada URL publikasi).
+                  </p>
+                )}
+                {canSchedulePublish && p.distribution_status !== "published" ? (
+                  <p className="mt-2">
+                    <Link
+                      href={`/publishing/new?workspace=${workspaceId}&placementId=${p.id}`}
+                      className="text-sm font-medium text-[var(--mt-teal-700)] underline-offset-2 hover:underline"
+                    >
+                      Jadwalkan publikasi
+                    </Link>
+                  </p>
+                ) : null}
                 {canEdit ? (
                   <div className="mt-3 flex flex-col gap-3">
                     <DistributionForm

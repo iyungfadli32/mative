@@ -2,6 +2,8 @@
  * Server actions Publishing Foundation — features/publishing/actions.ts (P6-03 s.d. P6-08).
  * Pola Phase 2/3/4/5: Zod dulu (boundary), lalu sesi + peran dari DB (BUKAN
  * dari body), lalu Supabase client sesi (RLS penegak terakhir).
+ * Struktur: fungsi *Core (logika + RPC, dipakai form action DAN route API)
+ * + form action tipis (FormData → wall-clock → UTC → core → revalidate).
  * - SEMUA perubahan status job HANYA lewat RPC 0020 — TIDAK ADA penulisan
  *   status langsung dari client (pola approval 0014).
  * - Jadwal wall-clock → UTC memakai zona placement secara eksplisit
@@ -155,7 +157,220 @@ async function requireUser(): Promise<{
   return { supabase, user: user ? { id: user.id } : null };
 }
 
-/** Buat job publishing (P6-03): jadwal + zona placement → RPC create. */
+// ===========================================================================
+// Core — dipakai form action DAN route API (satu jalur penegakan).
+// Input waktu di sini SELALU ISO UTC (atau null); konversi wall-clock
+// dilakukan pemanggil (form action) sebelum memanggil core.
+// ===========================================================================
+
+/** Buat job publishing (P6-03): preflight + kunci idempotency di RPC create. */
+export async function createPublishingJobCore(
+  supabase: SupabaseClient,
+  userId: string,
+  input: {
+    workspaceId: string;
+    placementId: string;
+    scheduledAtUtc: string | null;
+    timezone: string;
+  },
+): Promise<PublishingActionResult> {
+  const placement = await getPlacementContext(supabase, input.placementId);
+  if (!placement) return fail(PLANNING_TABLES_UNAVAILABLE_ID);
+  if (placement.workspaceId !== input.workspaceId) {
+    return fail("Placement tidak ditemukan di workspace ini.");
+  }
+  const denied = await requireScheduler(supabase, input.workspaceId, placement.brandId, userId);
+  if (denied) return fail(denied);
+  const { data, error } = await supabase.rpc("create_publishing_job", {
+    p_placement_id: input.placementId,
+    p_scheduled_at: input.scheduledAtUtc,
+    p_timezone: input.timezone,
+  });
+  if (error) return fail(dbErrorMessage(error, "Gagal membuat job publikasi."));
+  const result = asRpcResult(data);
+  if (!result?.ok) {
+    return fail(result?.message ?? "Gagal membuat job publikasi.", { code: result?.code });
+  }
+  return ok(result.message ?? "Job publikasi dibuat.", {
+    jobId: result.job_id,
+    status: result.status,
+    code: result.code,
+  });
+}
+
+/** Retry eksplisit job failed (P6-03): hanya transient, < 3 percobaan (RPC). */
+export async function retryPublishingJobCore(
+  supabase: SupabaseClient,
+  userId: string,
+  input: { workspaceId: string; jobId: string },
+): Promise<PublishingActionResult> {
+  const job = await getJobContext(supabase, input.jobId);
+  if (!job) return fail("Job tidak ditemukan.", { code: "NOT_FOUND" });
+  if (job.workspaceId !== input.workspaceId) {
+    return fail("Job tidak ditemukan di workspace ini.", { code: "NOT_FOUND" });
+  }
+  const denied = await requireScheduler(supabase, input.workspaceId, job.brandId, userId);
+  if (denied) return fail(denied, { code: "FORBIDDEN" });
+  const { data, error } = await supabase.rpc("retry_publishing_job", {
+    p_job_id: input.jobId,
+  });
+  if (error) return fail(dbErrorMessage(error, "Gagal me-retry job."));
+  const result = asRpcResult(data);
+  if (!result?.ok) return fail(result?.message ?? "Gagal me-retry job.", { code: result?.code });
+  return ok(result.message ?? "Retry dijadwalkan.", {
+    jobId: input.jobId,
+    code: result.code,
+  });
+}
+
+/** Batal eksplisit + alasan wajib (P6-03). */
+export async function cancelPublishingJobCore(
+  supabase: SupabaseClient,
+  userId: string,
+  input: { workspaceId: string; jobId: string; reason: string },
+): Promise<PublishingActionResult> {
+  const job = await getJobContext(supabase, input.jobId);
+  if (!job) return fail("Job tidak ditemukan.", { code: "NOT_FOUND" });
+  if (job.workspaceId !== input.workspaceId) {
+    return fail("Job tidak ditemukan di workspace ini.", { code: "NOT_FOUND" });
+  }
+  const denied = await requireScheduler(supabase, input.workspaceId, job.brandId, userId);
+  if (denied) return fail(denied, { code: "FORBIDDEN" });
+  const { data, error } = await supabase.rpc("cancel_publishing_job", {
+    p_job_id: input.jobId,
+    p_reason: input.reason,
+  });
+  if (error) return fail(dbErrorMessage(error, "Gagal membatalkan job."));
+  const result = asRpcResult(data);
+  if (!result?.ok) {
+    return fail(result?.message ?? "Gagal membatalkan job.", { code: result?.code });
+  }
+  return ok(result.message ?? "Job dibatalkan.", { jobId: input.jobId, code: result.code });
+}
+
+/** Konfirmasi manual — satu-satunya jalan ke Published (P6-03). */
+export async function confirmPublishingJobCore(
+  supabase: SupabaseClient,
+  userId: string,
+  input: { workspaceId: string; jobId: string; canonicalUrl: string; publishedAtUtc: string },
+): Promise<PublishingActionResult> {
+  const job = await getJobContext(supabase, input.jobId);
+  if (!job) return fail("Job tidak ditemukan.", { code: "NOT_FOUND" });
+  if (job.workspaceId !== input.workspaceId) {
+    return fail("Job tidak ditemukan di workspace ini.", { code: "NOT_FOUND" });
+  }
+  const denied = await requireScheduler(supabase, input.workspaceId, job.brandId, userId);
+  if (denied) return fail(denied, { code: "FORBIDDEN" });
+  const { data, error } = await supabase.rpc("confirm_publishing_job", {
+    p_job_id: input.jobId,
+    p_canonical_url: input.canonicalUrl,
+    p_published_at: input.publishedAtUtc,
+  });
+  if (error) return fail(dbErrorMessage(error, "Gagal mengonfirmasi publikasi."));
+  const result = asRpcResult(data);
+  if (!result?.ok) {
+    return fail(result?.message ?? "Gagal mengonfirmasi publikasi.", { code: result?.code });
+  }
+  return ok(result.message ?? "Publikasi dikonfirmasi manual.", {
+    jobId: input.jobId,
+    status: "published",
+    code: result.code,
+  });
+}
+
+/** Jadwalkan ulang: batalkan job lama (alasan "dijadwalkan ulang") + buat job baru. */
+export async function reschedulePublishingJobCore(
+  supabase: SupabaseClient,
+  userId: string,
+  input: { workspaceId: string; jobId: string; scheduledAtUtc: string; timezone: string },
+): Promise<PublishingActionResult> {
+  const job = await getJobContext(supabase, input.jobId);
+  if (!job) return fail("Job tidak ditemukan.", { code: "NOT_FOUND" });
+  if (job.workspaceId !== input.workspaceId) {
+    return fail("Job tidak ditemukan di workspace ini.", { code: "NOT_FOUND" });
+  }
+  const denied = await requireScheduler(supabase, input.workspaceId, job.brandId, userId);
+  if (denied) return fail(denied, { code: "FORBIDDEN" });
+  if (job.status === "published" || job.status === "cancelled") {
+    return fail(`Job ${job.status} tidak bisa dijadwalkan ulang.`, {
+      code: "INVALID_STATE_TRANSITION",
+    });
+  }
+  const cancelResult = await cancelPublishingJobCore(supabase, userId, {
+    workspaceId: input.workspaceId,
+    jobId: input.jobId,
+    reason: "Dijadwalkan ulang.",
+  });
+  if (!cancelResult.ok) return cancelResult;
+  const createResult = await createPublishingJobCore(supabase, userId, {
+    workspaceId: input.workspaceId,
+    placementId: job.placementId,
+    scheduledAtUtc: input.scheduledAtUtc,
+    timezone: input.timezone,
+  });
+  if (!createResult.ok) {
+    return fail(
+      `Job lama dibatalkan, tetapi buat job baru gagal: ${createResult.message} Buat job baru dari placement.`,
+      { code: createResult.code },
+    );
+  }
+  return ok("Job dijadwalkan ulang — job lama dibatalkan, job baru dibuat.", {
+    jobId: createResult.jobId,
+    status: createResult.status,
+    code: createResult.code,
+  });
+}
+
+/**
+ * Proses antrean (worker lokal, P6-06): klaim job jatuh tempo → preflight
+ * ulang → handoff manual. Idempotent — hanya job jatuh tempo yang disentuh;
+ * lease mencegah pemrosesan ganda.
+ */
+export async function processPublishingJobsCore(
+  supabase: SupabaseClient,
+  userId: string,
+  workspaceId: string,
+  jobId?: string | null,
+): Promise<PublishingActionResult> {
+  const role = (await getCallerRole(workspaceId, userId)) as WorkspaceRole | null;
+  if (!role || !can(role, "schedule_publish")) {
+    return fail("Peran Anda tidak boleh memproses antrean publishing.", { code: "FORBIDDEN" });
+  }
+  const { data, error } = await supabase.rpc("process_publishing_jobs", {
+    p_workspace_id: workspaceId,
+    p_job_id: jobId ?? null,
+  });
+  if (error) return fail(dbErrorMessage(error, "Gagal memproses antrean."));
+  const result = asRpcResult(data);
+  if (!result?.ok) {
+    return fail(result?.message ?? "Gagal memproses antrean.", { code: result?.code });
+  }
+  return ok(result.message ?? "Antrean diproses.", {
+    processed: result.processed ?? 0,
+    code: result.code,
+  });
+}
+
+/** Pembungkus proses antrean untuk server component/action (dengan revalidate). */
+export async function processPublishingJobs(
+  workspaceId: string,
+  jobId?: string | null,
+): Promise<PublishingActionResult> {
+  const supabase = await getSupabaseServerClient();
+  if (!supabase) return fail(SUPABASE_NOT_CONFIGURED_ID);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return fail("Anda harus masuk dulu.");
+  const result = await processPublishingJobsCore(supabase, user.id, workspaceId, jobId);
+  if (result.ok) revalidatePath("/publishing");
+  return result;
+}
+
+// ===========================================================================
+// Form actions — adapter tipis: Zod (FormData) → wall-clock → UTC → core.
+// ===========================================================================
+
 export async function createPublishingJobAction(
   _prev: PublishingActionResult,
   formData: FormData,
@@ -173,39 +388,28 @@ export async function createPublishingJobAction(
   if (!supabase || !user) {
     return fail(supabase ? "Anda harus masuk dulu." : SUPABASE_NOT_CONFIGURED_ID);
   }
+  // Zona efektif (ASUMSI-6.6: placement menang) + konversi wall-clock → UTC.
   const placement = await getPlacementContext(supabase, parsed.data.placementId);
   if (!placement) return fail(PLANNING_TABLES_UNAVAILABLE_ID);
-  if (placement.workspaceId !== parsed.data.workspaceId) {
-    return fail("Placement tidak ditemukan di workspace ini.");
-  }
-  const denied = await requireScheduler(supabase, parsed.data.workspaceId, placement.brandId, user.id);
-  if (denied) return fail(denied);
-
-  // Zona efektif (ASUMSI-6.6: placement menang) + konversi wall-clock → UTC.
   const timezone = resolvePublishingTimezone(null, parsed.data.timezone || placement.timezone);
   let scheduledAtUtc: string | null = null;
   if (parsed.data.scheduledAt) {
     scheduledAtUtc = zonedWallClockToUtcIso(parsed.data.scheduledAt, timezone);
     if (!scheduledAtUtc) return fail("Jadwal atau zona waktu tidak valid.");
   }
-
-  const { data, error } = await supabase.rpc("create_publishing_job", {
-    p_placement_id: parsed.data.placementId,
-    p_scheduled_at: scheduledAtUtc,
-    p_timezone: timezone,
+  const result = await createPublishingJobCore(supabase, user.id, {
+    workspaceId: parsed.data.workspaceId,
+    placementId: parsed.data.placementId,
+    scheduledAtUtc,
+    timezone,
   });
-  if (error) return fail(dbErrorMessage(error, "Gagal membuat job publikasi."));
-  const result = asRpcResult(data);
-  if (!result?.ok) return fail(result?.message ?? "Gagal membuat job publikasi.");
-  revalidatePath("/publishing");
-  revalidatePath(`/konten/${placement.contentItemId}`);
-  return ok(result.message ?? "Job publikasi dibuat.", {
-    jobId: result.job_id,
-    status: result.status,
-  });
+  if (result.ok) {
+    revalidatePath("/publishing");
+    revalidatePath(`/konten/${placement.contentItemId}`);
+  }
+  return result;
 }
 
-/** Retry eksplisit job failed (P6-03): hanya transient, < 3 percobaan (RPC). */
 export async function retryPublishingJobAction(
   _prev: PublishingActionResult,
   formData: FormData,
@@ -221,24 +425,14 @@ export async function retryPublishingJobAction(
   if (!supabase || !user) {
     return fail(supabase ? "Anda harus masuk dulu." : SUPABASE_NOT_CONFIGURED_ID);
   }
-  const job = await getJobContext(supabase, parsed.data.jobId);
-  if (!job) return fail("Job tidak ditemukan.");
-  if (job.workspaceId !== parsed.data.workspaceId) {
-    return fail("Job tidak ditemukan di workspace ini.");
-  }
-  const denied = await requireScheduler(supabase, parsed.data.workspaceId, job.brandId, user.id);
-  if (denied) return fail(denied);
-  const { data, error } = await supabase.rpc("retry_publishing_job", {
-    p_job_id: parsed.data.jobId,
+  const result = await retryPublishingJobCore(supabase, user.id, {
+    workspaceId: parsed.data.workspaceId,
+    jobId: parsed.data.jobId,
   });
-  if (error) return fail(dbErrorMessage(error, "Gagal me-retry job."));
-  const result = asRpcResult(data);
-  if (!result?.ok) return fail(result?.message ?? "Gagal me-retry job.");
-  revalidatePath("/publishing");
-  return ok(result.message ?? "Retry dijadwalkan.", { jobId: parsed.data.jobId });
+  if (result.ok) revalidatePath("/publishing");
+  return result;
 }
 
-/** Batal eksplisit + alasan wajib (P6-03). */
 export async function cancelPublishingJobAction(
   _prev: PublishingActionResult,
   formData: FormData,
@@ -255,25 +449,15 @@ export async function cancelPublishingJobAction(
   if (!supabase || !user) {
     return fail(supabase ? "Anda harus masuk dulu." : SUPABASE_NOT_CONFIGURED_ID);
   }
-  const job = await getJobContext(supabase, parsed.data.jobId);
-  if (!job) return fail("Job tidak ditemukan.");
-  if (job.workspaceId !== parsed.data.workspaceId) {
-    return fail("Job tidak ditemukan di workspace ini.");
-  }
-  const denied = await requireScheduler(supabase, parsed.data.workspaceId, job.brandId, user.id);
-  if (denied) return fail(denied);
-  const { data, error } = await supabase.rpc("cancel_publishing_job", {
-    p_job_id: parsed.data.jobId,
-    p_reason: parsed.data.reason,
+  const result = await cancelPublishingJobCore(supabase, user.id, {
+    workspaceId: parsed.data.workspaceId,
+    jobId: parsed.data.jobId,
+    reason: parsed.data.reason,
   });
-  if (error) return fail(dbErrorMessage(error, "Gagal membatalkan job."));
-  const result = asRpcResult(data);
-  if (!result?.ok) return fail(result?.message ?? "Gagal membatalkan job.");
-  revalidatePath("/publishing");
-  return ok(result.message ?? "Job dibatalkan.", { jobId: parsed.data.jobId });
+  if (result.ok) revalidatePath("/publishing");
+  return result;
 }
 
-/** Konfirmasi manual — satu-satunya jalan ke Published (P6-03). */
 export async function confirmPublishingJobAction(
   _prev: PublishingActionResult,
   formData: FormData,
@@ -291,32 +475,21 @@ export async function confirmPublishingJobAction(
   if (!supabase || !user) {
     return fail(supabase ? "Anda harus masuk dulu." : SUPABASE_NOT_CONFIGURED_ID);
   }
-  const job = await getJobContext(supabase, parsed.data.jobId);
-  if (!job) return fail("Job tidak ditemukan.");
-  if (job.workspaceId !== parsed.data.workspaceId) {
-    return fail("Job tidak ditemukan di workspace ini.");
-  }
-  const denied = await requireScheduler(supabase, parsed.data.workspaceId, job.brandId, user.id);
-  if (denied) return fail(denied);
   // Waktu publikasi diketik di zona job (zona placement) → UTC.
+  const job = await getJobContext(supabase, parsed.data.jobId);
+  if (!job) return fail("Job tidak ditemukan.", { code: "NOT_FOUND" });
   const publishedAtUtc = zonedWallClockToUtcIso(parsed.data.publishedAt, job.timezone);
   if (!publishedAtUtc) return fail("Waktu publikasi atau zona waktu tidak valid.");
-  const { data, error } = await supabase.rpc("confirm_publishing_job", {
-    p_job_id: parsed.data.jobId,
-    p_canonical_url: parsed.data.canonicalUrl,
-    p_published_at: publishedAtUtc,
-  });
-  if (error) return fail(dbErrorMessage(error, "Gagal mengonfirmasi publikasi."));
-  const result = asRpcResult(data);
-  if (!result?.ok) return fail(result?.message ?? "Gagal mengonfirmasi publikasi.");
-  revalidatePath("/publishing");
-  return ok(result.message ?? "Publikasi dikonfirmasi manual.", {
+  const result = await confirmPublishingJobCore(supabase, user.id, {
+    workspaceId: parsed.data.workspaceId,
     jobId: parsed.data.jobId,
-    status: "published",
+    canonicalUrl: parsed.data.canonicalUrl,
+    publishedAtUtc,
   });
+  if (result.ok) revalidatePath("/publishing");
+  return result;
 }
 
-/** Jadwalkan ulang: batalkan job lama (alasan "dijadwalkan ulang") + buat job baru. */
 export async function reschedulePublishingJobAction(
   _prev: PublishingActionResult,
   formData: FormData,
@@ -335,78 +508,18 @@ export async function reschedulePublishingJobAction(
     return fail(supabase ? "Anda harus masuk dulu." : SUPABASE_NOT_CONFIGURED_ID);
   }
   const job = await getJobContext(supabase, parsed.data.jobId);
-  if (!job) return fail("Job tidak ditemukan.");
-  if (job.workspaceId !== parsed.data.workspaceId) {
-    return fail("Job tidak ditemukan di workspace ini.");
-  }
-  const denied = await requireScheduler(supabase, parsed.data.workspaceId, job.brandId, user.id);
-  if (denied) return fail(denied);
-  if (job.status === "published" || job.status === "cancelled") {
-    return fail(`Job ${job.status} tidak bisa dijadwalkan ulang.`);
-  }
+  if (!job) return fail("Job tidak ditemukan.", { code: "NOT_FOUND" });
   const timezone = resolvePublishingTimezone(null, parsed.data.timezone || job.timezone);
   const scheduledAtUtc = zonedWallClockToUtcIso(parsed.data.scheduledAt, timezone);
   if (!scheduledAtUtc) return fail("Jadwal atau zona waktu tidak valid.");
-
-  const { data: cancelData, error: cancelError } = await supabase.rpc("cancel_publishing_job", {
-    p_job_id: parsed.data.jobId,
-    p_reason: "Dijadwalkan ulang.",
+  const result = await reschedulePublishingJobCore(supabase, user.id, {
+    workspaceId: parsed.data.workspaceId,
+    jobId: parsed.data.jobId,
+    scheduledAtUtc,
+    timezone,
   });
-  if (cancelError) return fail(dbErrorMessage(cancelError, "Gagal membatalkan job lama."));
-  const cancelResult = asRpcResult(cancelData);
-  if (!cancelResult?.ok) return fail(cancelResult?.message ?? "Gagal membatalkan job lama.");
-  const { data, error } = await supabase.rpc("create_publishing_job", {
-    p_placement_id: job.placementId,
-    p_scheduled_at: scheduledAtUtc,
-    p_timezone: timezone,
-  });
-  if (error) {
-    return fail(
-      `Job lama dibatalkan, tetapi buat job baru gagal: ${dbErrorMessage(error, "Gagal membuat job baru.")} Buat job baru dari placement.`,
-    );
-  }
-  const result = asRpcResult(data);
-  if (!result?.ok) {
-    return fail(
-      `Job lama dibatalkan, tetapi buat job baru gagal: ${result?.message ?? "Gagal membuat job baru."} Buat job baru dari placement.`,
-    );
-  }
-  revalidatePath("/publishing");
-  return ok("Job dijadwalkan ulang — job lama dibatalkan, job baru dibuat.", {
-    jobId: result.job_id,
-    status: result.status,
-  });
-}
-
-/**
- * Proses antrean (worker lokal, P6-06): klaim job jatuh tempo → preflight
- * ulang → handoff manual. Dipakai halaman Queue (server component) + tombol
- * "Proses antrean" + API proses. Idempotent — hanya job jatuh tempo yang
- * disentuh; lease mencegah pemrosesan ganda.
- */
-export async function processPublishingJobs(
-  workspaceId: string,
-  jobId?: string | null,
-): Promise<PublishingActionResult> {
-  const supabase = await getSupabaseServerClient();
-  if (!supabase) return fail(SUPABASE_NOT_CONFIGURED_ID);
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return fail("Anda harus masuk dulu.");
-  const role = (await getCallerRole(workspaceId, user.id)) as WorkspaceRole | null;
-  if (!role || !can(role, "schedule_publish")) {
-    return fail("Peran Anda tidak boleh memproses antrean publishing.");
-  }
-  const { data, error } = await supabase.rpc("process_publishing_jobs", {
-    p_workspace_id: workspaceId,
-    p_job_id: jobId ?? null,
-  });
-  if (error) return fail(dbErrorMessage(error, "Gagal memproses antrean."));
-  const result = asRpcResult(data);
-  if (!result?.ok) return fail(result?.message ?? "Gagal memproses antrean.");
-  revalidatePath("/publishing");
-  return ok(result.message ?? "Antrean diproses.", { processed: result.processed ?? 0 });
+  if (result.ok) revalidatePath("/publishing");
+  return result;
 }
 
 /** Periksa-ulang satu job (ASUMSI-6.1): preflight ulang dari needs_manual_action. */
@@ -426,14 +539,10 @@ export async function recheckPublishingJobAction(
     return fail(supabase ? "Anda harus masuk dulu." : SUPABASE_NOT_CONFIGURED_ID);
   }
   const job = await getJobContext(supabase, parsed.data.jobId);
-  if (!job) return fail("Job tidak ditemukan.");
-  if (job.workspaceId !== parsed.data.workspaceId) {
-    return fail("Job tidak ditemukan di workspace ini.");
-  }
+  if (!job) return fail("Job tidak ditemukan.", { code: "NOT_FOUND" });
   const denied = await requireScheduler(supabase, parsed.data.workspaceId, job.brandId, user.id);
-  if (denied) return fail(denied);
-  const result = await processPublishingJobs(parsed.data.workspaceId, parsed.data.jobId);
-  return result;
+  if (denied) return fail(denied, { code: "FORBIDDEN" });
+  return processPublishingJobs(parsed.data.workspaceId, parsed.data.jobId);
 }
 
 /** Aksi form untuk tombol "Proses antrean" (tanpa job tertentu). */

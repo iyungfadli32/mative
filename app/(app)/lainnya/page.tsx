@@ -19,6 +19,7 @@ export default async function LainnyaPage() {
     { href: "/pilar", label: "Pilar & Audiens", desc: "Pilar konten + audiens dasar." },
     { href: "/kampanye", label: "Campaign", desc: "Campaign dasar + brand." },
     { href: "/cari", label: "Pencarian", desc: "Cari konten, campaign, ide, brand." },
+    { href: "/publishing", label: "Publishing", desc: "Antrean publikasi manual + konfirmasi terbit." },
     { href: "/portal", label: "Portal Klien", desc: "Konten yang dibagikan ke klien." },
     {
       href: "/pengaturan/organisasi",

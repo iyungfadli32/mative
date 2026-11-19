@@ -90,4 +90,6 @@ export type PublishingActionResult = {
   jobId?: string;
   status?: string;
   processed?: number;
+  /** Kode RPC 0020 (FORBIDDEN, DUPLICATE_JOB, …) — dipakai pemetaan status HTTP API. */
+  code?: string;
 };
