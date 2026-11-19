@@ -1,9 +1,13 @@
--- MaTive Phase 4 — RLS + RPC approval tests (pgTAP) — v1.1
+-- MaTive Phase 4 — RLS + RPC approval tests (pgTAP) — v1.2
 -- v1.1 (2026-11-19, run live pertama GAGAL 23514 di setup): nilai
 -- connection_status setup 'disconnected' DITOLAK CHECK
 -- social_channels_connection_status_check (0007: hanya 'not_connected' /
 -- 'manual') — cacat file tes, BUKAN produk; diperbaiki ke 'not_connected'.
--- plan(64) + 64 asersi tidak berubah; migrasi 0001–0014 tidak disentuh.
+-- v1.2 (2026-11-19, run live v1.1 GAGAL 42703 di setup): kolom
+-- resource_shares.created_by TIDAK ADA (0005: kolomnya shared_by, NOT NULL)
+-- — cacat file tes, BUKAN produk; diperbaiki ke shared_by (nilai tetap A,
+-- si pembagi). plan(64) + 64 asersi tidak berubah; migrasi 0001–0014
+-- tidak disentuh.
 -- ============================================================================
 -- CARA MENJALANKAN (oleh koordinator — butuh DATABASE_URL / service role): <redacted>
 --   1. Terapkan migrasi 0001–0014 ke database BERSIH (lihat
@@ -190,7 +194,7 @@ values ('f3000000-0000-0000-0000-000000000001', 'f2000000-0000-0000-0000-0000000
 on conflict (approval_request_id, step_id, approver_user_id) do nothing;
 
 -- Share D1 ke B (viewer_client WS-D) + setting gerbang klien WS-A aktif.
-insert into public.resource_shares (id, workspace_id, resource_type, resource_id, shared_with_user_id, created_by)
+insert into public.resource_shares (id, workspace_id, resource_type, resource_id, shared_with_user_id, shared_by)
 values ('f4000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000004', 'content_item', 'd0000000-0000-0000-0000-000000000301', :'user_b', :'user_a')
 on conflict (id) do nothing;
 
