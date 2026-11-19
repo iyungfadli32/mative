@@ -186,7 +186,22 @@ WIB** — semuanya terverifikasi. **pgTAP 05 v1.2: 61/61 PASS live
 0 gagal, 19–20 Nov 2026** (tes mobile WebKit belum dijalankan —
 library sistem hilang, menunggu keputusan Tuan/B4). Detail lengkap +
 saga kegagalan + cacat yang ditemukan selama e2e:
-`docs/phase-5-report.md` §11 (deklarasi). **Migrasi kini 0001–0019.**
+`docs/phase-5-report.md` §11 (deklarasi). **Migrasi kini 0001–0019**
+(sebelum Phase 6).
+
+**Phase 6 — 0020 DITERAPKAN live 20 Nov 2026 01:35–01:36 WIB**
+(v1.1, 979 baris; 3 tabel RLS + 12 policy + 10 fungsi, terverifikasi
+01:37–01:39 WIB). **pgTAP 06 v1.1: 109/109 PASS live 20 Nov 2026
+02:32 WIB** (v1.0 sempat gagal 23503 — cleanup menghapus `brands`
+sebelum `content_items`; v1.1 urutan daun → akar). **E2E publishing
+live 6/6 (Chromium + mobile iPhone 13, `--workers=1`)** — tes mobile
+WebKit SUDAH dijalankan di Phase 6 (library sistem sempat hilang lalu
+diinstal ulang); regresi 22 lolos + 2 skip, 4 gagal (1 flake A5.1 —
+run ulang solo lolos; 3 smoke mobile pre-existing, sidebar hidden <
+md). Dua cacat aplikasi diperbaiki selama e2e (`a2ed6cb` bug
+`new Date(v)` 7 jam jalur placement; `e6d705e` preflight halaman
+buat-job). Detail lengkap: `docs/phase-6-report.md` §11 (deklarasi).
+**Migrasi kini 0001–0020.**
 
 ## Seed demo (local/preview SAJA — JANGAN di database produksi)
 

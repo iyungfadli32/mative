@@ -481,17 +481,15 @@ identik dalam satu render server di jalur Phase 6.
 
 ## 7. Batas jujur — yang BELUM terbukti (wajib dibaca parent)
 
-1. **Migrasi 0020 v1.1, pgTAP 06, dan e2e publishing BELUM terbukti
-   live.** Semua bukti di laporan ini statis/lokal (pglast, verifier,
-   Vitest, typecheck, lint, build). pgTAP 06 (109 asersi) dan e2e
-   (A6.1/A6.2/A6.3/A6.5) baru terbukti bila dijalankan terhadap
-   database live sesudah 0020 diterapkan (§8). Jangan nyatakan Phase 6
-   LOLOS sebelum itu.
-2. **Tes mobile WebKit BELUM dijalankan** (bawaan Phase 5, B4) —
-   menunggu keputusan user soal instalasi library sistem WebKit.
-   Spek e2e publishing berjalan di proyek chromium + mobile yang sama
-   seperti spek lain; bagian mobile tidak pernah lolos/gagal karena
-   `browserType.launch` gagal di lingkungan ini.
+1. **Migrasi 0020 v1.1, pgTAP 06, dan e2e publishing TERBUKTI live**
+   (lihat §11): 0020 live 01:35–01:36 WIB 20 Nov 2026, pgTAP 06 v1.1
+   109/109 live 02:32 WIB, e2e publishing 6/6 live (Chromium +
+   mobile).
+2. **Tes mobile WebKit SUDAH dijalankan dan lolos untuk publishing**
+   (6/6 incl. mobile, §11) — library sistem sempat hilang lalu
+   diinstal ulang 20 Nov 2026 (lihat §11 butir (e)). Yang belum lolos
+   di mobile: 3 smoke planning/production (pre-existing, sidebar
+   hidden < md — lihat §11 butir 3).
 3. **Job jatuh tempo tidak diproses sendiri** tanpa ada yang membuka
    Queue atau memanggil endpoint proses — tidak ada worker/cron
    otomatis di Phase 6 (B5 repo GitHub masih terbuka; tidak ada deploy
@@ -499,8 +497,10 @@ identik dalam satu render server di jalur Phase 6.
    worker/cron sungguhan tanpa mengubah model job.
 4. **Form lama (placement/due-date) memakai `new Date(v)` di zona
    server UTC** — untuk pengguna WIB jadwal bisa geser 7 jam (§4.5).
-   Di luar lingkup Phase 6; jangan perbaiki diam-diam di luar cakupan.
-   Perbaiki sebagai tugas tersendiri bila user memerintahkan.
+   Jalur placement DIPERBAIKI live Phase 6 (`a2ed6cb`:
+   `optionalWallClock` + `zonedWallClockToUtcIso`); jalur
+   campaign/idea/task (`optionalDatetime`) masih memakai `new Date(v)`
+   — di luar cakupan Phase 6.
 5. **Approval target placement ada di DB (0014) tapi tanpa UI.**
    Phase 6 tidak menambah submit approval per-placement (scope
    Phase 4). Sebagai pengaman, job menyimpan snapshot
@@ -693,11 +693,85 @@ cancelled`; tidak ada transisi langsung `→ sending` tanpa
    disembunyikan) — pelajaran unmount Phase 3/4/5. (§6.4)
 10. **Form lama di luar lingkup tidak diperbaiki** (geser 7 jam
     `new Date(v)` di zona UTC — §4.5) — dicatat sebagai batas jujur,
-    bukan diperbaiki diam-diam.
+    bukan diperbaiki diam-diam. **Pembaruan live:** jalur placement
+    akhirnya DIPERBAIKI (`a2ed6cb`) karena bug itu memblokir A6.2;
+    jalur campaign/idea/task tetap tidak disentuh.
 
-## 11. Deklarasi — (diisi parent sesudah live lolos)
+## 11. Deklarasi — DINYATAKAN LULUS oleh parent, 2026-11-20 04:03 WIB
 
-> Bagian ini diisi parent sesudah: migrasi 0020 v1.1 diterapkan live,
-> pgTAP 06 live 109/109, e2e publishing live lolos (Chromium; mobile
-> bila B4 disetujui), residu `org-p6-*`/`ws-p6-*` dibersihkan sampai
-> seed-only, dan `docs/apply-migrations.md` diperbarui ke 0001–0020.
+**Phase 6 LULUS.** Bukti live (semua diverifikasi parent langsung):
+
+1. **Migrasi 0020 v1.1 live** 2026-11-20 01:35–01:36 WIB ("Success. No
+   rows returned", 979 baris, tanpa dialog), terverifikasi 01:37–01:39
+   WIB: 3 tabel RLS true, 12 policy (4/tabel), 10 fungsi (7 RPC +
+   `publishing_backoff_minutes` + 2 helper visibilitas), indeks unik
+   partial idempotency ada.
+2. **pgTAP 06 v1.1 live 109/109** — Run 2026-11-20 02:32 WIB (tab baru,
+   1015 baris; dialog destructive dijawab "Run query"). v1.0 sempat
+   gagal 23503 karena cleanup menghapus `brands` sebelum
+   `content_items` (RESTRICT); v1.1 (commit `8dff127`) mengurutkan
+   cleanup daun → akar. Hasil: tanpa galat, asersi terakhir
+   `ok 109 - T36b`, tidak ada "not ok", `finish()` 0 baris (= lolos
+   penuh). Rollback bersih — fixture pgTAP terverifikasi semua 0
+   (02:33 WIB).
+3. **e2e publishing live 6/6** (Chromium + mobile iPhone 13,
+   `--workers=1`):
+   - Run 1 (02:32–03:03 WIB): A6.1 lolos kedua proyek; A6.2 gagal
+     kedua proyek karena bug lama `new Date(v)` (§4.5) — jadwal WIB
+     bergeser 7 jam, trigger 0014 menembak dengan BENAR
+     (`reapproval_required`) sehingga preflight kena
+     `APPROVAL_REQUIRED` sebelum pesan DUPLIKAT tercapai.
+   - Perbaikan: `a2ed6cb` (placement `scheduledAt` kini
+     `optionalWallClock` + `zonedWallClockToUtcIso`, tanpa migrasi;
+     `optionalDatetime` campaign/idea/task sengaja tidak disentuh) +
+     `e6d705e` (preflight halaman buat-job memakai jadwal placement,
+     bukan null — cacat aplikasi nyata kedua yang ditemukan run
+     ulang) + spek `6dfac74` (A6.2 isi jadwal placement = jadwal job).
+   - Run 2: run penuh 5/6 (A6.1 Chromium gagal 1×, flake cold-start)
+     + run ulang solo A6.1 lolos 1,9 mnt → **6/6**. Flake dikeraskan
+     dengan timeout eksplisit 30 dtk (`5a408ec`).
+   - Regresi (16,2 mnt): **22 lolos, 2 skip, 4 gagal.** A5.1 Chromium
+     flake timing yang sama (run ulang solo lolos 1,1 mnt, dikeraskan
+     `3bf9c79`). 3 smoke mobile (planning ×2, production ×1) gagal
+     deterministik dan PRE-EXISTING: `AppSidebar.tsx:95` memakai
+     `hidden ... md:flex` — sidebar tidak dirender di bawah breakpoint
+     md, tautan "Board Produksi"/"Tugas Saya" tidak ada di DOM iPhone
+     13 (390px). Smoke planning/production mobile belum pernah
+     dijalankan sebelum run ini (mobile Phase 5 hanya campaign) — jadi
+     ini ketidakcocokan tes-vs-desain responsif, BUKAN regresi Phase 6.
+     Butuh keputusan produk (drawer mobile atau skip di mobile) —
+     di luar mandat Phase 6.
+4. **Verifikasi parent langsung** (2026-11-20 04:02 WIB): HEAD
+   `3bf9c79`, tree bersih; typecheck 0, lint 0, Vitest **187/187**
+   (17 file).
+
+**Batas jujur yang TETAP berlaku sesudah deklarasi ini:** §7.3 (job
+jatuh tempo tidak diproses sendiri — tanpa worker/cron), §7.5
+(approval target placement ada di DB tanpa UI), §7.6 (approval
+dua-peran belum terbukti live), §7.7–§7.11. **Batas jujur BARU dari
+live Phase 6:**
+
+- (a) 3 smoke mobile gagal (pre-existing, lihat butir 3) — keputusan
+  produk tertunda.
+- (b) Efek samping `e6d705e`: selama ada job terjadwal aktif, tombol
+  buat-job di halaman itu disabled — job segera untuk placement yang
+  sama tidak bisa dibuat dari halaman itu sampai job terjadwal
+  dibatalkan (satu placement = satu rencana terbit).
+- (c) Timeout eksplisit 30 dtk (`5a408ec`, `3bf9c79`) belum dibuktikan
+  run ulang sesudah commit-nya — run ulang solo lolos sebelum commit.
+- (d) `optionalDatetime` (campaign/idea/task) masih memakai
+  `new Date(v)` — di luar cakupan Phase 6.
+- (e) Library sistem WebKit sempat hilang total
+  (`libgstreamer-1.0.so.0` tidak ter-resolve) lalu diinstal ulang
+  (`npx playwright install-deps webkit`, persetujuan user 01:22 WIB
+  masih berlaku untuk pustaka yang sama); penyebab hilangnya tidak
+  diketahui.
+- (f) Build produksi basi: e2e memakai `npm run start` dari `.next/`
+  (terakhir 19 Nov 19:08) — perbaikan pertama kali tidak ada di build.
+  Aturan: selalu rebuild sebelum e2e.
+- (g) Residu e2e `org-p6-*`/`ws-p6-*` BELUM dibersihkan saat deklarasi
+  ini ditulis — dibersihkan segera sesudahnya (§8.1), verifikasi
+  seed-only menyusul.
+
+**Keputusan:** Phase 6 DINYATAKAN LULUS. Buku rencana kini **8/11 =
+73%**. Lanjut Phase 7 (Integrasi + Analytics).
