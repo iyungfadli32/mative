@@ -1,4 +1,6 @@
--- MaTive Phase 7 — RLS + RPC analytics foundation (pgTAP) — v1.0
+-- MaTive Phase 7 — RLS + RPC analytics foundation (pgTAP) — v1.1
+-- v1.1 (2026-11-20): T6a/T6d pakai throws_ok 42501 (SELECT tanpa grant
+-- melempar 42501, bukan 0 baris — pelajaran 10). Selain itu identik v1.0.
 -- File baru untuk migrasi 0021 v1.0 (metric_definitions, analytics_snapshots,
 -- content_metrics, campaign_metrics, integration_events, channel_credentials
 -- + RPC import_analytics_snapshot + backoff + TTL snapshot).
@@ -465,10 +467,11 @@ select is(
 -- TES 6 — channel_credentials server-only: tolak semua untuk authenticated. (4)
 -- ============================================================================
 select _set_user(:'user_a');
-select is(
-  (select count(*) from public.channel_credentials)::int,
-  0,
-  'T6a select channel_credentials sebagai authenticated = 0 baris (RLS tanpa policy)'
+select throws_ok(
+  $$ select count(*) from public.channel_credentials $$,
+  '42501',
+  'permission denied for table channel_credentials',
+  'T6a select channel_credentials sebagai authenticated ditolak 42501 (tanpa grant — server-only)'
 );
 select throws_ok(
   $$ insert into public.channel_credentials (channel_id, provider, secret_reference) values ('e7100000-0000-0000-0000-000000000001', 'instagram', 'vault://uji/ref-1') $$,
@@ -482,10 +485,11 @@ select lives_ok(
   'T6c INSERT sebagai postgres lolos (server-only: hanya service role)'
 );
 select _set_user(:'user_a');
-select is(
-  (select count(*) from public.channel_credentials)::int,
-  0,
-  'T6d baris kredensial tetap tidak terlihat authenticated sesudah insert postgres'
+select throws_ok(
+  $$ select count(*) from public.channel_credentials $$,
+  '42501',
+  'permission denied for table channel_credentials',
+  'T6d baris kredensial tetap tidak bisa dibaca authenticated sesudah insert postgres (42501)'
 );
 
 -- ============================================================================
