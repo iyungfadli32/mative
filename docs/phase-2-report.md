@@ -308,3 +308,10 @@ Jangan pernah menulis kredensial akun uji ke file/repo — hanya lewat environme
 - `docs/apply-migrations.md` — ditambah langkah apply 0008 + verifikasi 6 fungsi RPC.
 - `README.md` — status v0.2.0 Phase 2 (DRAF), daftar halaman Phase 2, migrasi 0001–0008.
 - `CHANGELOG.md` — entri [0.2.0] Phase 2.
+
+## 14. Addendum live — pgTAP 02 LOLOS 20/20 (2026-11-19 10:13 WIB)
+
+- **pgTAP 01 ulang (live):** 14/14 LOLOS (06:09 WIB).
+- **pgTAP 02 (live), file kanonis v1.2:** **20/20 LOLOS** (run 10:04–10:13 WIB, tab SQL Editor baru, seluruh isi sebagai satu query `begin; ... rollback;`). Bukti: baris terakhir terlihat `ok 20 - T9 DENY: production_status client_review ditolak CHECK ...`; `finish()` 0 baris (tidak ada ringkasan kegagalan). Pemeriksaan read-only sesudahnya: 0 baris data uji tersisa di organizations, workspaces, organization_members, workspace_members, brands, social_channels, campaigns, content_items, content_placements, resource_shares, workspace_invitations.
+- **Jalur diagnosis (untuk arsip):** v1.1 gagal 18/20 (abort T7 42501 → perbaikan `reset role;` sebelum GRANT anon); run ulang v1.1 18/20 tanpa nomor tes yang teridentifikasi (keterbatasan tampilan SQL Editor); file diagnostik v1–v4 memperbaiki penangkapan hasil (temp table diag_results + GRANT tabel + GRANT sequence + restrukturisasi CTE `WITH ... INSERT`); diagnosis v4 (10:04 WIB): gagal no. 19 (T8) dan no. 20 (T9) saja — kedua CHECK BEKERJA (23514 tertangkap), pola `throws_ok` menghilangkan frasa `for relation "tabel"` dari pesan lengkap PostgreSQL. **v1.2** memperbaiki kedua pola menjadi pesan lengkap; TIDAK ada perubahan migrasi (0001–0008 tetap), TIDAK perlu migrasi 0009. Semua policy/RLS Phase 2 terverifikasi benar di live.
+- **Tersisa untuk Phase 2 dinyatakan lolos penuh:** Langkah 3 (§12) — spek penerimaan e2e live (`e2e/planning.spec.ts`, saat ini 3 skipped) + gate 6 Phase 1 (e2e `e2e/auth.spec.ts`). Keduanya menunggu kata sandi akun uji `mative-e2e@example.com` (dibuat 05:45 WIB, Auto Confirm ON; kata sandi acak TIDAK dicatat — perlu reset via dashboard).
