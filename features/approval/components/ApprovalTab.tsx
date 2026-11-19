@@ -72,6 +72,10 @@ export async function ApprovalTab({
   }
   const requests = requestsRes.data;
   const activeRequest = requests.find((r) => isActiveRequestStatus(r.status));
+  // Request yang ditampilkan form keputusannya: aktif bila ada, kalau tidak
+  // yang terbaru (list terurut created_at DESC) — supaya form tidak ikut
+  // hilang saat request selesai diputuskan.
+  const decisionRequest = activeRequest ?? requests[0] ?? null;
   const internalApproved = requests.some(
     (r) => r.request_type === "internal" && r.status === "approved",
   );
@@ -172,34 +176,40 @@ export async function ApprovalTab({
               ))}
             </ul>
           ) : null}
-          {canDecide ? (
-            <DecisionForm
-              key={activeRequest.id}
-              requestId={activeRequest.id}
-              workspaceId={workspaceId}
-            />
-          ) : activeRequest.status === "in_review" ? (
-            <p className="mt-2 text-sm text-[var(--mt-text-muted)]">
-              Anda tidak ditugaskan di step saat ini, jadi tidak bisa memutuskan request ini.
-            </p>
-          ) : (
-            // Request sudah diputuskan: form tetap mounted (disabled) supaya
-            // pesan sukses "Keputusan tercatat: ..." tidak hilang — pola
-            // Phase 3 (lihat komentar di DecisionForm). key per request
-            // supaya pesan tidak terbawa ke request berikutnya.
-            <DecisionForm
-              key={activeRequest.id}
-              requestId={activeRequest.id}
-              workspaceId={workspaceId}
-              disabled
-            />
-          )}
         </div>
       ) : (
         <p className="text-sm text-[var(--mt-text-muted)]">
           Belum ada request approval aktif untuk konten ini.
         </p>
       )}
+
+      {/* Form keputusan — SENGAJA di luar panel request aktif. Request
+          yang sudah diputuskan bukan lagi "aktif", jadi form di dalam
+          panel ikut hilang bersama pesannya (cacat e2e 2026-11-19:
+          pesan "Keputusan tercatat: ..." lenyap walau keputusan
+          berhasil). Di sini form mengikuti request TERBARU (aktif atau
+          yang baru diputuskan): aktif + ditugaskan → bisa memutuskan;
+          aktif tapi tidak ditugaskan → keterangan; sudah diputuskan →
+          form disabled supaya pesannya tetap terbaca. key per request
+          supaya pesan tidak terbawa ke request berikutnya. */}
+      {decisionRequest && canDecide ? (
+        <DecisionForm
+          key={decisionRequest.id}
+          requestId={decisionRequest.id}
+          workspaceId={workspaceId}
+        />
+      ) : decisionRequest && decisionRequest.status === "in_review" ? (
+        <p className="text-sm text-[var(--mt-text-muted)]">
+          Anda tidak ditugaskan di step saat ini, jadi tidak bisa memutuskan request ini.
+        </p>
+      ) : decisionRequest ? (
+        <DecisionForm
+          key={decisionRequest.id}
+          requestId={decisionRequest.id}
+          workspaceId={workspaceId}
+          disabled
+        />
+      ) : null}
 
       {/* Form submit SENGAJA tetap dirender walau ada request aktif — bila
           di-unmount saat request tercipta, pesan sukses "Konten diajukan
