@@ -2,7 +2,7 @@
 """Verifikasi statis MaTive Phase 3 (P3-01 s.d. P3-03) — tanpa database nyata.
 
 Memeriksa:
-  1. Migrasi 0009 + 0010 + tes 03 ter-parse penuh oleh pglast (parser PostgreSQL asli).
+  1. Migrasi 0009 + 0010 + 0011 + tes 03 ter-parse penuh oleh pglast (parser PostgreSQL asli).
   2. Jumlah asersi pgTAP di 03 == angka plan(N).
   3. Semua throws_ok di 03 memakai bentuk 4 argumen (sql, kode SQLSTATE,
      pola = pesan lengkap, deskripsi).
@@ -27,7 +27,9 @@ Memeriksa:
      tidak berlaku, bukan keadaan efektif.
   9. 0010 berisi 5 RPC transaksional Phase 3 (SECURITY DEFINER, search_path
      terkunci, GRANT EXECUTE hanya ke authenticated).
-  10. File 0001–0008 TIDAK diubah (diperiksa lewat git di luar skrip ini).
+  10. 0011 memperbaiki validate_content_item_scope (guard brand NULL,
+      pola validate_idea_scope); tanpa tabel/policy baru. File 0001–0008
+      TIDAK diubah (diperiksa lewat git di luar skrip ini).
 
 Jalankan:  python3 supabase/tests/rls_verify_phase3.py
 Keluar 0 bila semua pemeriksaan lolos.
@@ -42,6 +44,7 @@ from rls_audit import POLICY_RE, find_cycles  # noqa: E402
 APP_ROOT = Path(__file__).resolve().parent.parent.parent
 MIG9 = APP_ROOT / "supabase" / "migrations" / "0009_production_ops.sql"
 MIG10 = APP_ROOT / "supabase" / "migrations" / "0010_production_transactions.sql"
+MIG11 = APP_ROOT / "supabase" / "migrations" / "0011_fix_content_item_brand_null.sql"
 TEST_FILE = Path(__file__).resolve().parent / "03_rls_phase3.sql"
 FAKE_A = "11111111-1111-1111-1111-111111111111"
 FAKE_B = "22222222-2222-2222-2222-222222222222"
@@ -98,6 +101,7 @@ def strip_comments(sql):
 def main():
     mig9 = MIG9.read_text()
     mig10 = MIG10.read_text()
+    mig11 = MIG11.read_text()
     test = TEST_FILE.read_text()
 
     # 1. Parse pglast.
@@ -106,7 +110,7 @@ def main():
     except ImportError:
         check("pglast tersedia", False, "modul pglast tidak terpasang")
         return 1
-    for label, sql in (("0009", mig9), ("0010", mig10)):
+    for label, sql in (("0009", mig9), ("0010", mig10), ("0011", mig11)):
         try:
             stmts = pglast.parse_sql(sql)
             check(f"pglast parse {label} penuh", True, f"{len(stmts)} statement")
@@ -300,6 +304,24 @@ def main():
           "5 grant execute ke authenticated; tidak ada grant execute ke public")
     check("0010: tidak ada tabel baru",
           not re.search(r"create\s+table", mig10_nc, flags=re.I))
+
+    # 10. Perbaikan 0011 (regresi defect Phase 2): guard brand NULL.
+    mig11_nc = strip_comments(mig11)
+    check("0011 mengganti validate_content_item_scope",
+          "create or replace function public.validate_content_item_scope()" in mig11_nc)
+    check("0011: guard brand NULL ada (pola validate_idea_scope)",
+          bool(re.search(r"if\s+new\.brand_id\s+is\s+not\s+null\s+then", mig11_nc)))
+    check("0011: brand terisi tetap wajib satu workspace",
+          "scope mismatch: content_items.brand_id belongs to a different workspace" in mig11_nc)
+    check("0011: tidak ada tabel baru",
+          not re.search(r"create\s+table", mig11_nc, flags=re.I))
+    check("0011: tidak ada policy baru/diubah",
+          not re.search(r"create\s+policy|drop\s+policy", mig11_nc, flags=re.I))
+    check("0011: SECURITY DEFINER + search_path terkunci",
+          "security definer" in mig11_nc and "search_path = public, pg_temp" in mig11_nc)
+    check("0011: tidak menyentuh fungsi lain",
+          mig11_nc.count("create or replace function") == 1,
+          "tepat 1 fungsi diganti")
 
     failed = [r for r in results if not r[1]]
     print(f"\n{len(results) - len(failed)}/{len(results)} pemeriksaan lolos.")

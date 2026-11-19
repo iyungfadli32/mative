@@ -22,7 +22,7 @@ function migrationFiles(): Array<{ name: string; sql: string }> {
 }
 
 describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
-  it("memiliki 10 migrasi berversi berurutan 0001–0010", () => {
+  it("memiliki 11 migrasi berversi berurutan 0001–0011", () => {
     const files = migrationFiles();
     expect(files.map((f) => f.name)).toEqual([
       "0001_profiles.sql",
@@ -35,6 +35,7 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
       "0008_planning_transactions.sql",
       "0009_production_ops.sql",
       "0010_production_transactions.sql",
+      "0011_fix_content_item_brand_null.sql",
     ]);
   });
 
@@ -43,10 +44,12 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
       // 0006 hanya menulis ulang policy (DROP/CREATE POLICY), tidak membuat
       // tabel baru — RLS tabelnya sudah aktif sejak 0001–0005.
       // 0008 dan 0010 hanya berisi fungsi RPC transaksional (tanpa
-      // tabel/policy baru).
+      // tabel/policy baru); 0011 hanya mengganti satu fungsi trigger
+      // (tanpa tabel/policy baru).
       if (
         name === "0008_planning_transactions.sql" ||
-        name === "0010_production_transactions.sql"
+        name === "0010_production_transactions.sql" ||
+        name === "0011_fix_content_item_brand_null.sql"
       ) {
         expect(sql, `${name} tidak boleh membuat tabel`).not.toMatch(/create table/i);
         expect(sql, `${name} harus berisi fungsi RPC`).toMatch(/create or replace function/i);
@@ -168,7 +171,8 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
   });
 
   it("migrasi 0010 berisi 5 RPC transaksional Phase 3 (SECURITY DEFINER, search_path terkunci)", () => {
-    const m10 = migrationFiles().find((f) => f.name === "0010_production_transactions.sql")?.sql ?? "";
+    const m10 =
+      migrationFiles().find((f) => f.name === "0010_production_transactions.sql")?.sql ?? "";
     for (const fn of [
       "create_task_with_checklist",
       "transition_task_status",
@@ -181,6 +185,30 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
     expect(m10).toMatch(/security definer/i);
     expect(m10).toMatch(/search_path = public, pg_temp/);
     expect(m10).toMatch(/grant execute on function[\s\S]*to authenticated/i);
+  });
+
+  it("migrasi 0011 memperbaiki trigger scope item tanpa brand (regresi defect Phase 2)", () => {
+    const m11 =
+      migrationFiles().find((f) => f.name === "0011_fix_content_item_brand_null.sql")?.sql ?? "";
+    // Hanya mengganti validate_content_item_scope, dengan guard NULL.
+    expect(m11).toContain("create or replace function public.validate_content_item_scope()");
+    expect(m11).toMatch(/if\s+new\.brand_id\s+is\s+not\s+null\s+then/);
+    // Brand yang terisi tetap wajib satu workspace (tidak ada pelonggaran).
+    expect(m11).toContain(
+      "scope mismatch: content_items.brand_id belongs to a different workspace",
+    );
+    expect(m11).toMatch(/security definer/i);
+    expect(m11).toMatch(/search_path = public, pg_temp/);
+    // Tanpa tabel/policy baru; hardening revoke seperti migrasi lain.
+    expect(m11).not.toMatch(/create table/i);
+    expect(m11).not.toMatch(/create policy/i);
+    expect(m11).toMatch(
+      /revoke all on function public\.validate_content_item_scope\(\) from public/,
+    );
+    // Tepat satu fungsi diganti — validate_content_placement_scope hanya
+    // disebut di komentar (sengaja tidak diubah), bukan diganti.
+    expect(m11.match(/create or replace function/g)?.length).toBe(1);
+    expect(m11).not.toContain("create or replace function public.validate_content_placement_scope");
   });
 
   it("token undangan disimpan sebagai hash, bukan token mentah", () => {

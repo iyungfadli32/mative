@@ -34,7 +34,7 @@
 -- ============================================================================
 
 begin;
-select plan(31);
+select plan(34);
 
 -- ---------------------------------------------------------------------------
 -- Helper: set JWT claims untuk satu pengguna (simulasi auth.uid()).
@@ -404,7 +404,36 @@ select throws_ok(
 );
 
 -- ============================================================================
--- TES 15: anon (belum login) tidak bisa membaca task.
+-- TES 15 (migrasi 0011, regresi defect Phase 2): konversi ide TANPA brand
+-- berhasil — RPC convert_idea_to_content (0008) menyalin brand_id NULL dan
+-- trigger validate_content_item_scope (0007, diperbaiki 0011) wajib
+-- mengizinkannya. Dijalankan sebagai user A (owner Workspace A).
+-- Ide dibuat sebagai postgres (bypass RLS); RPC dipanggil sebagai user A.
+-- ============================================================================
+reset role;
+insert into public.ideas (id, workspace_id, brand_id, title, status, owner_user_id)
+values ('a7000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000001', null, 'Ide Tanpa Brand (sample test)', 'new', :'user_a')
+on conflict (id) do nothing;
+set local role authenticated;
+select _set_user(:'user_a');
+select is(
+  (select (public.convert_idea_to_content('a7000000-0000-0000-0000-000000000001') ->> 'ok')),
+  'true',
+  'T15 ALLOW: konversi ide tanpa brand mengembalikan ok=true (migrasi 0011)'
+);
+select is(
+  (select count(*) from public.content_items where origin_idea_id = 'a7000000-0000-0000-0000-000000000001' and brand_id is null)::int,
+  1,
+  'T15b ALLOW: content item hasil konversi tersimpan dengan brand_id NULL'
+);
+select is(
+  (select status from public.ideas where id = 'a7000000-0000-0000-0000-000000000001'),
+  'converted',
+  'T15c ALLOW: ide tanpa brand berstatus converted setelah konversi'
+);
+
+-- ============================================================================
+-- TES 16: anon (belum login) tidak bisa membaca task.
 -- GRANT SELECT ke anon diperlukan agar query is_empty bisa dieksekusi
 -- (tanpa grant, error 42501 permission denied, bukan hasil RLS).
 -- Grant ini DI DALAM transaksi file (ikut rollback di akhir).
@@ -416,13 +445,18 @@ set local role anon;
 select _as_anon();
 select is_empty(
   $$ select 1 from public.tasks where id = 'a1000000-0000-0000-0000-000000000001' $$,
-  'T15 DENY: anon tidak bisa membaca task'
+  'T16 DENY: anon tidak bisa membaca task'
 );
 reset role;
 set local role authenticated;
 
 -- Bersihkan data uji (hanya baris yang dibuat file ini).
 reset role;
+delete from public.activity_logs where entity_type = 'content_item' and entity_id in (select id from public.content_items where origin_idea_id = 'a7000000-0000-0000-0000-000000000001');
+delete from public.content_status_events where content_item_id in (select id from public.content_items where origin_idea_id = 'a7000000-0000-0000-0000-000000000001');
+delete from public.content_versions where content_item_id in (select id from public.content_items where origin_idea_id = 'a7000000-0000-0000-0000-000000000001');
+delete from public.content_items where origin_idea_id = 'a7000000-0000-0000-0000-000000000001';
+delete from public.ideas where id = 'a7000000-0000-0000-0000-000000000001';
 delete from public.tasks where title = 'Task RPC (sample test)';
 delete from public.notifications where id = 'a5000000-0000-0000-0000-000000000001';
 delete from public.comments where id in ('a4000000-0000-0000-0000-000000000001','a4000000-0000-0000-0000-000000000002','a4000000-0000-0000-0000-000000000003');
