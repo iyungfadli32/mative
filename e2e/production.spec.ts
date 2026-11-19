@@ -65,6 +65,19 @@ test.describe("penerimaan Phase 3 — production operations @needs-db", () => {
     await page.getByRole("button", { name: "Buat workspace" }).click();
     await expect(page.getByText("Workspace dibuat.")).toBeVisible({ timeout: 30000 });
 
+    // 0b. Template default: dibuat LAZY saat /template-brief dibuka oleh
+    //     owner (desain — bukan defect). Tanpa kunjungan ini, tab Brief
+    //     menampilkan "Belum ada template brief default di workspace ini"
+    //     dan alur berhenti. Kunjungan ini memakai workspace yang sama
+    //     dengan halaman lain (workspace pertama akun), jadi tanpa
+    //     switcher — switcher justru membuat template nyasar ke
+    //     workspace baru.
+    await page.goto("/template-brief");
+    await expect(page.getByRole("heading", { name: "Template Brief" })).toBeVisible();
+    await expect(page.getByText("Template Brief Standar").first()).toBeVisible({
+      timeout: 30000,
+    });
+
     // 0. Buat brand dulu — konversi wajib punya brand (0012).
     // Lokator form buat-baru sama seperti planning.spec.ts:
     // #brand-name-new / #brand-slug-new (getByLabel ambigu bila sudah
@@ -136,8 +149,17 @@ test.describe("penerimaan Phase 3 — production operations @needs-db", () => {
     await page.getByRole("button", { name: "Pindah status" }).click();
     await expect(page.getByText("Status task diubah.")).toBeVisible({ timeout: 30000 });
 
-    // 6. Tab Media: unggah aset PNG 1x1 → lampirkan ke konten.
+    // 6. Unggah aset PNG 1x1 lalu lampirkan ke konten. PERHATIAN: upload
+    //    HANYA ada di /pustaka — tab Media hanya melampirkan (teksnya:
+    //    "Unggah aset baru lewat Pustaka Aset"). Jadi: buka tab Media,
+    //    ikuti tautan "Pustaka Aset" di tab itu (membawa ?workspace= yang
+    //    benar), unggah di sana, kembali, lalu lampirkan di tab Media.
     await page.getByRole("tab", { name: "Media" }).click();
+    await page
+      .locator("main")
+      .getByRole("link", { name: "Pustaka Aset" })
+      .click();
+    await expect(page.getByRole("heading", { name: "Pustaka Aset" })).toBeVisible();
     await page.getByLabel(/Pilih file \(PNG, JPEG, WebP, MP4, WebM, PDF/).setInputFiles({
       name: `aset-p3-${slug}.png`,
       mimeType: "image/png",
@@ -145,7 +167,6 @@ test.describe("penerimaan Phase 3 — production operations @needs-db", () => {
     });
     await page.getByRole("button", { name: "Unggah aset" }).click();
     await expect(page.getByText("Aset diunggah.")).toBeVisible({ timeout: 30000 });
-    await page.getByRole("link", { name: "Pustaka Aset" }).click();
     await expect(page.getByText(`aset-p3-${slug}.png`).first()).toBeVisible({ timeout: 30000 });
     await page.goBack();
     await expect(page.getByRole("heading", { name: `Ide P3 ${slug}` })).toBeVisible({
@@ -183,7 +204,11 @@ test.describe("penerimaan Phase 3 — production operations @needs-db", () => {
     await expect(page.getByText(`Komentar P3 ${slug}`).first()).toBeVisible({ timeout: 30000 });
 
     // 10. Halaman Task Center + Pustaka + Template Brief menampilkan hasil.
+    //     Task Center default di tab "Tugas Saya" — task tes TIDAK ditugaskan
+    //     ke siapa pun saat dibuat (langkah 5), jadi ia hanya muncul di tab
+    //     "Semua Task". Buka tab itu dulu sebelum memeriksa judulnya.
     await page.goto("/tugas");
+    await page.getByRole("tab", { name: /Semua Task/ }).click();
     await expect(page.getByText(`Task P3 ${slug}`).first()).toBeVisible({ timeout: 30000 });
     await page.goto("/pustaka");
     await expect(page.getByText(`aset-p3-${slug}.png`).first()).toBeVisible({ timeout: 30000 });
