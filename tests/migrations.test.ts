@@ -22,7 +22,7 @@ function migrationFiles(): Array<{ name: string; sql: string }> {
 }
 
 describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
-  it("memiliki 14 migrasi berversi berurutan 0001–0014", () => {
+  it("memiliki 15 migrasi berversi berurutan 0001–0015", () => {
     const files = migrationFiles();
     expect(files.map((f) => f.name)).toEqual([
       "0001_profiles.sql",
@@ -39,6 +39,7 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
       "0012_convert_idea_brand_param.sql",
       "0013_approval_core.sql",
       "0014_approval_transactions.sql",
+      "0015_notification_scope_placement.sql",
     ]);
   });
 
@@ -50,13 +51,15 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
       // tabel/policy baru); 0011 hanya mengganti satu fungsi trigger
       // (tanpa tabel/policy baru); 0012 hanya mengganti satu fungsi RPC
       // (tanpa tabel/policy baru); 0014 hanya berisi fungsi approval
-      // (tanpa tabel/policy baru).
+      // (tanpa tabel/policy baru); 0015 hanya memperluas satu CHECK +
+      // mengganti satu fungsi trigger (tanpa tabel/policy baru).
       if (
         name === "0008_planning_transactions.sql" ||
         name === "0010_production_transactions.sql" ||
         name === "0011_fix_content_item_brand_null.sql" ||
         name === "0012_convert_idea_brand_param.sql" ||
-        name === "0014_approval_transactions.sql"
+        name === "0014_approval_transactions.sql" ||
+        name === "0015_notification_scope_placement.sql"
       ) {
         expect(sql, `${name} tidak boleh membuat tabel`).not.toMatch(/create table/i);
         expect(sql, `${name} harus berisi fungsi RPC`).toMatch(/create or replace function/i);
@@ -74,6 +77,10 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
 
   it("setiap migrasi mencabut grant default (revoke all ... from anon)", () => {
     for (const { name, sql } of migrationFiles()) {
+      // 0015 hanya mengganti fungsi trigger yang SUDAH ada (tanpa objek
+      // baru, tanpa grant baru) — grant validate_notification_scope
+      // tidak berubah sejak 0009, jadi tidak ada yang perlu di-revoke.
+      if (name === "0015_notification_scope_placement.sql") continue;
       expect(sql, `${name} harus revoke grant default`).toMatch(/revoke all on/i);
     }
   });
@@ -303,6 +310,28 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
     );
     // Guard 0014 = salinan 0008 + satu blok guard (bukan fungsi baru dari nol).
     expect(m14).toContain("create or replace function public.transition_content_item_status(");
+  });
+
+  it("migrasi 0015 mengizinkan notifikasi target 'placement' (perbaikan cacat Phase 4)", () => {
+    const m15 =
+      migrationFiles().find((f) => f.name === "0015_notification_scope_placement.sql")?.sql ?? "";
+    // CHECK diperluas dengan 'placement' (sebelumnya hanya 4 target).
+    expect(m15).toContain(
+      "check (target_type in ('content_item', 'campaign', 'task', 'comment', 'placement'))",
+    );
+    // Trigger scope mendapat cabang 'placement': workspace diambil lewat
+    // content_placements -> content_items.
+    expect(m15).toContain("create or replace function public.validate_notification_scope()");
+    expect(m15).toContain("elsif new.target_type = 'placement' then");
+    expect(m15).toContain("from public.content_placements cp");
+    expect(m15).toContain("join public.content_items ci on ci.id = cp.content_item_id");
+    expect(m15).toMatch(/security definer/i);
+    expect(m15).toMatch(/search_path = public, pg_temp/);
+    // Tanpa tabel/policy/grant baru; tepat satu fungsi diganti.
+    expect(m15).not.toMatch(/create table/i);
+    expect(m15).not.toMatch(/create policy/i);
+    expect(m15).not.toMatch(/grant .* to authenticated/i);
+    expect(m15.match(/create or replace function/g)?.length).toBe(1);
   });
 
   it("pgTAP 04 ada dengan plan(64) + pola placeholder yang benar", () => {
