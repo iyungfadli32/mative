@@ -1,9 +1,9 @@
 # Laporan Fase 5 — Campaign & Visual Planning, P5-01 s.d. P5-09 (MaTive DRAF)
 
-> Status: **SELESAI DIKEMBANGKAN (lokal), BELUM DILOLOSKAN LIVE.**
-> Migrasi 0016 + 0017 BELUM diterapkan ke database live. pgTAP 05 + e2e
-> Phase 5 BELUM dijalankan live — menunggu parent (§8). Jangan klaim
-> Phase 5 lolos sebelum §8 selesai dan §11 ditandatangani parent.
+> Status: **LOLOS (Chromium) 20 Nov 2026 ~00:40 WIB** — migrasi 0016–0019
+> live, pgTAP 05 v1.2 61/61, e2e Chromium 13 lolos + 1 skip (re-run
+> sekuensial). Batas jujur eksplisit: tes mobile WebKit BELUM dijalankan
+> (menunggu keputusan Tuan, B4). Detail lengkap di §11.
 
 ## 1. Ringkasan hasil
 
@@ -369,14 +369,18 @@ SELECT + UPDATE). pgTAP 05 naik ke **v1.2 (plan 61)** dengan TES 16
 (T16a/T16b: INSERT brand sebagai authenticated + terlihat owner).
 Batas jujur: anggota ber-scope terbatas yang membuat brand tidak
 langsung melihat brand itu sampai owner menambahkannya ke scope-nya
-(fail-safe di sisi baca). 0019 + v1.2 BELUM diterapkan/dijalankan live —
-menunggu parent (§8 Langkah 1–3 diulang untuk 0019 + pgTAP 05 v1.2).
+(fail-safe di sisi baca). 0019 diterapkan live 23:01–23:02 WIB
+19 Nov 2026 (terverifikasi via `pg_policies`: 1 baris INSERT,
+WITH CHECK `is_ws_member(workspace_id,
+ARRAY['owner','admin','manager'])`, tanpa `brand_in_scope`) dan
+pgTAP 05 v1.2 dijalankan live 23:11 WIB — 61/61 (§11.2).
 
 ## 7. Batas jujur — yang BELUM terbukti (wajib dibaca parent)
 
-1. **Migrasi 0016 + 0017 BELUM live.** Semua bukti RLS/RPC di atas adalah
-   statis (pglast + verifier) dan unit test. pgTAP 05 + e2e BELUM
-   dijalankan di database live.
+1. **TERBUKTI 20 Nov 2026: migrasi 0016–0019 live; pgTAP 05 v1.2
+   61/61 live; e2e Chromium hijau (re-run sekuensial 13 lolos + 1 skip).**
+   Bukti RLS/RPC di bawah ini bukan lagi statis semata — lihat §11.
+   (Satu pengecualian: tes mobile WebKit BELUM dijalankan, §11.6.1.)
 2. **Approval dua-peran belum terbukti live** (bawaan Phase 4) — tidak
    berubah di Phase 5.
 3. **CSV `owner_email` hanya bisa diverifikasi bila sama dengan email
@@ -477,7 +481,7 @@ Phase 2/3/4.)
 
 ### Langkah 4 — Setelah lolos
 
-1. Perbarui `docs/apply-migrations.md` (migrasi kini 0001–0017).
+1. Perbarui `docs/apply-migrations.md` (migrasi kini 0001–0019).
 2. Isi §11 laporan ini (deklarasi parent) + perbarui `~/MEMORY.md`
    (buku rencana 7/11 = 64%) + catat satu baris completions
    `C<YYYYMMDDHHMM>-plan` di `~/workspace/monitor/completions.jsonl`.
@@ -567,17 +571,190 @@ drag/drop — tanpa dependensi lain).
 8. **Rute template = `/template`** (baru) — bukan `/pustaka` (Pustaka Aset
    P3-07) dan bukan `/template-brief`.
 
-## 11. Deklarasi — BELUM DILOLOSKAN (menunggu parent)
+## 11. Deklarasi — LOLOS (Chromium) 20 Nov 2026 ~00:40 WIB
 
-Phase 5 **belum dinyatakan LULUS**. Yang sudah terbukti (lokal):
+Phase 5 **DINYATAKAN LOLOS (Chromium)** oleh parent. Semua gerbang live
+lolos; satu batas jujur eksplisit: tes mobile WebKit belum dijalankan
+(menunggu keputusan Tuan, B4 — §11.6.1). Commit HEAD: `8e0e95d`.
 
-- Lint 0, typecheck 0, Vitest 165/165, build lolos, verifier 33/33,
-  Prettier 18 file bersih.
-- pgTAP 05 ditulis lengkap (59 asersi) — BELUM dijalankan live.
-- e2e Phase 5 ditulis lengkap (A5.1 + A5.3 + A5.5 + smoke) — BELUM
-  dijalankan live.
+### 11.1 Migrasi live (0001–0019)
 
-Parent yang menerapkan migrasi 0016 → 0017 lewat SQL Editor, menjalankan
-pgTAP 05 + e2e live, mendeklarasikan Phase 5, membersihkan residu
-(§8.1), lalu meluncurkan koordinator Phase 6. Jangan klaim lolos bila
-ada gerbang yang gagal atau skip di luar yang dirancang.
+| Migrasi | File | Live (WIB 19 Nov 2026) | Isi |
+| ------- | ---- | ---------------------- | --- |
+| 0016 | `0016_brand_scope.sql` | 21:13–21:15 | Brand scope: CHECK + `brand_in_scope` + 15 policy ditulis ulang |
+| 0017 | `0017_visual_planner_templates.sql` | 21:40–21:42 | 5 tabel + RLS + 20 policy + RPC `set_visual_order` |
+| 0018 | `0018_set_visual_order_fixes.sql` | 22:30–22:34 | RPC posisi 1-based + `INVALID_STATE_TRANSITION` |
+| 0019 | `0019_brands_insert_scope_fix.sql` | 23:01–23:02 | Perbaikan cacat produk INSERT brand (§6.9 / §11.3) |
+
+**Saga 0017 (dicatat lengkap karena ada klaim yang sempat salah):**
+Run pertama 0017 GAGAL 21:29–21:30 WIB — `42601: only WITH CHECK
+expression allowed for INSERT` (policy INSERT `visual_orders`
+memakai `using (false)`; pglast menerimanya sebagai 85 statement OK,
+Postgres menolaknya — pelajaran: **pglast OK ≠ Postgres menerima**).
+Perbaikan commit `f3f1e7a`: `using (false)` → `with check (false)` +
+asersi regresi di `tests/migrations.test.ts`. Parent sempat berasumsi
+bagian 1–5 sudah live dan meluncurkan query sisa-saja — query itu
+gagal `42P01: relation "public.visual_orders" does not exist`, dan
+query pemeriksaan membuktikan **0017 tidak diterapkan sama sekali**
+(42601 = parse error, tidak ada statement yang dieksekusi). Klaim
+"bagian 1–5 sudah live" dikoreksi eksplisit ke Tuan. File penuh yang
+sudah diperbaiki diterapkan live 21:40–21:42 WIB, 0 galat;
+terverifikasi: 5 tabel, `set_visual_order` ada, 20 policy, RLS aktif
+×5. (Jumlah policy 20, bukan 15: 5 policy `no_*` pra-0016 dari 0007
+ikut terhitung.)
+
+### 11.2 pgTAP 05 live — 61/61
+
+- **v1.0 Run 1:** gagal di cacat file tes — kolom `format` vs
+  `platform_format` di `content_template_placements` (42703, sebelum
+  asersi apa pun berjalan); diperbaiki commit `f93d8e3`.
+- **v1.0 Run 2: 47/59** — 12 gagal. Diagnosis memakai tabel temp
+  `_tap_out` (semua 59 asersi dibungkus `insert into _tap_out select …`,
+  `select * from _tap_out` sebagai statement akhir) karena SQL Editor
+  hanya menampilkan result set terakhir dan `finish()` hanya
+  mengembalikan baris bila ada kegagalan. Run diagnosis pertama gagal
+  42501 — temp table milik postgres, butuh
+  `grant insert, select on _tap_out to authenticated;` sesudah
+  `set local role authenticated`.
+- **4 akar penyebab:** (a) RPC `set_visual_order` menulis posisi
+  0-based (`v_pos int := 0`), desain 1-based — CACAT RPC; (b)
+  penolakan placement-membership mengembalikan FORBIDDEN, pemetaan
+  yang dirancang: INVALID_STATE_TRANSITION untuk kegagalan validasi,
+  FORBIDDEN hanya peran/scope — CACAT RPC; (c) T11e: tes mengharapkan
+  approver B bisa reorder — kanonis RBAC (kit Dok 06 §3 + `can()` +
+  `features/visual-planner/actions.ts`) approver hanya view pada
+  `manage_pillars_campaigns` — CACAT TES (peran B jadi `manager` di
+  WS-A); (d) 7 pola `throws_ok` harus pesan galat LENGKAP termasuk
+  nama constraint yang terpotong Postgres ke 63 byte
+  (`..._place_key`, `..._posit_key`) — CACAT TES.
+- **Perbaikan migrasi 0018 + v1.1: 59/59** live 22:44–22:46 WIB
+  (687 baris editor, Run sekali, `finish()` 0 baris, asersi terakhir
+  `ok 59 - T15c`).
+- **v1.2 (tambah TES 16, T16a/T16b — regresi INSERT brand 0019):
+  61/61** live 23:11 WIB (708 baris ditempel dalam 13 bagian,
+  `finish()` 0 baris — tidak ada baris ringkasan kegagalan — asersi
+  terakhir `ok 61 - T16b ALLOW: brand baru terlihat owner (scope NULL)
+  sesudah INSERT`). File membersihkan dirinya sendiri (begin …
+  rollback), residu 0.
+
+### 11.3 Cacat 0019 (produk, ditemukan e2e live)
+
+Ringkasan §6.9: policy INSERT brands 0016 menuntut
+`brand_in_scope(brands.id)` — helper itu mencari baris di
+`public.brands`, sedangkan baris yang sedang di-INSERT belum ada di
+tabel, jadi INSERT ditolak untuk SEMUA peran termasuk owner scope
+penuh. e2e chromium pertama gagal di langkah "Buat brand" sebelum
+menyentuh fitur Phase 5. Perbaikan migrasi 0019 (commit `02f53f2`,
+bersama pgTAP 05 v1.2 + `tests/migrations.test.ts` 19 migrasi +
+regresi 0019 + §6.9 laporan ini): policy INSERT dibuat ulang dengan
+WITH CHECK hanya `is_ws_member(workspace_id,
+ARRAY['owner','admin','manager'])`. Batas jujur: anggota ber-scope
+terbatas yang membuat brand tidak langsung melihat brand itu sampai
+owner menambahkannya ke scope-nya (fail-safe di sisi baca, bukan
+kebocoran). Pelajaran: **policy INSERT tidak boleh memeriksa baris
+yang sedang di-INSERT di tabelnya sendiri** — baris itu belum ada
+saat policy dievaluasi.
+
+### 11.4 e2e live (Chromium)
+
+- **Run pertama (koordinator #2):** 3 tes @needs-db gagal di "Buat
+  brand" (cacat 0019, §11.3); 4 tes mobile gagal di
+  `browserType.launch` — library sistem WebKit hilang (`libgtk-4-1`,
+  `libgraphene-1.0-0`, `libmanette-0.2-0`, `libenchant-2-2`,
+  `libsecret-1-0`, `libgles2`, `libevent-2.1-7t64`); kemungkinan besar
+  VM diganti sejak Phase 2–4 (paket apt di luar `~` hilang; binari
+  di `~/.cache/ms-playwright` selamat). Smoke `/template` lolos
+  sesudah server Next.js basi (build pra-Phase-5, 20:07 WIB) dimatikan
+  — `reuseExistingServer: true` sempat memakainya ulang.
+- **Run ulang Chromium (koordinator #3):** campaign 4/4, planning 4/4,
+  approval 2 lolos/1 skip, production 3/3.
+- **Run paralel: 2 gagal** — approval timeout 300 dtk menunggu form
+  "Simpan penugasan"; production "Template Brief Standar" tidak
+  ditemukan. Keduanya berjalan di workspace residu lama
+  (`ws-p5-p5b-mwnqbqmm`) dan AWALNYA didiagnosis sebagai
+  transien/lingkungan (seed malas telat muncul saat pemuatan pertama).
+  **Koreksi atas diagnosis awal:** run sekuensial (`--workers=1`)
+  MEMBUKTIKAN keduanya cacat aplikasi nyata deterministik — sesudah
+  seed malas dihapus di ws-p4, run solo approval gagal lagi di langkah
+  yang sama persis. Akar penyebab: **Next.js me-memoize fetch GET yang
+  sama dalam SATU render server** — pola baca → tulis (lazy-create) →
+  baca ulang dengan URL GET identik mengembalikan hasil kosong dari
+  baca pertama (sebelum tulis), tanpa pernah mengenai database;
+  `cache: "no-store"` hanya menonaktifkan Data Cache, BUKAN memoize
+  per-render. Perbaikan Phase 4 (`3c83a08`) tidak pernah benar-benar
+  bekerja pada pemuatan pertama.
+- **Perbaikan (commit terpisah, satu cacat = satu commit):**
+  - `668293a` — approval: baca ulang workflow default berdasarkan
+    `workflow_id` hasil RPC (URL berbeda → tidak kena memoize);
+    fallback ke `getDefaultWorkflow` bila RPC tidak mengembalikan id.
+  - `8e0e95d` — production: `ensureDefaultBriefTemplate` mengembalikan
+    baris template-nya (dari pemeriksaan awal, dari `.select()` sesudah
+    insert = POST, atau dari baca bentuk berbeda bila balapan 23505);
+    halaman Template Brief + tab Brief konten memakai baris itu
+    langsung, tanpa baca ulang URL sama.
+  - `1da0023` — form tambah placement di-unmount saat berhasil: form
+    hanya dirender bila `freeChannels.length > 0`, jadi sesudah
+    placement pertama tercipta + revalidasi, form beserta pesan sukses
+    `useActionState` hilang sebelum dibaca — pola yang sama dengan
+    2 cacat Phase 3 + 3 cacat Phase 4; diperbaiki mengikuti `a869027`
+    (form tetap dirender saat `canEdit`, disabled bila tidak ada
+    channel bebas + penjelasan di bawahnya).
+  - Perbaikan tes (bukan cacat aplikasi): `742d4ee` (locator heading
+    ambigu, tambah `exact: true`), `ddc8ba4` (locator template A5.1 +
+    koma CSV A5.5 — 2 baris CSV kekurangan 1 koma sehingga `status`
+    jatuh di kolom `end_at`).
+- **Re-run sekuensial penuh sesudah perbaikan: 13 lolos, 1 skip,
+  0 gagal (9,1 mnt, exit 0)** — campaign 4/4, planning 4/4,
+  approval 2 lolos/1 skip (dua-peran skip, Chromium saja, satu
+  pengguna), production 3/3.
+- **Verifikasi parent atas HEAD `8e0e95d`:** typecheck 0, lint 0,
+  Vitest **167/167** (16 file), Prettier bersih pada file yang diubah,
+  build **29/29** halaman. (Vitest naik dari 165/165 di §1/§5 karena
+  uji migrasi diperbarui ke 19 migrasi + regresi 0019, commit
+  `02f53f2`.) Working tree bersih.
+
+### 11.5 Pembersihan residu (dua kali, sampai seed-only)
+
+- **Run 1** (setelah e2e paralel): 17 organisasi + 17 workspace
+  dihapus (pola `org-p5-*`/`ws-p5-*` + `org-p3-p3-*`/`org-p4-p4-*` +
+  `org-e2e-*`); unset `is_default=false` dulu; seed-only
+  terverifikasi (orgs 1, workspaces 1, org_members 1, ws_members 2,
+  sisanya 0; `workspace_settings` 1 milik seed).
+- **Run 2** (setelah re-run sekuensial): 15 organisasi + 15 workspace
+  dihapus (pola sama + awalan ganda `ws-p5-p5a-*` dst.); seed-only
+  terverifikasi dengan hitungan yang sama.
+- Semua penghapusan berdasarkan slug tepat yang terdaftar dulu; seed
+  (`contoh-studio-sample` / `workspace-contoh-sample`) dan pengguna
+  Auth tidak disentuh. pgTAP 05 tidak meninggalkan residu (rollback).
+
+### 11.6 Batas jujur yang tersisa (wajib dibaca)
+
+1. **Tes mobile WebKit BELUM dijalankan** — 4 tes campaign di
+   iPhone 13 (proyek WebKit) tidak pernah lolos/gagal karena
+   `browserType.launch` gagal sebelum tes apa pun berjalan (library
+   sistem hilang, §11.4). Menunggu keputusan Tuan (B4: install
+   library WebKit via `npx playwright install-deps webkit` vs cukup
+   Chromium saja). **JANGAN jalankan apt-get/install-deps tanpa izin
+   eksplisit Tuan.**
+2. **Approval dua-peran belum terbukti live** (skip, satu pengguna)
+   — bawaan Phase 4, tidak berubah di Phase 5.
+3. **Pola seed malas yang menelan galat diam-diam** sudah diperbaiki
+   untuk 2 jalur yang terbukti cacat (workflow approval, brief
+   template); pola yang sama di tempat lain belum diaudit menyeluruh
+   — hardening "tampilkan galat query, bukan daftar kosong" dicatat
+   untuk Phase 9.
+4. Batas jujur §7.2–§7.10 tetap berlaku (CSV `owner_email` hanya
+   email pemanggil; tautan brand di luar scope dipertahankan;
+   template tanpa aksi hapus; halaman anggota gagal-bersih bila 0016
+   belum live — kini tidak relevan karena 0016 live; QA visual login
+   + mobile 390 px di browser nyata belum ada; peran "limited"
+   mengikuti preseden planning; tiga file rencana detail masih teks
+   pra-v2; framework Plan Management masih DRAF).
+
+### 11.7 Keputusan
+
+**Phase 5 LOLOS (Chromium).** Migrasi 0016–0019 live, pgTAP 05 v1.2
+61/61, e2e Chromium 13 lolos + 1 skip, residu bersih seed-only,
+verifikasi parent atas HEAD `8e0e95d` hijau penuh. Lanjut Phase 6
+(Publishing Foundation). Tes mobile WebKit menyusul bila Tuan
+menyetujui B4 — bukan gate yang menahan Phase 6.

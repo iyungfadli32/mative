@@ -153,6 +153,41 @@ v1.4: 64/64 PASS live 19 Nov 2026 18:42 WIB. E2E live 19 Nov 2026
 Detail lengkap + saga kegagalan + cacat yang ditemukan selama e2e:
 `docs/phase-4-report.md` §11 (deklarasi). **Migrasi kini 0001–0015.**
 
+## RLS policy tests Phase 5 (pgTAP) — setelah migrasi 0016 + 0017 + 0018 + 0019
+
+```bash
+# Jalankan tes Phase 5 (61 tes v1.2; ekspektasi: semua ok, tidak ada "not ok"):
+psql "$DATABASE_URL" \
+  -v user_a='<UUID-USER-A>' -v user_b='<UUID-USER-B>' \
+  -f supabase/tests/05_rls_phase5.sql
+
+# Lalu jalankan spek penerimaan Phase 5 (e2e live, butuh akun uji):
+E2E_TEST_EMAIL='<email-akun-uji>' E2E_TEST_PASSWORD='<password-akun-uji>' \
+  npx playwright test --project=chromium e2e/campaign.spec.ts
+# Ekspektasi: 4/4 (3 tes @needs-db + 1 smoke).
+# Juga jalankan ulang regresi Phase 2 + Phase 3 + Phase 4:
+E2E_TEST_EMAIL='<email-akun-uji>' E2E_TEST_PASSWORD='<password-akun-uji>' \
+  npx playwright test --project=chromium e2e/planning.spec.ts e2e/approval.spec.ts e2e/production.spec.ts
+# Ekspektasi: planning 4/4 + approval 2 lolos/1 skip + production 3/3.
+```
+
+**Urutan wajib Phase 5: 0016 dulu, lalu 0017, lalu 0018, lalu 0019**
+(0018 memperbaiki RPC `set_visual_order` dari 0017; 0019 memperbaiki
+policy INSERT brands dari 0016; migrasi 0001–0015 tidak diubah).
+**0016 DITERAPKAN live 19 Nov 2026 21:13–21:15 WIB; 0017 DITERAPKAN
+live 19 Nov 2026 21:40–21:42 WIB** (Run pertama gagal 42601 — policy
+INSERT `visual_orders` memakai `using (false)`; diperbaiki commit
+`f3f1e7a`; 42601 = parse error, tidak ada statement yang dieksekusi —
+jangan berasumsi penerapan parsial); **0018 DITERAPKAN live 19 Nov
+2026 22:30–22:34 WIB; 0019 DITERAPKAN live 19 Nov 2026 23:01–23:02
+WIB** — semuanya terverifikasi. **pgTAP 05 v1.2: 61/61 PASS live
+19 Nov 2026 23:11 WIB (v1.0 sempat 47/59; v1.1 59/59). E2E live
+(Chromium, re-run sekuensial `--workers=1`): 13 lolos + 1 skip,
+0 gagal, 19–20 Nov 2026** (tes mobile WebKit belum dijalankan —
+library sistem hilang, menunggu keputusan Tuan/B4). Detail lengkap +
+saga kegagalan + cacat yang ditemukan selama e2e:
+`docs/phase-5-report.md` §11 (deklarasi). **Migrasi kini 0001–0019.**
+
 ## Seed demo (local/preview SAJA — JANGAN di database produksi)
 
 ```bash
