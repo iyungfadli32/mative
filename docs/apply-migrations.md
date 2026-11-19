@@ -91,10 +91,10 @@ E2E_TEST_EMAIL='<email-akun-uji>' E2E_TEST_PASSWORD='<password-akun-uji>' \
 # Ekspektasi: semua tes lolos (tidak lagi skip).
 ```
 
-## RLS policy tests Phase 3 (pgTAP) — setelah migrasi 0009 + 0010 + 0011
+## RLS policy tests Phase 3 (pgTAP) — setelah migrasi 0009 + 0010 + 0011 + 0012
 
 ```bash
-# Jalankan tes Phase 3 (34 tes; ekspektasi: semua ok, tidak ada "not ok"):
+# Jalankan tes Phase 3 (35 tes v1.1; ekspektasi: semua ok, tidak ada "not ok"):
 psql "$DATABASE_URL" \
   -v user_a='<UUID-USER-A>' -v user_b='<UUID-USER-B>' \
   -f supabase/tests/03_rls_phase3.sql
@@ -109,9 +109,13 @@ E2E_TEST_EMAIL='<email-akun-uji>' E2E_TEST_PASSWORD='<password-akun-uji>' \
 # Ekspektasi: 4/4.
 ```
 
-**Urutan wajib Phase 3: 0009 dulu, lalu 0010, lalu 0011** (0010 memakai
-tabel dari 0009; 0011 mengganti fungsi trigger dari 0007 — 0007 tidak
-diubah). Detail lengkap + verifikasi per langkah + pembersihan data uji:
+**Urutan wajib Phase 3: 0009 dulu, lalu 0010, lalu 0011, lalu 0012** (0010 memakai
+tabel dari 0009; 0011 mengganti fungsi trigger dari 0007; 0012 mengganti RPC
+convert_idea_to_content dari 0008 — 0007 dan 0008 tidak diubah). **0009, 0010,
+0011 DITERAPKAN live 19 Nov 2026 (14:08–14:16 WIB, terverifikasi); 0012
+DITERAPKAN live 19 Nov 2026 15:22 WIB, terverifikasi: definisi fungsi 3-arg
+(p_idea_id, p_title, p_brand_id) + guard brand + count pg_proc = 1 (overload
+lama hilang).** Detail lengkap + verifikasi per langkah + pembersihan data uji:
 `docs/phase-3-report.md` §8.
 
 ## Seed demo (local/preview SAJA — JANGAN di database produksi)

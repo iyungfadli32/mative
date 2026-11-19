@@ -501,8 +501,11 @@ Semua baris di bawah adalah residu tes (bukan data seed — seed JANGAN
 dihapus). Hapus lewat SQL Editor, urutan anak-dulu:
 
 ```sql
--- (a) Probe Langkah 0 (2026-11-19): 3 set org/workspace/brand/konten
---     slug probe0-mwn4fhxd, probe0-mwn4hktd, probe0-mwn4lj9u.
+-- (a) Probe Langkah 0 (2026-11-19): 4 set org/workspace/brand/konten
+--     slug probe0-mwn4fhxd, probe0-mwn4hktd, probe0-mwn4lj9u, probe0-mwn4o3mj
+--     (KOREKSI 2026-11-19 saat deklarasi: tadinya tertulis 3 set; nyatanya 4.
+--     social_channels TIDAK punya kolom workspace_id — hapus lewat brand_id,
+--     pola yang sama dengan blok (b). Versi lama di sini pernah gagal 42703.)
 delete from public.content_placements
  where content_item_id in (select id from public.content_items
   where workspace_id in (select id from public.workspaces where slug like 'ws-probe0-%'));
@@ -515,7 +518,8 @@ delete from public.content_status_events
 delete from public.content_items
  where workspace_id in (select id from public.workspaces where slug like 'ws-probe0-%');
 delete from public.social_channels
- where workspace_id in (select id from public.workspaces where slug like 'ws-probe0-%');
+ where brand_id in (select id from public.brands
+  where workspace_id in (select id from public.workspaces where slug like 'ws-probe0-%'));
 delete from public.brands
  where workspace_id in (select id from public.workspaces where slug like 'ws-probe0-%');
 delete from public.workspace_members
@@ -556,8 +560,8 @@ org/workspace miliknya — dibutuhkan run e2e berikutnya).
 - `supabase/migrations/0009_production_ops.sql` (baru)
 - `supabase/migrations/0010_production_transactions.sql` (baru)
 - `supabase/migrations/0011_fix_content_item_brand_null.sql` (baru)
-- `supabase/tests/03_rls_phase3.sql` (baru, plan(34))
-- `supabase/tests/rls_verify_phase3.py` (baru, 50/50)
+- `supabase/tests/03_rls_phase3.sql` (baru, plan(35) — v1.4; v1.0 plan(34))
+- `supabase/tests/rls_verify_phase3.py` (baru, 60/60 — v1.1; awalnya 50/50)
 - `lib/validation/schemas.ts` (bagian Phase 3)
 - `features/production/{types,constants,transitions,mime,queries,actions}.ts` (baru)
 - `features/production/components/{TaskForm,TaskStatusForm,TaskChecklist,CommentThread,AssetUploadForm,AssetCard,AttachAssetForm,BriefEditor,ScriptEditor,TemplateForm,VersionCompare,ClientCommentsToggle}.tsx` (baru)
@@ -670,3 +674,150 @@ brand harus berupa pesan bersih, bukan crash database.
   live (karena `drop function ... convert_idea_to_content(uuid, text)`):
   DROP itu langsung diikuti CREATE ulang signatur baru dalam file yang
   sama — fungsi diganti, bukan dihapus.
+
+---
+
+## 12. Deklarasi: Phase 3 LOLOS PENUH — 2026-11-19 16:52 WIB
+
+**Gate yang lolos (semua live, database proyek Supabase "mative"):**
+
+| Gate | Hasil | Waktu |
+| --- | --- | --- |
+| pgTAP 03 v1.4 (`supabase/tests/03_rls_phase3.sql`) | **35/35** | 16:05 WIB |
+| e2e `e2e/production.spec.ts` (chromium, live) | **3/3** (1 acceptance + 2 smoke) | 16:44 WIB |
+| e2e `e2e/planning.spec.ts` regresi (chromium, live) | **4/4** (1 acceptance + 3 smoke) | 16:44 WIB |
+| Verifikasi parent (tangan pertama) | lint 0 error; Vitest **108/108** (11 file); build sukses | 16:45 WIB |
+| Kebersihan database live | hanya seed (orgs 1, workspaces 1, org_members 1, ws_members 2, sisanya 0) | 16:52 WIB |
+
+### 12.1 Penerapan migrasi live (0009–0012)
+
+- **0009** (13:48–14:08 WIB, 19 bagian): cacat forward-reference
+  `mentions.notification_id → notifications` (tabel dibuat belakangan di
+  bagian yang sama — kelas cacat yang sama dengan migrasi 0001).
+  Perbaikan: tukar urutan blok (notifications dulu), commit `08627ea`
+  (diff murni reorder 15+/15−); audit forward-reference 0 hard failure
+  0 warning (kontrol negatif: audit menangkap cacat asli di file
+  sebelum perbaikan). Dialog RLS saat membuat tabel → **"Run without
+  RLS"** (migrasi mengaktifkan RLS sendiri; verifikasi akhir
+  `pg_class.relrowsecurity`: 9/9 `true` — query §8 lama yang memakai
+  `pg_tables.row_security_enabled` SALAH kolom, sudah dikoreksi).
+  Dialog destructive (`drop trigger if exists`) → **"Run query"**
+  (trigger di-drop lalu langsung dibuat ulang di bagian yang sama).
+- **0010** (14:08–14:14 WIB, 6 bagian): header pesan parent untuk bagian 4
+  tertulis "119 baris" padahal isi file 75 baris — isi file BENAR, hanya
+  typo header. 5/5 RPC terverifikasi ada di `pg_proc`.
+- **0011** (14:14–14:16 WIB, 2 bagian): guard `if new.brand_id is not null`
+  terverifikasi di definisi fungsi live. Guard ini kemudian terbukti
+  MOOT (lihat §12.2) — dipertahankan sebagai defense-in-depth.
+- **0012** (15:11–15:22 WIB, 4 bagian, 156 baris): dialog DROP FUNCTION →
+  **"Run query"** (overload lama langsung diganti signatur baru dalam
+  file yang sama). Verifikasi: signatur 3-arg
+  `(p_idea_id, p_title, p_brand_id)` + `coalesce` + pesan brand +
+  `count(pg_proc) = 1` (overload lama hilang).
+
+### 12.2 Saga pgTAP 03 (v1.0 → v1.4) — semua kegagalan adalah file tes, bukan kebijakan
+
+- **v1.0 gagal di T15 (23502):** konversi ide tanpa brand menabrak
+  `content_items.brand_id NOT NULL`. Diagnosis parent dari disk: premis
+  koordinator Phase 3 ("kolom NULLABLE menurut skema 0007") SALAH —
+  ia mempercayai komentar header 0007 baris 191, bukan DDL baris 200
+  (`brand_id uuid not null`); Dok 05 §3, ERD §5, dan skema Zod
+  (`brandId` wajib) semuanya sepakat brand WAJIB di item. Keputusan
+  dikunci: brand TETAP NOT NULL; perbaikan = migrasi 0012 + select brand
+  saat konversi + T15 ditulis ulang + spek e2e brand-first (§11).
+- **Pelajaran 1 (14:20 WIB):** tiap Run SQL Editor = sesi database
+  terpisah. File yang membentang satu transaksi (`begin…rollback`,
+  mis. tes pgTAP) HARUS ditempel UTUH lalu Run SEKALI; Run per bagian
+  me-rollback bagian 1 dan merusak referensi FK bagian 2.
+- **v1.1 gagal P0001:** baris cleanup eksplisit
+  `delete from public.brief_templates where id = ...` menabrak trigger
+  pelindung template default. v1.2 menghapus baris itu →
+  **v1.2 gagal P0001 juga**, kali ini CONTEXT-nya cascade:
+  `delete from public.workspaces` → cascade menghapus brief_templates →
+  trigger. **Pelajaran 3:** audit bagian cleanup untuk jalur FK
+  CASCADE, bukan hanya DELETE eksplisit.
+- **v1.3** (tambah `update brief_templates set is_default = false`
+  sebelum hapus workspace) → **34/35**. Run diagnostik (temp table
+  `diag_results`) mengidentifikasi **T4** (asersi no. 8): tertangkap
+  P0001 scope-mismatch, diharapkan 23514 CHECK. Penyebab terverifikasi:
+  trigger BEFORE `validate_task_scope()` (0009) berjalan SEBELUM CHECK
+  dievaluasi; `parent_type='idea'` tak cocok cabang IF mana pun → v_ws
+  NULL → P0001. Perilaku produk BENAR (baris tetap ditolak); hanya
+  ekspektasi tes yang salah. **Pelajaran 4:** trigger BEFORE berjalan
+  sebelum CHECK — bila tes mengharapkan penolakan CHECK, periksa dulu
+  apakah trigger BEFORE menolak baris itu duluan.
+- **v1.4** (T4 harapkan P0001 + pesan lengkap) → **35/35, 16:05 WIB.**
+
+### 12.3 Saga e2e production (7 run, 16:08–16:44 WIB)
+
+| Run | Hasil | Tindak lanjut |
+| --- | --- | --- |
+| 1 | Gagal — akun baru tanpa org/workspace → `/merek` empty state | Fix tes `523a93d`: setup buat org+workspace dulu |
+| 2 | Gagal — konversi sukses tapi pesan sukses tak pernah muncul → **defect aplikasi nyata**: `ConvertIdeaButton` di-unmount `revalidatePlanning()` begitu aksi sukses | Fix aplikasi `339585d`: tombol tetap mounted; bila sudah dikonversi tampilkan pesan sukses / tautan hasil, bukan form |
+| 3 | Gagal — tab Brief: "Belum ada template brief default" → **bukan defect**: template default dibuat LAZY saat `/template-brief` dibuka owner | Fix tes `e1623c1`: kunjungi `/template-brief` dulu (langkah 0b) |
+| 4 | Gagal — input pilih file tidak ada di tab Media → **bukan defect**: upload HANYA di `/pustaka`; tab Media hanya melampirkan | Fix tes `e1623c1`: ikuti tautan "Pustaka Aset", unggah di sana, kembali, lampirkan |
+| 5 | Gagal — lampiran berhasil (Media (1)) tapi pesan "Aset dilampirkan ke konten." tak muncul → **defect aplikasi nyata, pola sama dengan run 2**: `MediaTab` hanya merender `AttachAssetForm` bila ada aset bebas; begitu lampiran terakhir berhasil + revalidasi, form lenyap | Fix aplikasi `ac85d63`: form selalu dirender saat `canEdit`; bila tak ada aset bebas tampilkan pesan sukses / "Semua aset siap..." |
+| 6 | Gagal — `/tugas` tak menampilkan task → **bukan defect**: Task Center default tab "Tugas Saya"; task tes tak ditugaskan ke siapa pun, hanya muncul di "Semua Task" | Fix tes `e1623c1`: buka tab "Semua Task" dulu |
+| 7 | **LOLOS 3/3** ✅ | — |
+
+Regresi `planning.spec.ts`: **4/4** ✅ (run yang sama). Login tidak pernah
+menggantung; tidak ada kartu persetujuan baru (izin jaringan Supabase
+`allow_always` tetap berlaku). Tidak ada pembayaran, bahaya, atau blocker.
+Migrasi dan file tes pgTAP TIDAK diubah dalam sesi e2e. RLS tidak
+dilonggarkan.
+
+**Pelajaran pola (untuk Phase 4):** jangan sembunyikan form
+`useActionState` berdasarkan hasil aksi yang sama — pesan sukses ikut
+hilang saat form di-unmount. Dua defect aplikasi sesi ini berasal dari
+pola itu.
+
+### 12.4 Pembersihan residu e2e (16:47–16:52 WIB)
+
+- Daftar: 8 organisasi — 1 seed + 7 `org-p3-*` (`mwnc30vb`, `mwncarpv`,
+  `mwncfrre`, `mwncm1sb`, `mwncudsa`, `mwncybil` — slug run ke-7 yang
+  tidak tercatat di output tes) + 1 `org-e2e-mwnd1sd8` (set planning).
+  Semua isi tes menumpuk di workspace pertama `ws-p3-mwnc30vb`
+  (resolusi workspace default = workspace tertua — lihat §12.5).
+- Delete organisasi pertama **GAGAL P0001** (cascade → template default)
+  — pelajaran yang sama dengan §12.2, kali ini di data nyata:
+  `org-p3-p3-mwnc30vb` punya 3 template "Template Brief Standar"
+  (`is_default=true`, masing-masing satu-satunya template di
+  workspace-nya). Pemulihan (disetujui parent setelah verifikasi
+  read-only per ID via join ke workspace + organisasi): `update
+  brief_templates set is_default = false` untuk ketiga ID itu, lalu
+  delete berhasil. **Aturan pembersihan ke depan: unset `is_default`
+  dulu sebelum menghapus workspace/organisasi yang punya template
+  default.**
+- Verifikasi akhir (read-only): orgs 1, workspaces 1, org_members 1,
+  ws_members 2, brands 0, channels 0, campaigns 0, items 0, placements
+  0, tasks 0, assets 0, comments 0, shares 0, invitations 0. Seed utuh,
+  Auth utuh (akun e2e `mative-e2e@example.com` tetap ada untuk run
+  Phase 4).
+- **Koreksi §8.1 dalam addendum ini:** blok (a) `social_channels`
+  kini lewat `brand_id` (bukan `workspace_id` — versi lama gagal
+  42703 saat pembersihan 15:10 WIB); "3 set" dikoreksi jadi 4 set
+  probe0; catatan "JANGAN dihapus" soal org e2e sudah kedaluwarsa
+  (residu sudah dibersihkan 16:52 WIB).
+
+### 12.5 Batas jujur yang tersisa
+
+- Aset tanpa pemindaian virus (batas desain — jangan klaim aman dari
+  malware); `duration_ms` selalu null; item tanpa brand tidak bisa
+  menerima placement; screenshot visual QA login masih belum ada;
+  batas Phase 2 tetap berlaku (KPI dashboard pakai workspace pertama;
+  kalender/board limit 200 item; WebKit B4 — jangan retry `apt-get`
+  tanpa izin user).
+- **Temuan baru (perilaku desain, bukan defect):** resolusi workspace
+  default = workspace pertama (tertua). Semua isi tes menumpuk di
+  workspace `mwnc30vb`, sementara workspace baru tiap run kosong
+  kecuali template. Perlu diingat untuk pengguna multi-workspace.
+- Guard 0011 kini dead code efektif (brand_id tak pernah NULL) —
+  dipertahankan sebagai defense-in-depth; jangan dihapus, jangan ubah
+  0007/0008/0009/0010/0011.
+- Komentar lama di 0011 ("brand diisi lewat edit konten") TIDAK AKURAT:
+  select Brand di edit konten masih `disabled`.
+
+### 12.6 Status
+
+**Phase 3 LOLOS PENUH.** Phase 4 boleh dimulai. Progres buku
+`PLAN-MATIVE-001`: 5/11 = 45%.
