@@ -689,3 +689,61 @@ export const clientCommentSchema = z.object({
   shareId: z.string().uuid("share_id tidak valid."),
   body: z.string().trim().min(1, "Isi komentar wajib diisi.").max(5000),
 });
+
+/** Skema publishing (Phase 6, ADR-0012). Jadwal memakai wall-clock
+ * "YYYY-MM-DDTHH:mm" — konversi ke UTC dilakukan server action dengan zona
+ * placement secara eksplisit (features/publishing/utils.ts), BUKAN dengan
+ * `new Date(v)` (zona server = UTC, akan geser 7 jam untuk WIB). */
+const wallClockDatetime = z
+  .string()
+  .trim()
+  .refine((v) => v === "" || /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(v), {
+    message: "Format tanggal/waktu tidak valid (YYYY-MM-DDTHH:mm).",
+  });
+
+export const createPublishingJobSchema = z.object({
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  placementId: z.string().uuid("placement_id tidak valid."),
+  scheduledAt: wallClockDatetime
+    .transform((v) => (v === "" ? null : v))
+    .nullable()
+    .optional()
+    .default(null),
+  timezone: z.string().trim().max(64, "Zona waktu maksimal 64 karakter.").default(""),
+});
+
+export const retryPublishingJobSchema = z.object({
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  jobId: z.string().uuid("job_id tidak valid."),
+});
+
+export const cancelPublishingJobSchema = z.object({
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  jobId: z.string().uuid("job_id tidak valid."),
+  reason: z
+    .string()
+    .trim()
+    .min(1, "Alasan pembatalan wajib diisi.")
+    .max(500, "Alasan pembatalan maksimal 500 karakter."),
+});
+
+export const confirmPublishingJobSchema = z.object({
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  jobId: z.string().uuid("job_id tidak valid."),
+  canonicalUrl: z
+    .string()
+    .trim()
+    .min(1, "URL publikasi wajib diisi.")
+    .max(2048, "URL publikasi maksimal 2048 karakter.")
+    .refine((v) => /^https?:\/\/[^/\s]+[^\s]*$/.test(v), {
+      message: "URL publikasi tidak valid — isi URL lengkap (http:// atau https://) tanpa spasi.",
+    }),
+  publishedAt: wallClockDatetime,
+});
+
+export const reschedulePublishingJobSchema = z.object({
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  jobId: z.string().uuid("job_id tidak valid."),
+  scheduledAt: wallClockDatetime,
+  timezone: z.string().trim().max(64, "Zona waktu maksimal 64 karakter.").default(""),
+});
