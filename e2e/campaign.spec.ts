@@ -143,7 +143,7 @@ test.describe("penerimaan Phase 5 — campaign & visual planning @needs-db", () 
     await expect(page.getByText("Template campaign disimpan.")).toBeVisible({ timeout: 30000 });
     await page.goto("/template");
     await expect(page.getByRole("heading", { name: "Template", exact: true })).toBeVisible();
-    await expect(page.getByText(`${campaignName} (template)`)).toBeVisible();
+    await expect(page.getByText(`${campaignName} (template)`, { exact: true })).toBeVisible();
   });
 
   test("A5.3 visual planner: urutan diubah, scheduled_at TIDAK BERUBAH", async ({ page }) => {
@@ -235,8 +235,8 @@ test.describe("penerimaan Phase 5 — campaign & visual planning @needs-db", () 
     // Impor: 1 baris valid (CSV Impor) + 1 baris tidak valid (status live).
     const csvText =
       "name,objective,audience_name,start_at,end_at,status,owner_email,target_deliverables,target_date,notes,brands,deliverables\r\n" +
-      `CSV Impor ${slug},Impor test,,,draft,,2,2026-12-31,catatan impor,Brand E2E ${slug},\r\n` +
-      `CSV Rusak ${slug},Baris rusak,,,live,,1,,,,\r\n`;
+      `CSV Impor ${slug},Impor test,,,,draft,,2,2026-12-31,catatan impor,Brand E2E ${slug},\r\n` +
+      `CSV Rusak ${slug},Baris rusak,,,,live,,1,,,,\r\n`;
     await page.setInputFiles('input[name="file"]', {
       name: "import.csv",
       mimeType: "text/csv",
