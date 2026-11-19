@@ -2,6 +2,31 @@
 
 Format: [Versi] — tanggal (WIB) — ringkasan.
 
+## [0.4.0] — 2026-11-19 — Phase 4: Review & Approval (DRAF)
+
+### Ditambahkan
+
+- Migrasi `0013_approval_core.sql` — 4 tabel (approval_workflows, approval_steps, approval_requests, approval_decisions) + 16 policy RLS + 4 helper SECURITY DEFINER + perluasan CHECK `notifications.type` (approval_requested / approval_decided / approval_reapproval_required); pgTAP `04_rls_phase4.sql` (64 asersi, verifier statis 51/51, graf RLS efektif 0001–0014 144 policy 0 siklus).
+- Migrasi `0014_approval_transactions.sql` — 6 RPC `SECURITY DEFINER` (workflow default malas, buat request, putuskan request, submit client review, komentar klien, + guard `transition_content_item_status` yang menolak internal_review → approved tanpa request approved — kode `APPROVAL_REQUIRED`) + 5 trigger critical-change (script/caption/cta/asset/channel/format/scheduled_time → `reapproval_required` + notifikasi).
+- Kode aplikasi Review & Approval (ADR-0010): domain `features/approval/` (skema Zod, logika transisi murni, queries, server actions) + Approval Center (`/persetujuan` — 5 antrean: menunggu saya / semua tertunda / disetujui / minta revisi / ditolak) + tab "Approval" ke-9 di editor konten + panel review klien di portal (`/portal/[shareId]` — komentar hanya bila workspace mengizinkan, default tidak boleh; komentar klien tidak pernah menjadi keputusan) + API v1 (`GET /api/v1/approvals`, `GET /api/v1/approvals/[id]`, `POST /api/v1/approvals/[id]/decisions`).
+- Tes: unit 131/131 (12 file, termasuk `tests/approval.test.ts` 20 tes), Playwright chromium smoke + visual + approval 38 lolos + 2 skip (@needs-db), visual QA 3 screenshot baru (`/persetujuan` × 1440/1024/390).
+- Dokumen: ADR-0010, laporan fase 4 (`docs/phase-4-report.md`), `docs/apply-migrations.md` (langkah apply 0013–0014 + pgTAP 04 + e2e Phase 4).
+
+### Diperbaiki
+
+- Keamanan: grant EXECUTE `approval_critical_fields` dan `flag_request_reapproval` ke `authenticated` DIHAPUS (keduanya helper internal — yang pertama membocorkan daftar critical-fields workspace lain, yang kedua bisa memaksa reapproval konten orang lain). Commit `03c1f0a`.
+- File tes: pgTAP 04 T10d memakai UUID palsu literal di dalam blok `$$` (tidak akan disubstitusi SQL Editor) — diperbaiki dengan `format($f$...%L...$f$,:'user_b')`. Commit `03c1f0a`.
+- Tes smoke pra-Phase 4 ("tombol modul fase berikut") gagal deterministik karena mengharapkan tombol di dalam Dialog "Buat cepat" tanpa membuka dialog — diperbaiki dengan mengklik "Buat cepat" dulu (file tes saja; aplikasi benar).
+
+### Diketahui belum selesai / blocker
+
+- Migrasi 0013 + 0014 BELUM diterapkan ke database live (butuh SQL Editor — dipegang parent). Lihat `docs/phase-4-report.md` §8.
+- pgTAP 04 (64 asersi) + spek penerimaan e2e Phase 4 (`e2e/approval.spec.ts`) BELUM bisa lolos live sebelum migrasi diterapkan.
+- Visual QA keadaan login (antrean berisi data, tab Approval berisi request, portal klien berisi konten) belum ada screenshot-nya — hanya shell belum-login.
+- Separation of duties (submitter ≠ approver) tidak di-enforce di DB (sengaja — ADR-0010); dua peran sejati belum terbukti live sampai akun approver kedua dibuat.
+- Playwright WebKit tetap BLOCKED (B4); GitHub repo (B5) tetap belum dibuat — CI + deploy Vercel menunggu user; dashboard KPI memakai workspace pertama; filter kalender/board limit 200 item.
+- Prettier: 2 file pra-Phase 4 (`docs/phase-3-report.md`, `e2e/production.spec.ts`) sudah tidak bersih sejak commit Phase 3 — sengaja tidak diformat ulang di fase ini agar diff tidak tercemar.
+
 ## [0.3.0] — 2026-11-19 — Phase 3: Production Operations (DRAF)
 
 ### Ditambahkan

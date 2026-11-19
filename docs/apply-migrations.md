@@ -118,6 +118,35 @@ DITERAPKAN live 19 Nov 2026 15:22 WIB, terverifikasi: definisi fungsi 3-arg
 lama hilang).** Detail lengkap + verifikasi per langkah + pembersihan data uji:
 `docs/phase-3-report.md` §8.
 
+## RLS policy tests Phase 4 (pgTAP) — setelah migrasi 0013 + 0014
+
+```bash
+# Jalankan tes Phase 4 (64 tes; ekspektasi: semua ok, tidak ada "not ok"):
+psql "$DATABASE_URL" \
+  -v user_a='<UUID-USER-A>' -v user_b='<UUID-USER-B>' \
+  -f supabase/tests/04_rls_phase4.sql
+
+# Lalu jalankan spek penerimaan Phase 4 (e2e live, butuh akun uji):
+E2E_TEST_EMAIL='<email-akun-uji>' E2E_TEST_PASSWORD='<redacted>' \
+  npx playwright test --project=chromium e2e/approval.spec.ts
+# Ekspektasi: 1 penerimaan + 1 smoke lolos; 1 tes dua-peran SKIP kecuali
+# E2E_APPROVER_EMAIL/E2E_APPROVER_PASSWORD diisi (akun approver kedua
+# harus sudah dibuat sebelumnya).
+# Juga jalankan ulang regresi Phase 2 + Phase 3:
+E2E_TEST_EMAIL='<email-akun-uji>' E2E_TEST_PASSWORD='<redacted>' \
+  npx playwright test --project=chromium e2e/planning.spec.ts e2e/production.spec.ts
+# Ekspektasi: planning 4/4 + production 3/3.
+```
+
+**Urutan wajib Phase 4: 0013 dulu, lalu 0014** (0014 memakai tabel dari
+0013 dan mengganti `transition_content_item_status` dari 0008 — 0008
+tidak diubah kecuali guard itu; migrasi 0001–0012 tidak diubah).
+**0013 + 0014 BELUM diterapkan live (menunggu parent)** — lihat
+`docs/phase-4-report.md` §8 untuk instruksi apply lengkap (verifikasi
+per langkah, dialog SQL Editor, pgTAP 04 ditempel UTUH + Run SEKALI,
+pola slug residu `org-p4-*` / `ws-p4-*` / `brand-p4-*` / `Konten P4 *`
+untuk pembersihan).
+
 ## Seed demo (local/preview SAJA — JANGAN di database produksi)
 
 ```bash
