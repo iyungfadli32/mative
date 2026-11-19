@@ -1,4 +1,9 @@
--- MaTive Phase 4 — RLS + RPC approval tests (pgTAP) — v1.0
+-- MaTive Phase 4 — RLS + RPC approval tests (pgTAP) — v1.1
+-- v1.1 (2026-11-19, run live pertama GAGAL 23514 di setup): nilai
+-- connection_status setup 'disconnected' DITOLAK CHECK
+-- social_channels_connection_status_check (0007: hanya 'not_connected' /
+-- 'manual') — cacat file tes, BUKAN produk; diperbaiki ke 'not_connected'.
+-- plan(64) + 64 asersi tidak berubah; migrasi 0001–0014 tidak disentuh.
 -- ============================================================================
 -- CARA MENJALANKAN (oleh koordinator — butuh DATABASE_URL / service role): <redacted>
 --   1. Terapkan migrasi 0001–0014 ke database BERSIH (lihat
@@ -134,7 +139,7 @@ values ('d1000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-0000000
 on conflict (content_item_id, version_number) do nothing;
 
 insert into public.social_channels (id, brand_id, platform, account_name, connection_status)
-values ('e1000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000001', 'instagram', 'Akun A (sample test)', 'disconnected')
+values ('e1000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000001', 'instagram', 'Akun A (sample test)', 'not_connected')
 on conflict (id) do nothing;
 
 insert into public.content_placements (id, content_item_id, social_channel_id, platform_format, platform_caption, distribution_status)
