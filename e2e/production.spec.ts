@@ -2,14 +2,21 @@ import { test, expect } from "@playwright/test";
 
 /**
  * Spek penerimaan Phase 3 — prompts/04 (P3-12).
- * Alur: ide → konversi jadi konten → brief terstruktur (versi baru) →
- * task ditugaskan → aset diunggah + dilampirkan → komentar di editor →
- * bandingkan + pulihkan versi → reload dan verifikasi persistence.
+ * Alur: buat brand → ide → konversi jadi konten (pilih brand di form
+ * konversi) → brief terstruktur (versi baru) → task ditugaskan → aset
+ * diunggah + dilampirkan → komentar di editor → bandingkan + pulihkan
+ * versi → reload dan verifikasi persistence.
  *
- * BUTUH database live + migrasi 0009 + 0010 diterapkan + akun uji
- * (E2E_TEST_EMAIL/PASSWORD). Tes ini di-SKIP otomatis bila akun uji tidak
- * diisi. Sampai migrasi diterapkan, spek ini BELUM TERBUKTI live — lihat
- * docs/phase-3-report.md §5/§9 (batas jujur).
+ * BUTUH database live + migrasi 0009 + 0010 + 0011 + 0012 diterapkan +
+ * akun uji (E2E_TEST_EMAIL/PASSWORD). Tes ini di-SKIP otomatis bila akun
+ * uji tidak diisi. Sampai migrasi diterapkan, spek ini BELUM TERBUKTI
+ * live — lihat docs/phase-3-report.md §5/§9 (batas jujur).
+ *
+ * CATATAN 0012 (2026-11-19): content_items.brand_id NOT NULL (0007 DDL,
+ * Dok 05 §3, ERD §5) — ide tanpa brand TIDAK BISA dikonversi sebelum
+ * brand dipilih. Karena itu alur ini membuat brand dulu, menangkap ide
+ * TANPA brand, lalu memilih brand di form konversi ("Brand (wajib untuk
+ * konversi)") sebelum klik "Konversi menjadi konten".
  */
 const hasTestAccount = Boolean(process.env.E2E_TEST_EMAIL && process.env.E2E_TEST_PASSWORD);
 
@@ -32,7 +39,7 @@ const ONE_BY_ONE_PNG = Buffer.from(
 );
 
 test.describe("penerimaan Phase 3 — production operations @needs-db", () => {
-  test.skip(!hasTestAccount, "Butuh akun uji (E2E_TEST_EMAIL/PASSWORD) + migrasi 0009/0010 live.");
+  test.skip(!hasTestAccount, "Butuh akun uji (E2E_TEST_EMAIL/PASSWORD) + migrasi 0009–0012 live.");
 
   test("ide → brief → task → aset → komentar → versi → reload", async ({ page }) => {
     // Semua expect di tes ini memakai 30 dtk (bukan default 5 dtk):
@@ -44,14 +51,39 @@ test.describe("penerimaan Phase 3 — production operations @needs-db", () => {
     await signIn(page);
     const slug = `p3-${Date.now().toString(36)}`;
 
-    // 1. Tangkap ide di inbox.
+    // 0. Buat brand dulu — konversi wajib punya brand (0012).
+    // Lokator form buat-baru sama seperti planning.spec.ts:
+    // #brand-name-new / #brand-slug-new (getByLabel ambigu bila sudah
+    // ada brand lain).
+    await page.goto("/merek");
+    await expect(page.getByRole("heading", { name: "Merek" })).toBeVisible();
+    await page.locator("#brand-name-new").fill(`Brand P3 ${slug}`);
+    await page.locator("#brand-slug-new").fill(`brand-p3-${slug}`);
+    await page.getByRole("button", { name: "Buat brand" }).click();
+    await expect(page.getByText("Brand dibuat.")).toBeVisible({ timeout: 30000 });
+
+    // 1. Tangkap ide di inbox (TANPA brand — menguji jalur 0012: brand
+    // dipilih belakangan, di form konversi).
     await page.goto("/ide");
     await expect(page.getByRole("heading", { name: "Ide", exact: true })).toBeVisible();
     await page.getByLabel("Judul ide").fill(`Ide P3 ${slug}`);
     await page.getByRole("button", { name: "Tangkap ide" }).click();
     await expect(page.getByText(`Ide P3 ${slug}`).first()).toBeVisible({ timeout: 30000 });
 
-    // 2. Konversi ide → konten (RPC 0008, satu transaksi).
+    // 2. Konversi ide → konten (RPC 0012, satu transaksi): pilih brand di
+    // form konversi dulu, baru klik konversi.
+    // Brand baru kadang belum muncul di select konversi pada pemuatan
+    // pertama (stale sesaat setelah mutasi — pola planning.spec.ts);
+    // muat ulang sekali bila opsi belum ada.
+    const convertSelect = page.getByLabel("Brand (wajib untuk konversi)").first();
+    try {
+      await convertSelect
+        .locator(`option:has-text("Brand P3 ${slug}")`)
+        .waitFor({ state: "attached", timeout: 10000 });
+    } catch {
+      await page.reload();
+    }
+    await convertSelect.selectOption({ label: `Brand P3 ${slug}` });
     await page.getByRole("button", { name: "Konversi menjadi konten" }).first().click();
     await expect(page.getByText("Ide dikonversi menjadi konten baru (v1).")).toBeVisible({
       timeout: 30000,
