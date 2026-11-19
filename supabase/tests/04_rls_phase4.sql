@@ -1,4 +1,4 @@
--- MaTive Phase 4 — RLS + RPC approval tests (pgTAP) — v1.3
+-- MaTive Phase 4 — RLS + RPC approval tests (pgTAP) — v1.4
 -- v1.1 (2026-11-19, run live pertama GAGAL 23514 di setup): nilai
 -- connection_status setup 'disconnected' DITOLAK CHECK
 -- social_channels_connection_status_check (0007: hanya 'not_connected' /
@@ -11,8 +11,16 @@
 -- overload (bigint, integer) — count(*) mengembalikan bigint. 5 asersi
 -- count (T5, T5b, T7d, T11b, T12d) kehilangan cast ::int yang dipakai
 -- file 01/02/03; diperbaiki ke (select count(*) ...)::int. Cacat file
--- tes, BUKAN produk. plan(64) + 64 asersi tidak berubah; migrasi
--- 0001–0014 tidak disentuh.
+-- tes, BUKAN produk.
+-- v1.4 (2026-11-19, run live v1.3 GAGAL 42501 di T5): UPDATE/DELETE
+-- approval_decisions sebagai authenticated melempar permission denied
+-- SEBELUM RLS berjalan — 0013 hanya memberi GRANT SELECT (revoke all +
+-- grant select, 0013:208/212), sesuai desain append-only. T5/T5b ditulis
+-- ulang sebagai throws_ok 42501 'permission denied for table
+-- approval_decisions' (bukti DENY lebih kuat dari 0 baris; TIDAK ADA
+-- GRANT tambahan — melonggarkan hak akan merusak desain). T5c (trigger
+-- P0001, postgres) tidak berubah. plan(64) + 64 asersi tidak berubah;
+-- migrasi 0001–0014 tidak disentuh.
 -- ============================================================================
 -- CARA MENJALANKAN (oleh koordinator — butuh DATABASE_URL / service role): <redacted>
 --   1. Terapkan migrasi 0001–0014 ke database BERSIH (lihat
@@ -322,22 +330,26 @@ select is(
 );
 
 -- ============================================================================
--- TES 5 (Dok 07 §4): keputusan append-only — UPDATE/DELETE lewat RLS
--- tidak berpengaruh (0 baris); trigger menolak UPDATE langsung (T5c).
+-- TES 5 (Dok 07 §4): keputusan append-only — UPDATE/DELETE ditolak hak
+-- akses (42501) SEBELUM RLS sempat berjalan: 0013 hanya memberi GRANT
+-- SELECT ke authenticated (revoke all + grant select, 0013:208/212),
+-- jadi UPDATE/DELETE melempar permission denied, bukan mengembalikan
+-- 0 baris. Bukti DENY ini LEBIH KUAT dari 0 baris (peran tidak bisa
+-- mencoba sama sekali). Trigger menolak UPDATE langsung (T5c, postgres).
 -- ============================================================================
 select _set_user(:'user_a');
-with upd as (
-  update public.approval_decisions set comment = 'Diubah (sample test)'
-  where approval_request_id = 'f2000000-0000-0000-0000-000000000002'
-  returning 1
-)
-select is((select count(*) from upd)::int, 0, 'T5 DENY: UPDATE keputusan lewat RLS tidak mengubah baris apa pun');
-with del as (
-  delete from public.approval_decisions
-  where approval_request_id = 'f2000000-0000-0000-0000-000000000002'
-  returning 1
-)
-select is((select count(*) from del)::int, 0, 'T5b DENY: DELETE keputusan lewat RLS tidak menghapus baris apa pun');
+select throws_ok(
+  $$ update public.approval_decisions set comment = 'Diubah (sample test)' where approval_request_id = 'f2000000-0000-0000-0000-000000000002' $$,
+  '42501',
+  'permission denied for table approval_decisions',
+  'T5 DENY: UPDATE keputusan ditolak hak akses (42501) — append-only'
+);
+select throws_ok(
+  $$ delete from public.approval_decisions where approval_request_id = 'f2000000-0000-0000-0000-000000000002' $$,
+  '42501',
+  'permission denied for table approval_decisions',
+  'T5b DENY: DELETE keputusan ditolak hak akses (42501) — append-only'
+);
 reset role;
 select throws_ok(
   $$ update public.approval_decisions set comment = 'Diubah langsung (sample test)' where id = 'f3000000-0000-0000-0000-000000000001' $$,
