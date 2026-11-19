@@ -40,6 +40,15 @@
 -- membersihkan semua baris uji termasuk template itu. T11 TIDAK diubah:
 -- throws_ok menangkap exception lewat subtransaction, jadi T11 bukan penyebab
 -- P0001. plan TETAP 35, jumlah asersi TETAP 35.
+--
+-- v1.3 (2026-11-19): unset is_default template uji sebelum hapus workspace
+-- di cleanup. v1.2 GAGAL live lagi dengan P0001 yang sama, tapi CONTEXT
+-- error membuktikan penyebabnya CASCADE, bukan delete eksplisit: hapus
+-- Workspace A men-cascade ke brief_templates (FK workspace_id ON DELETE
+-- CASCADE, 0009) dan trigger trg_prevent_default_template_delete menolak
+-- hapus template is_default=true. UPDATE is_default=false dulu membuat
+-- cascade menghapus template non-default dan lolos. plan TETAP 35, jumlah
+-- asersi TETAP 35.
 -- CATATAN: tes ini TIDAK BOLEH dijalankan di database produksi berisi data
 -- nyata — hanya database bersih/preview. Tes memakai JWT claims palsu lewat
 -- set_config('request.jwt.claims') untuk mensimulasikan tiap pengguna.
@@ -497,6 +506,11 @@ delete from public.content_items where id in ('d0000000-0000-0000-0000-000000000
 delete from public.campaigns where id = '90000000-0000-0000-0000-000000000001';
 delete from public.brands where id in ('e0000000-0000-0000-0000-000000000001','e0000000-0000-0000-0000-000000000002');
 delete from public.workspace_members where workspace_id in ('b0000000-0000-0000-0000-000000000001','b0000000-0000-0000-0000-000000000002');
+-- v1.3: unset default dulu — hapus workspace men-cascade ke brief_templates
+-- (FK workspace_id ON DELETE CASCADE, 0009) dan trigger pelindung menolak
+-- hapus template is_default=true (P0001). Setelah unset, cascade menghapus
+-- template non-default dan lolos.
+update public.brief_templates set is_default = false where id = 'a6000000-0000-0000-0000-000000000001';
 delete from public.workspaces where id in ('b0000000-0000-0000-0000-000000000001','b0000000-0000-0000-0000-000000000002');
 delete from public.organization_members where organization_id in ('a0000000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002');
 delete from public.organizations where id in ('a0000000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002');
