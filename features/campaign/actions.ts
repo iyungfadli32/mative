@@ -779,7 +779,7 @@ export async function importCampaignsCsvAction(
     const rowNumber = parsedCsv.rowNumbers[i];
     if (Object.values(row).every((v) => v.trim() === "")) continue;
     report.total += 1;
-    const validated = validateCampaignCsvRow(row, rowNumber);
+    const validated = validateCampaignCsvRow(row);
     if (!validated.ok) {
       report.failed += 1;
       report.errors.push({ row: rowNumber, message: validated.error });
@@ -792,7 +792,7 @@ export async function importCampaignsCsvAction(
       report.failed += 1;
       report.errors.push({
         row: rowNumber,
-        message: `Baris ${rowNumber}: owner_email '${d.ownerEmail}' bukan email Anda — hanya email Anda sendiri yang bisa dipakai sebagai owner di impor ini (email member lain tidak terbaca).`,
+        message: `owner_email '${d.ownerEmail}' bukan email Anda — hanya email Anda sendiri yang bisa dipakai sebagai owner di impor ini (email member lain tidak terbaca).`,
       });
       continue;
     }
@@ -802,12 +802,12 @@ export async function importCampaignsCsvAction(
       const { found, ambiguous } = resolveByName(audiences, d.audienceName);
       if (ambiguous) {
         report.failed += 1;
-        report.errors.push({ row: rowNumber, message: `Baris ${rowNumber}: audience '${d.audienceName}' ambigu (ada lebih dari satu dengan nama itu).` });
+        report.errors.push({ row: rowNumber, message: `audience '${d.audienceName}' ambigu (ada lebih dari satu dengan nama itu).` });
         continue;
       }
       if (!found) {
         report.failed += 1;
-        report.errors.push({ row: rowNumber, message: `Baris ${rowNumber}: audience '${d.audienceName}' tidak ditemukan di workspace ini.` });
+        report.errors.push({ row: rowNumber, message: `audience '${d.audienceName}' tidak ditemukan di workspace ini.` });
         continue;
       }
       audienceId = found.id;
@@ -819,19 +819,19 @@ export async function importCampaignsCsvAction(
       const { found, ambiguous } = resolveByName(brands, brandName);
       if (ambiguous) {
         report.failed += 1;
-        report.errors.push({ row: rowNumber, message: `Baris ${rowNumber}: brand '${brandName}' ambigu (ada lebih dari satu dengan nama itu).` });
+        report.errors.push({ row: rowNumber, message: `brand '${brandName}' ambigu (ada lebih dari satu dengan nama itu).` });
         brandFailed = true;
         break;
       }
       if (!found) {
         report.failed += 1;
-        report.errors.push({ row: rowNumber, message: `Baris ${rowNumber}: brand '${brandName}' tidak ditemukan di workspace ini (atau di luar scope Anda).` });
+        report.errors.push({ row: rowNumber, message: `brand '${brandName}' tidak ditemukan di workspace ini (atau di luar scope Anda).` });
         brandFailed = true;
         break;
       }
       if (!brandInScope(scope, found.id)) {
         report.failed += 1;
-        report.errors.push({ row: rowNumber, message: `Baris ${rowNumber}: brand '${brandName}' di luar scope Anda.` });
+        report.errors.push({ row: rowNumber, message: `brand '${brandName}' di luar scope Anda.` });
         brandFailed = true;
         break;
       }
@@ -842,7 +842,7 @@ export async function importCampaignsCsvAction(
     const nameKey = d.name.toLowerCase();
     if (existingNames.has(nameKey) || importedNames.has(nameKey)) {
       report.failed += 1;
-      report.errors.push({ row: rowNumber, message: `Baris ${rowNumber}: nama campaign '${d.name}' sudah dipakai di workspace ini.` });
+      report.errors.push({ row: rowNumber, message: `nama campaign '${d.name}' sudah dipakai di workspace ini.` });
       continue;
     }
     const metrics: Record<string, unknown> = {};
@@ -868,7 +868,7 @@ export async function importCampaignsCsvAction(
       report.failed += 1;
       report.errors.push({
         row: rowNumber,
-        message: `Baris ${rowNumber}: gagal menyimpan campaign (${insertError?.message ?? "tidak diketahui"}).`,
+        message: `gagal menyimpan campaign (${insertError?.message ?? "tidak diketahui"}).`,
       });
       continue;
     }

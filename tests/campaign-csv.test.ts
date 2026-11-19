@@ -97,7 +97,7 @@ describe("validateCampaignCsvRow — validasi per baris", () => {
   });
 
   it("baris valid lolos + daftar dipisah titik-koma", () => {
-    const result = validateCampaignCsvRow(validRow(), 2);
+    const result = validateCampaignCsvRow(validRow());
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.data.name).toBe("Launch Q4");
@@ -110,26 +110,26 @@ describe("validateCampaignCsvRow — validasi per baris", () => {
   it("status kosong = draft; status tak dikenal ditolak", () => {
     const row = validRow();
     row.status = "";
-    expect(validateCampaignCsvRow(row, 2).ok).toBe(true);
+    expect(validateCampaignCsvRow(row).ok).toBe(true);
     row.status = "live";
-    const bad = validateCampaignCsvRow(row, 2);
+    const bad = validateCampaignCsvRow(row);
     expect(bad.ok).toBe(false);
     if (!bad.ok) expect(bad.error).toContain("Baris 2");
   });
   it("nama < 2 karakter, tanggal tidak valid, mulai > selesai ditolak", () => {
-    expect(validateCampaignCsvRow({ ...validRow(), name: "A" }, 3).ok).toBe(false);
-    expect(validateCampaignCsvRow({ ...validRow(), start_at: "01-10-2026" }, 3).ok).toBe(false);
+    expect(validateCampaignCsvRow({ ...validRow(), name: "A" }).ok).toBe(false);
+    expect(validateCampaignCsvRow({ ...validRow(), start_at: "01-10-2026" }).ok).toBe(false);
     expect(
-      validateCampaignCsvRow({ ...validRow(), start_at: "2026-12-31", end_at: "2026-10-01" }, 3)
+      validateCampaignCsvRow({ ...validRow(), start_at: "2026-12-31", end_at: "2026-10-01" })
         .ok,
     ).toBe(false);
   });
   it("target_deliverables negatif/pecahan dan target_date salah format ditolak", () => {
-    expect(validateCampaignCsvRow({ ...validRow(), target_deliverables: "-1" }, 4).ok).toBe(false);
-    expect(validateCampaignCsvRow({ ...validRow(), target_deliverables: "2.5" }, 4).ok).toBe(false);
-    expect(validateCampaignCsvRow({ ...validRow(), target_date: "31-12-2026" }, 4).ok).toBe(false);
+    expect(validateCampaignCsvRow({ ...validRow(), target_deliverables: "-1" }).ok).toBe(false);
+    expect(validateCampaignCsvRow({ ...validRow(), target_deliverables: "2.5" }).ok).toBe(false);
+    expect(validateCampaignCsvRow({ ...validRow(), target_date: "31-12-2026" }).ok).toBe(false);
   });
   it("notes > 500 karakter ditolak", () => {
-    expect(validateCampaignCsvRow({ ...validRow(), notes: "x".repeat(501) }, 5).ok).toBe(false);
+    expect(validateCampaignCsvRow({ ...validRow(), notes: "x".repeat(501) }).ok).toBe(false);
   });
 });

@@ -83,12 +83,12 @@ function splitList(value: string): string[] {
     .filter((v) => v !== "");
 }
 
-/** Validasi satu baris (format saja). Baris kosong total dilewati pemanggil. */
+/** Validasi satu baris (format saja). Pesan TIDAK memakai prefix "Baris N:"
+ * — nomor baris ditambahkan pemanggil (actions/UI) agar tidak ganda. */
 export function validateCampaignCsvRow(
   row: Record<string, string>,
-  rowNumber: number,
 ): { ok: true; data: ValidatedCampaignCsvRow } | { ok: false; error: string } {
-  const fail = (message: string) => ({ ok: false as const, error: `Baris ${rowNumber}: ${message}` });
+  const fail = (message: string) => ({ ok: false as const, error: message });
   const name = (row.name ?? "").trim();
   if (name.length < 2) return fail("name wajib diisi (minimal 2 karakter).");
   if (name.length > 120) return fail("name maksimal 120 karakter.");

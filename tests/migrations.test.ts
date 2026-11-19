@@ -432,6 +432,18 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
     expect(test04).not.toContain("aabb1dab-77c1-4659-af0e-c703c9de279c");
     expect(test04).toContain("select * from finish();");
   });
+
+  it("pgTAP 05 ada dengan plan(59) + pola placeholder yang benar", () => {
+    const test05 = readFileSync(path.join(APP_ROOT, "supabase/tests/05_rls_phase5.sql"), "utf8");
+    expect(test05).toContain("select plan(59);");
+    expect(test05).not.toContain("094e8752-eef4-4f0e-b6ae-2d5813445018");
+    expect(test05).not.toContain("aabb1dab-77c1-4659-af0e-c703c9de279c");
+    expect(test05).toContain("select * from finish();");
+    // Bukti pemisahan M5.4 ada di file: scheduled_at diuji TIDAK BERUBAH.
+    expect(test05).toContain("T10e M5.4");
+    expect(test05).toContain("T10f M5.4");
+    expect(test05).toContain("set_visual_order");
+  });
 });
 
 describe("Repo bebas secret (statis)", () => {
