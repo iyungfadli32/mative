@@ -1,4 +1,4 @@
--- MaTive Phase 4 — RLS + RPC approval tests (pgTAP) — v1.2
+-- MaTive Phase 4 — RLS + RPC approval tests (pgTAP) — v1.3
 -- v1.1 (2026-11-19, run live pertama GAGAL 23514 di setup): nilai
 -- connection_status setup 'disconnected' DITOLAK CHECK
 -- social_channels_connection_status_check (0007: hanya 'not_connected' /
@@ -6,8 +6,13 @@
 -- v1.2 (2026-11-19, run live v1.1 GAGAL 42703 di setup): kolom
 -- resource_shares.created_by TIDAK ADA (0005: kolomnya shared_by, NOT NULL)
 -- — cacat file tes, BUKAN produk; diperbaiki ke shared_by (nilai tetap A,
--- si pembagi). plan(64) + 64 asersi tidak berubah; migrasi 0001–0014
--- tidak disentuh.
+-- si pembagi).
+-- v1.3 (2026-11-19, run live v1.2 GAGAL 42883 di T5): is() tidak punya
+-- overload (bigint, integer) — count(*) mengembalikan bigint. 5 asersi
+-- count (T5, T5b, T7d, T11b, T12d) kehilangan cast ::int yang dipakai
+-- file 01/02/03; diperbaiki ke (select count(*) ...)::int. Cacat file
+-- tes, BUKAN produk. plan(64) + 64 asersi tidak berubah; migrasi
+-- 0001–0014 tidak disentuh.
 -- ============================================================================
 -- CARA MENJALANKAN (oleh koordinator — butuh DATABASE_URL / service role): <redacted>
 --   1. Terapkan migrasi 0001–0014 ke database BERSIH (lihat
@@ -326,13 +331,13 @@ with upd as (
   where approval_request_id = 'f2000000-0000-0000-0000-000000000002'
   returning 1
 )
-select is((select count(*) from upd), 0, 'T5 DENY: UPDATE keputusan lewat RLS tidak mengubah baris apa pun');
+select is((select count(*) from upd)::int, 0, 'T5 DENY: UPDATE keputusan lewat RLS tidak mengubah baris apa pun');
 with del as (
   delete from public.approval_decisions
   where approval_request_id = 'f2000000-0000-0000-0000-000000000002'
   returning 1
 )
-select is((select count(*) from del), 0, 'T5b DENY: DELETE keputusan lewat RLS tidak menghapus baris apa pun');
+select is((select count(*) from del)::int, 0, 'T5b DENY: DELETE keputusan lewat RLS tidak menghapus baris apa pun');
 reset role;
 select throws_ok(
   $$ update public.approval_decisions set comment = 'Diubah langsung (sample test)' where id = 'f3000000-0000-0000-0000-000000000001' $$,
@@ -423,7 +428,7 @@ select is(
   'T7c ALLOW: produksi A3 menjadi approved'
 );
 select is(
-  (select count(*) from public.content_versions where content_item_id = 'd0000000-0000-0000-0000-000000000003'),
+  (select count(*) from public.content_versions where content_item_id = 'd0000000-0000-0000-0000-000000000003')::int,
   2,
   'T7d ALLOW: A3 punya tepat 2 versi (v1 tidak ditimpa, v2 baru)'
 );
@@ -529,7 +534,7 @@ select is(
   'T11 ALLOW: client review A6 bisa dibuat setelah internal approved'
 );
 select is(
-  (select count(*) from public.approval_requests where content_version_id = 'd1000000-0000-0000-0000-000000000006' and request_type = 'client'),
+  (select count(*) from public.approval_requests where content_version_id = 'd1000000-0000-0000-0000-000000000006' and request_type = 'client')::int,
   1,
   'T11b ALLOW: tepat 1 request client_review tercatat untuk A6 v1'
 );
@@ -586,7 +591,7 @@ select is(
   'T12c ALLOW: klien bisa berkomentar setelah workspace mengizinkan'
 );
 select is(
-  (select count(*) from public.comments where target_type = 'content_item' and target_id = 'd0000000-0000-0000-0000-000000000301' and author_user_id = :'user_b'),
+  (select count(*) from public.comments where target_type = 'content_item' and target_id = 'd0000000-0000-0000-0000-000000000301' and author_user_id = :'user_b')::int,
   1,
   'T12d ALLOW: tepat 1 komentar klien tercatat di D1'
 );
