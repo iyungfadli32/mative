@@ -75,7 +75,7 @@ async function walkToEditing(page: import("@playwright/test").Page) {
 test.describe("penerimaan Phase 4 — review & approval @needs-db", () => {
   test.skip(!hasTestAccount, "Butuh akun uji (E2E_TEST_EMAIL/PASSWORD) + migrasi 0013–0014 live.");
 
-  test("submit v1 → stale ditolak → minta revisi → v2 → setujui v2 → Disetujui", async ({
+  test("submit v1 → revisi v1 → v2 → stale ditolak → v3 → setujui v3 → Disetujui", async ({
     page,
   }) => {
     // Semua expect di tes ini memakai 30 dtk (bukan default 5 dtk):
@@ -196,7 +196,13 @@ test.describe("penerimaan Phase 4 — review & approval @needs-db", () => {
     });
     await expect(decisionForm.getByLabel("Minta revisi", { exact: true })).toBeVisible();
     await decisionForm.getByRole("button", { name: "Kirim keputusan" }).click();
-    await expect(page.getByText("disetujui")).toBeVisible({ timeout: 30000 });
+    // Pesan form "Keputusan tercatat: konten disetujui." tidak bisa
+    // di-assert di sini: sesudah v3 disetujui, request aktif kembali ke
+    // request v2 yang masih in_review (basi) sehingga form berganti
+    // instance. Yang persisten: produksi approved + riwayat "Disetujui".
+    await expect(page.getByText("Disetujui • review internal")).toBeVisible({
+      timeout: 30000,
+    });
     await expect(page.getByText("Status produksi: approved")).toBeVisible({ timeout: 30000 });
 
     // 11. Approval Center: antrean Disetujui memuat konten ini; antrean
