@@ -7,8 +7,8 @@
 --       kini BOLEH diisi konfirmasi manual (CHECK lama dicabut, sesuai
 --       komentar 0007: "CHECK dicabut migrasi Phase 6").
 --   (2) Tabel baru: publishing_jobs, publishing_attempts, published_posts.
---   (3) RLS + policy (baca: member / shared; tulis: HANYA lewat RPC —
---       pola visual_orders 0017) + grant select saja.
+--   (3) RLS + policy (baca: member + brand scope / shared; tulis: HANYA
+--       lewat RPC — pola visual_orders 0017) + grant select saja.
 --   (4) RPC (SECURITY DEFINER, {ok, code, message}, TIDAK melempar):
 --       publishing_preflight, create_publishing_job, claim_publishing_job,
 --       process_publishing_jobs, retry_publishing_job, cancel_publishing_job,
@@ -16,6 +16,15 @@
 --   (5) ASUMSI-6.2: idempotency_key unik per placement + scheduled_at UTC,
 --       indeks partial (job cancelled membebaskan slotnya — ADR-0012 §4).
 --   (6) ASUMSI-6.4: provider_job_id / provider_post_id selalu null (CHECK).
+--
+-- v1.1 (2026-11-20, SEBELUM live — perbaikan pra-penerapan, ditemukan saat
+-- merancang pgTAP 06): policy SELECT ketiga tabel kini menegakkan brand
+-- scope (pola 0016: is_ws_member AND brand_in_scope). v1.0 hanya memeriksa
+-- keanggotaan workspace, sehingga member scope-terbatas bisa MEMBACA
+-- job/attempt/bukti brand lain (kebocoran baca; mutasi sudah benar karena
+-- RPC memeriksa scope). Helper baru: is_publishing_job_visible +
+-- is_publishing_post_visible; helper is_publishing_job_member dihapus
+-- (digantikan keduanya). Cabang shared (viewer_client) tidak berubah.
 --
 -- Aturan keras (pelajaran Phase 5): policy INSERT TIDAK BOLEH memeriksa
 -- baris yang sedang di-INSERT di tabelnya sendiri; policy INSERT hanya
@@ -150,9 +159,11 @@ alter table public.publishing_jobs enable row level security;
 alter table public.publishing_attempts enable row level security;
 alter table public.published_posts enable row level security;
 
--- Helper RLS untuk attempts (pola is_campaign_template_member 0017):
--- policy TIDAK BOLEH memindai tabel lain — hanya helper + kolom baris.
-create or replace function public.is_publishing_job_member(p_job_id uuid, p_roles text[] default null)
+-- Helper RLS visibilitas lengkap (pola 0016: member AND brand scope).
+-- Cabang member: keanggotaan workspace (8 peran) DAN brand item dalam scope
+-- pemanggil. Cabang shared (viewer_client, v2): placement dibagikan eksplisit
+-- ke pemanggil — tidak berubah, tidak kena filter scope.
+create or replace function public.is_publishing_job_visible(p_job_id uuid, p_roles text[] default null)
 returns boolean
 language sql
 stable
@@ -161,25 +172,48 @@ set search_path = public, pg_temp
 as $$
   select exists (
     select 1 from public.publishing_jobs j
+    join public.content_placements pl on pl.id = j.placement_id
+    join public.content_items ci on ci.id = pl.content_item_id
     where j.id = p_job_id
       and (
-        public.is_ws_member(j.workspace_id, p_roles)
+        (public.is_ws_member(j.workspace_id, p_roles) and public.brand_in_scope(ci.brand_id))
         or public.is_placement_shared_with_me(j.placement_id)
       )
   );
 $$;
 
-comment on function public.is_publishing_job_member(uuid, text[]) is 'Helper RLS (0020): apakah pemanggil member workspace pemilik job ATAU placement job itu dibagikan eksplisit ke pemanggil. SECURITY DEFINER — hanya boolean.';
+comment on function public.is_publishing_job_visible(uuid, text[]) is 'Helper RLS (0020 v1.1): apakah pemanggil boleh MELIHAT job ini — member (peran + brand scope, pola 0016) ATAU placement dibagikan eksplisit. SECURITY DEFINER — hanya boolean.';
 
--- publishing_jobs — baca: member workspace (8 peran non-klien) ATAU placement
--- dibagikan eksplisit ke pemanggil (viewer_client, v2). Tulis: TIDAK (hanya
--- RPC 0020; pola visual_orders 0017).
+create or replace function public.is_publishing_post_visible(p_post_id uuid, p_roles text[] default null)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select exists (
+    select 1 from public.published_posts pp
+    join public.content_placements pl on pl.id = pp.placement_id
+    join public.content_items ci on ci.id = pl.content_item_id
+    where pp.id = p_post_id
+      and (
+        (public.is_ws_member(pp.workspace_id, p_roles) and public.brand_in_scope(ci.brand_id))
+        or public.is_placement_shared_with_me(pp.placement_id)
+      )
+  );
+$$;
+
+comment on function public.is_publishing_post_visible(uuid, text[]) is 'Helper RLS (0020 v1.1): apakah pemanggil boleh MELIHAT bukti terbit ini — member (peran + brand scope, pola 0016) ATAU placement dibagikan eksplisit. SECURITY DEFINER — hanya boolean.';
+
+-- publishing_jobs — baca: member workspace (8 peran non-klien, DAN brand
+-- item dalam scope — pola 0016) ATAU placement dibagikan eksplisit ke
+-- pemanggil (viewer_client, v2). Tulis: TIDAK (hanya RPC 0020; pola
+-- visual_orders 0017).
 create policy "publishing_jobs_select_member_or_shared"
   on public.publishing_jobs for select
   to authenticated
   using (
-    public.is_ws_member(workspace_id, array['owner', 'admin', 'manager', 'strategist', 'creator', 'editor', 'approver', 'analyst'])
-    or public.is_placement_shared_with_me(placement_id)
+    public.is_publishing_job_visible(publishing_jobs.id, array['owner', 'admin', 'manager', 'strategist', 'creator', 'editor', 'approver', 'analyst'])
   );
 
 create policy "publishing_jobs_no_insert"
@@ -191,12 +225,13 @@ create policy "publishing_jobs_no_update"
 create policy "publishing_jobs_no_delete"
   on public.publishing_jobs for delete to authenticated using (false);
 
--- publishing_attempts — baca: member job itu (atau shared). Tulis: TIDAK.
+-- publishing_attempts — baca: boleh melihat job itu (member + scope ATAU
+-- shared). Tulis: TIDAK.
 create policy "publishing_attempts_select_member_or_shared"
   on public.publishing_attempts for select
   to authenticated
   using (
-    public.is_publishing_job_member(publishing_attempts.publishing_job_id, array['owner', 'admin', 'manager', 'strategist', 'creator', 'editor', 'approver', 'analyst'])
+    public.is_publishing_job_visible(publishing_attempts.publishing_job_id, array['owner', 'admin', 'manager', 'strategist', 'creator', 'editor', 'approver', 'analyst'])
   );
 
 create policy "publishing_attempts_no_insert"
@@ -208,14 +243,14 @@ create policy "publishing_attempts_no_update"
 create policy "publishing_attempts_no_delete"
   on public.publishing_attempts for delete to authenticated using (false);
 
--- published_posts — baca: member workspace (8 peran) ATAU placement
--- dibagikan eksplisit. Tulis: TIDAK (hanya RPC confirm).
+-- published_posts — baca: member workspace (8 peran, DAN brand item dalam
+-- scope — pola 0016) ATAU placement dibagikan eksplisit. Tulis: TIDAK
+-- (hanya RPC confirm).
 create policy "published_posts_select_member_or_shared"
   on public.published_posts for select
   to authenticated
   using (
-    public.is_ws_member(workspace_id, array['owner', 'admin', 'manager', 'strategist', 'creator', 'editor', 'approver', 'analyst'])
-    or public.is_placement_shared_with_me(placement_id)
+    public.is_publishing_post_visible(published_posts.id, array['owner', 'admin', 'manager', 'strategist', 'creator', 'editor', 'approver', 'analyst'])
   );
 
 create policy "published_posts_no_insert"
@@ -236,8 +271,10 @@ grant select on public.publishing_attempts to authenticated;
 revoke all on public.published_posts from anon, authenticated;
 grant select on public.published_posts to authenticated;
 
-revoke all on function public.is_publishing_job_member(uuid, text[]) from public;
-grant execute on function public.is_publishing_job_member(uuid, text[]) to authenticated;
+revoke all on function public.is_publishing_job_visible(uuid, text[]) from public;
+grant execute on function public.is_publishing_job_visible(uuid, text[]) to authenticated;
+revoke all on function public.is_publishing_post_visible(uuid, text[]) from public;
+grant execute on function public.is_publishing_post_visible(uuid, text[]) to authenticated;
 
 -- ============================================================================
 -- (5) Fungsi utilitas — backoff (ASUMSI-6.3)
