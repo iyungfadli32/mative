@@ -29,6 +29,17 @@
 -- (brandId wajib). Perilaku benar (migrasi 0012): konversi ide tanpa
 -- brand TANPA p_brand_id ditolak bersih (ok=false + pesan); DENGAN
 -- p_brand_id → berhasil dan item memakai brand itu.
+--
+-- v1.2 (2026-11-19): hapus baris cleanup "delete from public.brief_templates
+-- where id = 'a6000000-0000-0000-0000-000000000001'" di akhir file. Baris itu
+-- GAGAL live dengan P0001 ("cannot delete the default brief template: set
+-- another template as default first") dan menggagalkan transaksi sebelum
+-- finish() — trigger trg_prevent_default_template_delete (0009) menolak hapus
+-- template is_default=true, dan DELETE polos itu tidak ditangkap exception
+-- apa pun. Baris itu redundan: rollback tanpa syarat di akhir file sudah
+-- membersihkan semua baris uji termasuk template itu. T11 TIDAK diubah:
+-- throws_ok menangkap exception lewat subtransaction, jadi T11 bukan penyebab
+-- P0001. plan TETAP 35, jumlah asersi TETAP 35.
 -- CATATAN: tes ini TIDAK BOLEH dijalankan di database produksi berisi data
 -- nyata — hanya database bersih/preview. Tes memakai JWT claims palsu lewat
 -- set_config('request.jwt.claims') untuk mensimulasikan tiap pengguna.
@@ -482,7 +493,6 @@ delete from public.comments where id in ('a4000000-0000-0000-0000-000000000001',
 delete from public.content_assets where id = 'a3000000-0000-0000-0000-000000000001';
 delete from public.assets where id in ('a2000000-0000-0000-0000-000000000001','a2000000-0000-0000-0000-000000000002');
 delete from public.tasks where id in ('a1000000-0000-0000-0000-000000000001','a1000000-0000-0000-0000-000000000002','a1000000-0000-0000-0000-000000000003');
-delete from public.brief_templates where id = 'a6000000-0000-0000-0000-000000000001';
 delete from public.content_items where id in ('d0000000-0000-0000-0000-000000000001','d0000000-0000-0000-0000-000000000002','d0000000-0000-0000-0000-000000000003');
 delete from public.campaigns where id = '90000000-0000-0000-0000-000000000001';
 delete from public.brands where id in ('e0000000-0000-0000-0000-000000000001','e0000000-0000-0000-0000-000000000002');
