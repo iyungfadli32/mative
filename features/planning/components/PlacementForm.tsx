@@ -36,6 +36,14 @@ export function PlacementForm({
       <input type="hidden" name="workspaceId" value={workspaceId} />
       <input type="hidden" name="contentItemId" value={contentItemId} />
       {initial ? <input type="hidden" name="placementId" value={initial.id} /> : null}
+      {/* Select channel di-disable saat edit (channel tak bisa diubah),
+          tapi kontrol disabled TIDAK ikut terkirim — tanpa input
+          tersembunyi ini socialChannelId null dan validasi update selalu
+          gagal ("Data tidak valid.", defect Langkah 0 Phase 3: edit
+          placement tak pernah bisa menyimpan). */}
+      {initial ? (
+        <input type="hidden" name="socialChannelId" value={initial.social_channel_id} />
+      ) : null}
       {/* Edit tidak mengubah jadwal/distribusi — kirim nilai lama apa adanya. */}
       {initial ? (
         <>
