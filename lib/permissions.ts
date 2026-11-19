@@ -39,6 +39,7 @@ export type Capability =
   | "approve_assigned"
   | "schedule_publish"
   | "view_analytics"
+  | "import_analytics"
   | "export_data"
   | "view_portal_shared";
 
@@ -198,6 +199,17 @@ export const PERMISSION_MATRIX: Record<
     approver: "limited",
     analyst: true,
     viewer_client: "shared",
+  },
+  import_analytics: {
+    owner: true,
+    admin: true,
+    manager: true,
+    strategist: true,
+    creator: false,
+    editor: false,
+    approver: false,
+    analyst: true,
+    viewer_client: false,
   },
   export_data: {
     owner: true,

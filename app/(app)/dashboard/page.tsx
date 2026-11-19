@@ -6,6 +6,9 @@ import { KPIStatCard } from "@/components/ui/KPIStatCard";
 import { EmptyState } from "@/components/ui/States";
 import { EMPTY_KPIS } from "@/features/dashboard/kpis";
 import { getDashboardKpis } from "@/features/planning/queries";
+import { DashboardAnalyticsSummary } from "@/features/analytics/components/DashboardAnalyticsSummary";
+import { can } from "@/lib/permissions";
+import type { WorkspaceRole } from "@/lib/permissions";
 import { formatDateOnly, timezoneLabel } from "@/lib/time";
 import { envStatus, SUPABASE_NOT_CONFIGURED_ID } from "@/lib/env";
 import Link from "next/link";
@@ -100,6 +103,15 @@ export default async function DashboardPage() {
         <KPIStatCard label="Terjadwal" value={kpis.scheduled} icon="📅" empty={!kpis.hasData} />
         <KPIStatCard label="Terbit" value={kpis.published} icon="✅" empty={!kpis.hasData} />
       </section>
+
+      {user && workspaces[0] && can(workspaces[0].role as WorkspaceRole, "view_analytics") ? (
+        <section className="mt-6" aria-label="Ringkasan analitik">
+          <DashboardAnalyticsSummary
+            workspaceId={workspaces[0].workspace.id}
+            timezone={workspaces[0].workspace.timezone}
+          />
+        </section>
+      ) : null}
 
       <section className="mt-6 grid gap-4 lg:grid-cols-3">
         <div className="rounded-2xl border border-[var(--mt-border)] bg-[var(--mt-surface)] p-4">

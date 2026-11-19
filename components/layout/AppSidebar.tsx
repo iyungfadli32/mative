@@ -64,6 +64,15 @@ export const NAV_SECTIONS: Array<{ title: string; items: NavItem[] }> = [
     ],
   },
   {
+    title: "Analisis",
+    items: [
+      { href: "/analitik", label: "Analitik", icon: "📊", available: true },
+      { href: "/analitik/laporan", label: "Laporan", icon: "📄", available: true },
+      { href: "/analitik/impor", label: "Impor Data", icon: "📥", available: true },
+      { href: "/integrasi", label: "Integrasi", icon: "🔌", available: true },
+    ],
+  },
+  {
     title: "Administrasi",
     items: [
       {

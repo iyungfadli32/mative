@@ -769,3 +769,35 @@ export const reschedulePublishingJobSchema = z.object({
   scheduledAt: wallClockDatetime,
   timezone: z.string().trim().max(64, "Zona waktu maksimal 64 karakter.").default(""),
 });
+
+/**
+ * Impor analytics CSV (Phase 7): satu snapshot = satu periode.
+ * brandId kosong = impor multi-brand (brand_id NULL di snapshot);
+ * RPC tetap menegakkan scope per subject.
+ */
+export const importAnalyticsCsvSchema = z
+  .object({
+    workspaceId: z.string().uuid("workspace_id tidak valid."),
+    brandId: z
+      .string()
+      .uuid("brand_id tidak valid.")
+      .nullable()
+      .optional()
+      .default(null),
+    periodStart: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Periode awal harus format YYYY-MM-DD."),
+    periodEnd: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Periode akhir harus format YYYY-MM-DD."),
+    rawReference: z
+      .string()
+      .trim()
+      .max(200, "Referensi file maksimal 200 karakter.")
+      .default(""),
+    csvText: z.string().min(1, "Isi CSV wajib diisi — tempel CSV atau unggah file."),
+  })
+  .refine((v) => v.periodStart <= v.periodEnd, {
+    message: "Periode awal tidak boleh sesudah periode akhir.",
+    path: ["periodEnd"],
+  });
