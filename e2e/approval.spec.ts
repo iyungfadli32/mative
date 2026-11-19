@@ -2,11 +2,12 @@ import { test, expect } from "@playwright/test";
 
 /**
  * Spek penerimaan Phase 4 — prompts/05 (P4-12).
- * Alur: buat brand → konten → tab Approval → tugaskan step ke diri
- * sendiri (eksplisit, pengecualian R4.3) → submit v1 → buat v2 →
- * approve v1 DITOLAK (stale, R4.1) → minta revisi v1 (komentar wajib)
- * → submit v2 → setujui v2 → Disetujui + produksi approved → antrean
- * Approval Center.
+ * Alur: buat brand → konten → pindah stage idea → Editing (5 langkah,
+ * wajib — RPC 0014 hanya menerima submit dari editing/internal_review)
+ * → tab Approval → tugaskan step ke diri sendiri (eksplisit,
+ * pengecualian R4.3) → submit v1 → buat v2 → approve v1 DITOLAK (stale,
+ * R4.1) → minta revisi v1 (komentar wajib) → submit v2 → setujui v2 →
+ * Disetujui + produksi approved → antrean Approval Center.
  *
  * BUTUH database live + migrasi 0013 + 0014 diterapkan + akun uji
  * (E2E_TEST_EMAIL/PASSWORD). Tes ini di-SKIP otomatis bila akun uji
@@ -42,6 +43,31 @@ async function signIn(page: import("@playwright/test").Page, email?: string, pas
   await expect(page.getByRole("heading", { name: "Command Center" })).toBeVisible({
     timeout: 15000,
   });
+}
+
+/**
+ * Pindah production stage idea → editing (5 langkah, tab Overview).
+ * WAJIB sebelum submit approval internal: RPC 0014 hanya menerima
+ * submit dari 'editing'/'internal_review' — dari 'idea' langsung
+ * ditolak server ("Pindahkan dulu ke Editing."). Jalur jujur lewat
+ * pipeline (tanpa jalan pintas exception blocked → editing, yang
+ * akan mencatat event status palsu).
+ */
+async function walkToEditing(page: import("@playwright/test").Page) {
+  const pipeline: Array<[string, string]> = [
+    ["idea", "brief"],
+    ["brief", "scripting"],
+    ["scripting", "ready_for_production"],
+    ["ready_for_production", "in_production"],
+    ["in_production", "editing"],
+  ];
+  for (const [from, to] of pipeline) {
+    await page.getByLabel("Pindah stage ke").selectOption(to);
+    await page.getByRole("button", { name: "Pindah stage" }).click();
+    await expect(
+      page.getByText(`Status produksi diubah: ${from} → ${to}.`, { exact: true }),
+    ).toBeVisible({ timeout: 30000 });
+  }
 }
 
 test.describe("penerimaan Phase 4 — review & approval @needs-db", () => {
@@ -92,10 +118,12 @@ test.describe("penerimaan Phase 4 — review & approval @needs-db", () => {
     await page.getByRole("button", { name: "Buat konten (v1)" }).click();
     await expect(page.getByText("Konten dibuat beserta versi v1.")).toBeVisible({ timeout: 30000 });
 
-    // 3. Buka tab Approval konten.
+    // 3. Buka tab Approval konten — tapi pindah stage dulu ke Editing
+    //    (submit approval internal hanya dari editing, RPC 0014).
     await page.goto("/konten");
     await page.getByRole("link", { name: `Konten P4 ${slug}` }).click();
     await expect(page.getByRole("heading", { name: `Konten P4 ${slug}` })).toBeVisible();
+    await walkToEditing(page);
     await page.getByRole("tab", { name: "Approval" }).click();
     await expect(page.getByText("Belum ada request approval aktif")).toBeVisible({
       timeout: 30000,
@@ -244,6 +272,9 @@ test.describe("penerimaan Phase 4 — review & approval @needs-db", () => {
     });
     await ownerPage.goto("/konten");
     await ownerPage.getByRole("link", { name: `Konten P4 ${slug}` }).click();
+    await expect(ownerPage.getByRole("heading", { name: `Konten P4 ${slug}` })).toBeVisible();
+    // Pindah stage ke Editing dulu (submit hanya dari editing, RPC 0014).
+    await walkToEditing(ownerPage);
     await ownerPage.getByRole("tab", { name: "Approval" }).click();
     await ownerPage.getByRole("button", { name: "Ajukan v1 untuk approval" }).click();
     await expect(ownerPage.getByText("Konten diajukan untuk approval")).toBeVisible({
