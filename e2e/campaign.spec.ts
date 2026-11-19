@@ -73,7 +73,7 @@ async function createCampaign(
   campaignName: string,
 ) {
   await page.goto("/kampanye");
-  await expect(page.getByRole("heading", { name: "Campaign" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Campaign", exact: true })).toBeVisible();
   await page.getByLabel("Nama campaign").fill(campaignName);
   await page.getByLabel("Tujuan (objective)").fill("Tujuan E2E Phase 5");
   await page.locator("#campaign-target-deliverables").fill("5");
@@ -142,7 +142,7 @@ test.describe("penerimaan Phase 5 — campaign & visual planning @needs-db", () 
     await page.getByRole("button", { name: "Simpan sebagai template" }).click();
     await expect(page.getByText("Template campaign disimpan.")).toBeVisible({ timeout: 30000 });
     await page.goto("/template");
-    await expect(page.getByRole("heading", { name: "Template" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Template", exact: true })).toBeVisible();
     await expect(page.getByText(`${campaignName} (template)`)).toBeVisible();
   });
 
@@ -255,7 +255,7 @@ test.describe("penerimaan Phase 5 — campaign & visual planning @needs-db", () 
 test.describe("smoke — halaman Phase 5 (tanpa login)", () => {
   test("halaman Template menampilkan judul + ajakan masuk", async ({ page }) => {
     await page.goto("/template");
-    await expect(page.getByRole("heading", { name: "Template" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Template", exact: true })).toBeVisible();
     await expect(page.getByText("Anda belum masuk")).toBeVisible();
   });
 });
