@@ -1,4 +1,13 @@
--- MaTive Phase 7 — RLS + RPC analytics foundation (pgTAP) — v1.1
+-- MaTive Phase 7 — RLS + RPC analytics foundation (pgTAP) — v1.2
+-- v1.2 (2026-11-20): perbaiki 16 kegagalan Run 3 (diagnostik _tap_out):
+--   (a) _set_user HANYA mengubah klaim JWT, BUKAN role — sesudah tiap
+--   `reset role;`, tegaskan lagi `set local role authenticated;` sebelum
+--   _set_user (T6d, T7b, T7e, T8b, T12a); tanpanya tes berjalan sebagai
+--   postgres (RLS/privilege bypass) — 11 dari 16 gagal karenanya.
+--   (b) T2g 4->5 (impor T2a juga membawa impressions); T13d 2->3 (T2b juga
+--   menyimpan satu baris reach); T8b: subquery dipatok ke snapshot yang
+--   dituakan (bukan "latest" — sesudah update, yang dituakan bukan lagi
+--   yang terbaru). Migrasi 0021 TIDAK berubah: agregasi RPC sudah benar.
 -- v1.1 (2026-11-20): T6a/T6d pakai throws_ok 42501 (SELECT tanpa grant
 -- melempar 42501, bukan 0 baris — pelajaran 10). Selain itu identik v1.0.
 -- File baru untuk migrasi 0021 v1.0 (metric_definitions, analytics_snapshots,
@@ -51,7 +60,9 @@
 --     SQL dinamis dibangun lewat format($f$...$f$, :'user_b').
 --   - UUID palsu 1111.../2222... HANYA di dua baris \\set.
 --   - Insert baris uji di tengah tes memakai `reset role;` (postgres) lalu
---     `set local role authenticated;` lagi.
+--     `set local role authenticated;` lagi — WAJIB: _set_user HANYA mengubah
+--     klaim JWT, BUKAN role (pelajaran 36, pgTAP 07 Run 3: 11 dari 16 gagal
+--     karena _set_user sesudah reset role tetap berjalan sebagai postgres).
 --   - Pola throws_ok = pesan galat lengkap (nama constraint terpotong 63
 --     byte bila perlu); pola pendek GAGAL walau galatnya benar (pelajaran 05).
 --   - Cleanup defensif diurutkan daun → akar (pelajaran 06 v1.0: brands
@@ -233,8 +244,8 @@ select is(
 );
 select is(
   (select count(*) from public.campaign_metrics where campaign_id = 'f7000000-0000-0000-0000-000000000001')::int,
-  4,
-  'T2g empat baris campaign_metrics (reach, engagements, likes, engagement_rate)'
+  5,
+  'T2g lima baris campaign_metrics (reach, impressions, engagements, likes, engagement_rate)'
 );
 select is(
   (select count(*) from public.integration_events where workspace_id = 'b7000000-0000-0000-0000-000000000001' and event_type = 'import_completed')::int,
@@ -484,6 +495,7 @@ select lives_ok(
   $$ insert into public.channel_credentials (channel_id, provider, secret_reference) values ('e7100000-0000-0000-0000-000000000001', 'instagram', 'vault://uji/ref-1') $$,
   'T6c INSERT sebagai postgres lolos (server-only: hanya service role)'
 );
+set local role authenticated;
 select _set_user(:'user_a');
 select throws_ok(
   $$ select count(*) from public.channel_credentials $$,
@@ -502,6 +514,7 @@ select throws_ok(
   'new row for relation "social_channels" violates check constraint "social_channels_connection_status_check"',
   'T7a connection_status connected ditolak (hanya not_connected/manual/disabled)'
 );
+set local role authenticated;
 select _set_user(:'user_a');
 update public.social_channels
 set connection_status = 'disabled',
@@ -523,6 +536,7 @@ select lives_ok(
   $$ insert into public.social_channels (brand_id, platform, connection_status) values ('e7000000-0000-0000-0000-000000000001', 'instagram', 'disabled') $$,
   'T7d insert channel dengan status disabled lolos (CHECK baru)'
 );
+set local role authenticated;
 select _set_user(:'user_b');
 select is(
   (select count(*) from public.social_channels where brand_id = 'e7000000-0000-0000-0000-000000000001')::int,
@@ -543,9 +557,12 @@ reset role;
 update public.analytics_snapshots
 set retrieved_at = now() - interval '25 hours'
 where id = (select id from public.analytics_snapshots where workspace_id = 'b7000000-0000-0000-0000-000000000001' order by retrieved_at desc limit 1);
+set local role authenticated;
 select _set_user(:'user_a');
+-- (v1.2) T8b memeriksa snapshot yang DITUAKAN: subquery "latest" tidak bisa
+-- dipakai lagi — sesudah update, snapshot yang dituakan bukan lagi terbaru.
 select is(
-  public.analytics_snapshot_is_stale((select id from public.analytics_snapshots where workspace_id = 'b7000000-0000-0000-0000-000000000001' order by retrieved_at desc limit 1)),
+  public.analytics_snapshot_is_stale((select id from public.analytics_snapshots where workspace_id = 'b7000000-0000-0000-0000-000000000001' and retrieved_at < now() - interval '24 hours' order by retrieved_at desc limit 1)),
   true,
   'T8b snapshot berumur 25 jam kedaluwarsa (TTL 24 jam)'
 );
@@ -649,6 +666,7 @@ select throws_ok(
 -- ============================================================================
 -- TES 12 — integration_events INSERT pola actor (activity_logs 0004). (3)
 -- ============================================================================
+set local role authenticated;
 select _set_user(:'user_a');
 select lives_ok(
   $$ insert into public.integration_events (workspace_id, event_type, actor_user_id) values ('b7000000-0000-0000-0000-000000000001', 'capability_checked', auth.uid()) $$,
@@ -691,8 +709,8 @@ select is(
 );
 select is(
   (select count(*) from public.content_metrics where subject_type = 'placement' and subject_id = 'c7000000-0000-0000-0000-000000000001' and metric_key = 'reach' and period_start = '2026-11-01')::int,
-  2,
-  'T13d dua baris reach tersimpan (lama + koreksi); agregasi memakai yang terbaru'
+  3,
+  'T13d tiga baris reach tersimpan (T2a + T2b + koreksi); agregasi memakai yang terbaru'
 );
 
 -- ============================================================================
