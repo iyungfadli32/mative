@@ -181,7 +181,7 @@ test.describe("analytics — dashboard, impor CSV, laporan, integrasi", () => {
     await signIn(page);
     const wsId = await setupContent(page, slug);
     await gotoWs(page, "/integrasi", wsId);
-    await expect(page.getByRole("heading", { name: "Integrasi" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Integrasi", exact: true })).toBeVisible();
     await expect(page.getByText("Adapter integrasi: DISABLED")).toBeVisible({ timeout: 30000 });
     await expect(page.getByText("Instagram")).toBeVisible({ timeout: 30000 });
     await expect(page.getByText("DISABLED").first()).toBeVisible({ timeout: 30000 });
