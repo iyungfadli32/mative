@@ -75,7 +75,11 @@ test.describe("penerimaan Phase 4 — review & approval @needs-db", () => {
     await page.locator("#brand-name-new").fill(`Brand P4 ${slug}`);
     await page.locator("#brand-slug-new").fill(`brand-p4-${slug}`);
     await page.getByRole("button", { name: "Buat brand" }).click();
-    await expect(page.getByText("Brand dibuat.")).toBeVisible({ timeout: 30000 });
+    // WAJIB exact: true — getByText tanpa exact cocok dengan hint statis
+    // "Slug tidak bisa diubah setelah brand dibuat." (BrandForm.tsx:44),
+    // sehingga wait lolos instan SEBELUM insert selesai dan /konten/baru
+    // lalu (dengan benar) belum menampilkan brand baru (cacat e2e 2026-11-19).
+    await expect(page.getByText("Brand dibuat.", { exact: true })).toBeVisible({ timeout: 30000 });
 
     // 2. Buat konten (otomatis v1).
     await page.goto("/konten/baru");
@@ -227,7 +231,7 @@ test.describe("penerimaan Phase 4 — review & approval @needs-db", () => {
     await ownerPage.locator("#brand-name-new").fill(`Brand P4 ${slug}`);
     await ownerPage.locator("#brand-slug-new").fill(`brand-p4-${slug}`);
     await ownerPage.getByRole("button", { name: "Buat brand" }).click();
-    await expect(ownerPage.getByText("Brand dibuat.")).toBeVisible({ timeout: 30000 });
+    await expect(ownerPage.getByText("Brand dibuat.", { exact: true })).toBeVisible({ timeout: 30000 });
     await ownerPage.goto("/konten/baru");
     await ownerPage.getByLabel(/Brand/).selectOption({ label: `Brand P4 ${slug}` });
     await ownerPage.getByLabel("Judul konten").fill(`Konten P4 ${slug}`);

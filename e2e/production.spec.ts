@@ -87,7 +87,10 @@ test.describe("penerimaan Phase 3 — production operations @needs-db", () => {
     await page.locator("#brand-name-new").fill(`Brand P3 ${slug}`);
     await page.locator("#brand-slug-new").fill(`brand-p3-${slug}`);
     await page.getByRole("button", { name: "Buat brand" }).click();
-    await expect(page.getByText("Brand dibuat.")).toBeVisible({ timeout: 30000 });
+    // WAJIB exact: true — getByText tanpa exact cocok dengan hint statis
+    // "Slug tidak bisa diubah setelah brand dibuat." (BrandForm.tsx:44),
+    // sehingga wait lolos instan SEBELUM insert selesai (cacat e2e 2026-11-19).
+    await expect(page.getByText("Brand dibuat.", { exact: true })).toBeVisible({ timeout: 30000 });
 
     // 1. Tangkap ide di inbox (TANPA brand — menguji jalur 0012: brand
     // dipilih belakangan, di form konversi).
@@ -141,7 +144,7 @@ test.describe("penerimaan Phase 3 — production operations @needs-db", () => {
     await page.getByRole("tab", { name: "Task" }).click();
     await page.getByLabel("Judul task").fill(`Task P3 ${slug}`);
     await page.getByRole("button", { name: "Buat task" }).click();
-    await expect(page.getByText("Task dibuat.")).toBeVisible({ timeout: 30000 });
+    await expect(page.getByText("Task dibuat.", { exact: true })).toBeVisible({ timeout: 30000 });
     await expect(page.getByText(`Task P3 ${slug}`).first()).toBeVisible({ timeout: 30000 });
 
     // 5. Pindah status task todo → in_progress (mesin RPC 0010).

@@ -36,13 +36,14 @@ export async function getSupabaseServerClient(): Promise<SupabaseClient | null> 
         },
       },
       // Data SELALU segar: fetch Next.js tidak boleh men-cache respons
-      // PostgREST (cacat e2e 2026-11-19: daftar brand di /konten/baru
-      // basi sesudah brand dibuat — render pertama sesudah mutasi tidak
-      // melihat baris baru, padahal barisnya sudah terlihat via REST;
-      // revalidatePath (termasuk /konten/baru) TIDAK membersihkannya —
-      // terbukti 4x via probe). no-store di sini membuat setiap baca
-      // server mengenai database live; biaya tambahannya kecil untuk
-      // aplikasi operasi ini.
+      // PostgREST. no-store di sini membuat setiap baca server mengenai
+      // database live; biaya tambahannya kecil untuk aplikasi operasi
+      // realtime ini. CATATAN (2026-11-19): no-store BUKAN perbaikan
+      // untuk "daftar brand basi" — penyebabnya ternyata wait spek e2e
+      // yang false-positive (getByText("Brand dibuat.") cocok dengan
+      // hint statis "…setelah brand dibuat."), bukan cache. no-store
+      // dipertahankan sebagai hardening: bila ada mutasi yang lupa
+      // revalidatePath, baca server tetap segar.
       global: {
         fetch: (input: RequestInfo | URL, init?: RequestInit) =>
           fetch(input, { ...init, cache: "no-store" }),

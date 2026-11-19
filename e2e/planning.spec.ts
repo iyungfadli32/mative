@@ -75,7 +75,10 @@ test.describe("penerimaan Phase 2 — planning core @needs-db", () => {
     // dan pernah >15 dtk — terbukti 2026-11-19 di channel, konten,
     // dan placement (baris tercatat di DB, expect yang gagal).
     // Berlaku untuk semua expect pesan sukses di tes ini.
-    await expect(page.getByText("Brand dibuat.")).toBeVisible({ timeout: 30000 });
+    // exact: true WAJIB di "Brand dibuat." — tanpa exact, wait cocok
+    // dengan hint statis "…setelah brand dibuat." dan lolos instan
+    // sebelum insert selesai (cacat e2e 2026-11-19).
+    await expect(page.getByText("Brand dibuat.", { exact: true })).toBeVisible({ timeout: 30000 });
 
     // 2. Buat 2 channel (Instagram + TikTok) untuk brand itu.
     await page.goto("/channel");
