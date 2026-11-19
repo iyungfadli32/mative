@@ -1,8 +1,8 @@
--- MaTive Phase 3 — RLS policy tests (pgTAP) — v1
+-- MaTive Phase 3 — RLS policy tests (pgTAP) — v1.1
 -- ============================================================================
 -- CARA MENJALANKAN (oleh koordinator — butuh DATABASE_URL / service role):
---   1. Terapkan migrasi 0001–0010 ke database BERSIH (lihat
---      docs/phase-3-report.md §5; urutan: 0009 lalu 0010).
+--   1. Terapkan migrasi 0001–0012 ke database BERSIH (lihat
+--      docs/phase-3-report.md §5; urutan: 0009 lalu 0010 lalu 0011 lalu 0012).
 --   2. Aktifkan ekstensi pgTAP di proyek Supabase (Dashboard → Database →
 --      Extensions → pgtap), atau jalankan:  create extension if not exists pgtap;
 --   3. Buat 2 pengguna auth uji (mis. lewat Dashboard → Authentication →
@@ -16,7 +16,19 @@
 --   DI SQL EDITOR (tanpa psql): hapus kedua baris \set, ganti setiap :'user_a'
 --   dengan literal UUID-A dan setiap :'user_b' dengan literal UUID-B, lalu
 --   jalankan seluruh file sebagai satu query (begin ... rollback di akhir
---   membersihkan data uji; GRANT untuk T15 ikut rollback).
+--   membersihkan data uji; GRANT untuk T16 ikut rollback).
+--   PENTING: SQL Editor TIDAK mempertahankan transaksi antar-Run (tiap Run
+--   sesi baru) — tempel SELURUH file ke editor lalu Run SEKALI (bukti live
+--   2026-11-19: run per bagian gagal FK 23503 di BAGIAN 2).
+--
+-- v1.1 (2026-11-19): T15–T15c ditulis ulang jadi T15–T15d (plan 34 → 35).
+-- T15 v1 SALAH (gagal live 23502): ia mengasumsikan content_items.brand_id
+-- NULLABLE karena membaca komentar header 0007 baris 191. Kenyataannya
+-- brand_id NOT NULL — DDL 0007 baris 200, Dok 05 §3 (tanpa penanda
+-- "nullable"), ERD §5 (BRANDS ||--o{ CONTENT_ITEMS), contentItemSchema
+-- (brandId wajib). Perilaku benar (migrasi 0012): konversi ide tanpa
+-- brand TANPA p_brand_id ditolak bersih (ok=false + pesan); DENGAN
+-- p_brand_id → berhasil dan item memakai brand itu.
 -- CATATAN: tes ini TIDAK BOLEH dijalankan di database produksi berisi data
 -- nyata — hanya database bersih/preview. Tes memakai JWT claims palsu lewat
 -- set_config('request.jwt.claims') untuk mensimulasikan tiap pengguna.
@@ -34,7 +46,7 @@
 -- ============================================================================
 
 begin;
-select plan(34);
+select plan(35);
 
 -- ---------------------------------------------------------------------------
 -- Helper: set JWT claims untuk satu pengguna (simulasi auth.uid()).
@@ -404,11 +416,12 @@ select throws_ok(
 );
 
 -- ============================================================================
--- TES 15 (migrasi 0011, regresi defect Phase 2): konversi ide TANPA brand
--- berhasil — RPC convert_idea_to_content (0008) menyalin brand_id NULL dan
--- trigger validate_content_item_scope (0007, diperbaiki 0011) wajib
--- mengizinkannya. Dijalankan sebagai user A (owner Workspace A).
--- Ide dibuat sebagai postgres (bypass RLS); RPC dipanggil sebagai user A.
+-- TES 15 (migrasi 0012, KOREKSI atas T15 v1): konversi ide TANPA brand
+-- TANPA p_brand_id ditolak bersih — RPC convert_idea_to_content (0012)
+-- mengembalikan ok=false + pesan, BUKAN crash 23502. DENGAN p_brand_id
+-- (Brand A) → berhasil dan item memakai brand itu. Dijalankan sebagai
+-- user A (owner Workspace A). Ide dibuat sebagai postgres (bypass RLS);
+-- RPC dipanggil sebagai user A.
 -- ============================================================================
 reset role;
 insert into public.ideas (id, workspace_id, brand_id, title, status, owner_user_id)
@@ -417,19 +430,25 @@ on conflict (id) do nothing;
 set local role authenticated;
 select _set_user(:'user_a');
 select is(
-  (select (public.convert_idea_to_content('a7000000-0000-0000-0000-000000000001') ->> 'ok')),
-  'true',
-  'T15 ALLOW: konversi ide tanpa brand mengembalikan ok=true (migrasi 0011)'
+  (select (r ->> 'ok') || '|' || (r ->> 'message')
+     from (select public.convert_idea_to_content('a7000000-0000-0000-0000-000000000001') as r) s),
+  'false|Ide ini belum punya brand. Pilih brand dulu sebelum dikonversi.',
+  'T15 DENY: konversi ide tanpa brand tanpa p_brand_id ditolak bersih (ok=false + pesan, migrasi 0012)'
 );
 select is(
-  (select count(*) from public.content_items where origin_idea_id = 'a7000000-0000-0000-0000-000000000001' and brand_id is null)::int,
-  1,
-  'T15b ALLOW: content item hasil konversi tersimpan dengan brand_id NULL'
+  (select (public.convert_idea_to_content('a7000000-0000-0000-0000-000000000001', null, 'e0000000-0000-0000-0000-000000000001') ->> 'ok')),
+  'true',
+  'T15b ALLOW: konversi ide tanpa brand DENGAN p_brand_id mengembalikan ok=true (migrasi 0012)'
+);
+select is(
+  (select brand_id::text from public.content_items where origin_idea_id = 'a7000000-0000-0000-0000-000000000001'),
+  'e0000000-0000-0000-0000-000000000001',
+  'T15c ALLOW: content item hasil konversi memakai brand dari p_brand_id (Brand A)'
 );
 select is(
   (select status from public.ideas where id = 'a7000000-0000-0000-0000-000000000001'),
   'converted',
-  'T15c ALLOW: ide tanpa brand berstatus converted setelah konversi'
+  'T15d ALLOW: ide berstatus converted setelah konversi dengan p_brand_id'
 );
 
 -- ============================================================================

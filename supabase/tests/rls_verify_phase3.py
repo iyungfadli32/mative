@@ -2,7 +2,7 @@
 """Verifikasi statis MaTive Phase 3 (P3-01 s.d. P3-03) — tanpa database nyata.
 
 Memeriksa:
-  1. Migrasi 0009 + 0010 + 0011 + tes 03 ter-parse penuh oleh pglast (parser PostgreSQL asli).
+  1. Migrasi 0009 + 0010 + 0011 + 0012 + tes 03 ter-parse penuh oleh pglast (parser PostgreSQL asli).
   2. Jumlah asersi pgTAP di 03 == angka plan(N).
   3. Semua throws_ok di 03 memakai bentuk 4 argumen (sql, kode SQLSTATE,
      pola = pesan lengkap, deskripsi).
@@ -30,6 +30,11 @@ Memeriksa:
   10. 0011 memperbaiki validate_content_item_scope (guard brand NULL,
       pola validate_idea_scope); tanpa tabel/policy baru. File 0001–0008
       TIDAK diubah (diperiksa lewat git di luar skrip ini).
+  11. 0012 mengganti convert_idea_to_content: signatur baru (uuid, text,
+      uuid) + p_brand_id + guard brand NULL (pesan bersih) + tolak brand
+      lintas workspace; fungsi lama (uuid, text) di-drop agar tak tersisa
+      overload yang crash; GRANT EXECUTE hanya ke authenticated; tanpa
+      tabel/policy baru.
 
 Jalankan:  python3 supabase/tests/rls_verify_phase3.py
 Keluar 0 bila semua pemeriksaan lolos.
@@ -45,6 +50,7 @@ APP_ROOT = Path(__file__).resolve().parent.parent.parent
 MIG9 = APP_ROOT / "supabase" / "migrations" / "0009_production_ops.sql"
 MIG10 = APP_ROOT / "supabase" / "migrations" / "0010_production_transactions.sql"
 MIG11 = APP_ROOT / "supabase" / "migrations" / "0011_fix_content_item_brand_null.sql"
+MIG12 = APP_ROOT / "supabase" / "migrations" / "0012_convert_idea_brand_param.sql"
 TEST_FILE = Path(__file__).resolve().parent / "03_rls_phase3.sql"
 FAKE_A = "11111111-1111-1111-1111-111111111111"
 FAKE_B = "22222222-2222-2222-2222-222222222222"
@@ -102,6 +108,7 @@ def main():
     mig9 = MIG9.read_text()
     mig10 = MIG10.read_text()
     mig11 = MIG11.read_text()
+    mig12 = MIG12.read_text()
     test = TEST_FILE.read_text()
 
     # 1. Parse pglast.
@@ -110,7 +117,7 @@ def main():
     except ImportError:
         check("pglast tersedia", False, "modul pglast tidak terpasang")
         return 1
-    for label, sql in (("0009", mig9), ("0010", mig10), ("0011", mig11)):
+    for label, sql in (("0009", mig9), ("0010", mig10), ("0011", mig11), ("0012", mig12)):
         try:
             stmts = pglast.parse_sql(sql)
             check(f"pglast parse {label} penuh", True, f"{len(stmts)} statement")
@@ -321,6 +328,31 @@ def main():
           "security definer" in mig11_nc and "search_path = public, pg_temp" in mig11_nc)
     check("0011: tidak menyentuh fungsi lain",
           mig11_nc.count("create or replace function") == 1,
+          "tepat 1 fungsi diganti")
+
+    # 11. Perbaikan 0012 (defect konversi ide tanpa brand, gagal live 23502):
+    # convert_idea_to_content terima p_brand_id + guard brand NULL.
+    mig12_nc = strip_comments(mig12)
+    check("0012 mengganti convert_idea_to_content (uuid, text, uuid)",
+          "create or replace function public.convert_idea_to_content(" in mig12_nc
+          and "p_brand_id uuid default null" in mig12_nc)
+    check("0012: fungsi lama (uuid, text) di-drop agar tak tersisa overload yang crash",
+          bool(re.search(r"drop\s+function\s+if\s+exists\s+public\.convert_idea_to_content\(uuid,\s*text\)", mig12_nc)))
+    check("0012: guard brand NULL ada (pesan bersih, bukan crash 23502)",
+          "Ide ini belum punya brand. Pilih brand dulu sebelum dikonversi." in mig12_nc)
+    check("0012: p_brand_id lintas workspace ditolak",
+          "Brand tidak ditemukan di workspace ini." in mig12_nc)
+    check("0012: brand efektif = coalesce(p_brand_id, brand ide)",
+          bool(re.search(r"v_brand_id\s*:=\s*coalesce\(p_brand_id,\s*v_idea\.brand_id\)", mig12_nc)))
+    check("0012: tidak ada tabel/policy baru",
+          not re.search(r"create\s+table|create\s+policy", mig12_nc, flags=re.I))
+    check("0012: SECURITY DEFINER + search_path terkunci",
+          "security definer" in mig12_nc and "search_path = public, pg_temp" in mig12_nc)
+    check("0012: GRANT EXECUTE hanya ke authenticated",
+          bool(re.search(r"grant execute on function public\.convert_idea_to_content\(uuid,\s*text,\s*uuid\) to authenticated", mig12_nc))
+          and not re.search(r"grant execute on function[^;]*to public", mig12_nc, flags=re.I))
+    check("0012: tidak menyentuh fungsi lain",
+          mig12_nc.count("create or replace function") == 1,
           "tepat 1 fungsi diganti")
 
     failed = [r for r in results if not r[1]]
