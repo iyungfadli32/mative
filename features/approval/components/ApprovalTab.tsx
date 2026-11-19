@@ -17,6 +17,7 @@ import {
   listWorkflowSteps,
 } from "@/features/approval/queries";
 import { isActiveRequestStatus } from "@/features/approval/transitions";
+import type { ApprovalWorkflow } from "@/features/approval/types";
 import { DecisionForm } from "./DecisionForm";
 import { StepAssignmentForm } from "./StepAssignmentForm";
 import { SubmitClientReviewForm } from "./SubmitClientReviewForm";
@@ -113,17 +114,38 @@ export async function ApprovalTab({
   // Pastikan workflow ada dulu (RPC idempotent); abaikan galat RPC
   // (mis. balapan dengan pembuat lain — indeks unik satu-default
   // menjaga hanya satu baris) lalu baca ulang apa pun hasilnya.
+  // BACA ULANG BERDASARKAN ID, BUKAN getDefaultWorkflow: Next.js
+  // me-memoize fetch GET yang sama dalam SATU render — memanggil
+  // getDefaultWorkflow lagi mengembalikan daftar kosong dari baca
+  // pertama (sebelum RPC), walau baris sudah dibuat dan ter-commit
+  // (cacat e2e 2026-11-19, repro deterministik: RPC membuat workflow
+  // + step di DB live, tapi form tetap tidak muncul). Baca berdasarkan
+  // id memakai URL berbeda sehingga tidak kena memoize render ini.
   let workflow = workflowRes.data;
   const canManage = ["owner", "admin", "manager"].includes(role);
   if (!workflow && canManage) {
+    let createdWorkflowId: string | null = null;
     try {
-      await supabase.rpc("get_or_create_default_workflow", {
+      const { data } = await supabase.rpc("get_or_create_default_workflow", {
         p_workspace_id: workspaceId,
       });
+      const rpcData = data as { workflow_id?: unknown } | null;
+      createdWorkflowId = typeof rpcData?.workflow_id === "string" ? rpcData.workflow_id : null;
     } catch {
       // Abaikan — baca ulang di bawah menentukan ada/tidaknya workflow.
     }
-    workflow = (await getDefaultWorkflow(supabase, workspaceId)).data;
+    if (createdWorkflowId) {
+      const byId = await supabase
+        .from("approval_workflows")
+        .select("id, workspace_id, name, is_default, created_by, created_at")
+        .eq("id", createdWorkflowId)
+        .single();
+      workflow =
+        (byId.data as ApprovalWorkflow | null) ??
+        (await getDefaultWorkflow(supabase, workspaceId)).data;
+    } else {
+      workflow = (await getDefaultWorkflow(supabase, workspaceId)).data;
+    }
   }
   let workflowSteps: Awaited<ReturnType<typeof listWorkflowSteps>>["data"] = [];
   let members: Awaited<ReturnType<typeof listWorkspaceMembers>> = [];
