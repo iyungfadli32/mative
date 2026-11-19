@@ -57,4 +57,25 @@ for (const vp of VIEWPORTS) {
     await expect(page.getByRole("heading", { name: "Konten" })).toBeVisible();
     await page.screenshot({ path: `docs/visual-qa/konten-${vp.name}.png`, fullPage: true });
   });
+
+  test(`visual — tugas (belum masuk) @ ${vp.name}`, async ({ page }) => {
+    await page.setViewportSize({ width: vp.width, height: vp.height });
+    await page.goto("/tugas");
+    await expect(page.getByRole("heading", { name: "Tugas Saya" })).toBeVisible();
+    await page.screenshot({ path: `docs/visual-qa/tugas-${vp.name}.png`, fullPage: true });
+  });
+
+  test(`visual — pustaka (belum masuk) @ ${vp.name}`, async ({ page }) => {
+    await page.setViewportSize({ width: vp.width, height: vp.height });
+    await page.goto("/pustaka");
+    await expect(page.getByRole("heading", { name: "Pustaka Aset" })).toBeVisible();
+    await page.screenshot({ path: `docs/visual-qa/pustaka-${vp.name}.png`, fullPage: true });
+  });
+
+  test(`visual — template brief (belum masuk) @ ${vp.name}`, async ({ page }) => {
+    await page.setViewportSize({ width: vp.width, height: vp.height });
+    await page.goto("/template-brief");
+    await expect(page.getByRole("heading", { name: "Template Brief" })).toBeVisible();
+    await page.screenshot({ path: `docs/visual-qa/template-brief-${vp.name}.png`, fullPage: true });
+  });
 }

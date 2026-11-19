@@ -312,3 +312,169 @@ export const tagSchema = z.object({
   name: z.string().trim().min(2, "Nama tag minimal 2 karakter.").max(60),
   slug: slugField,
 });
+
+// ============================================================================
+// Skema Production Operations — Phase 3 (P3-04 s.d. P3-11)
+// Nilai enum dikunci di sini (ADR-0009 §1/§2); CHECK database 0009
+// menegakkan nilai yang sama. MIME + ukuran file dicek dari ISI file
+// (features/production/mime.ts) — bukan dari ekstensi nama file.
+// ============================================================================
+
+/** Snapshot brief (ADR-0009 §6): struktur tetap, tersimpan di content_versions.brief_snapshot. */
+export const briefSnapshotSchema = z.object({
+  objective: z.string().trim().max(500).optional().default(""),
+  audience: z.string().trim().max(200).optional().default(""),
+  angle: z.string().trim().max(500).optional().default(""),
+  format: z.string().trim().max(120).optional().default(""),
+  keyMessages: z.array(z.string().trim().min(1).max(200)).max(10).default([]),
+  cta: z.string().trim().max(300).optional().default(""),
+  references: z.array(z.string().trim().min(1).max(500)).max(10).default([]),
+});
+export type BriefSnapshot = z.infer<typeof briefSnapshotSchema>;
+
+/** Satu field template brief: { key, label, type, required } (ADR-0009 §6). */
+export const briefTemplateFieldSchema = z.object({
+  key: z
+    .string()
+    .trim()
+    .regex(/^[a-z][a-z0-9_]*$/, "Key field hanya huruf kecil, angka, dan garis bawah.")
+    .min(2)
+    .max(40),
+  label: z.string().trim().min(2, "Label field minimal 2 karakter.").max(80),
+  type: z.enum(["text", "list"]),
+  required: z.boolean().default(false),
+});
+export type BriefTemplateField = z.infer<typeof briefTemplateFieldSchema>;
+
+/** schema_json template: { fields: [...] } — maksimal 12 field. */
+export const briefTemplateSchemaJson = z.object({
+  fields: z.array(briefTemplateFieldSchema).min(1, "Template wajib punya minimal 1 field.").max(12),
+});
+
+export const briefTemplateSchema = z.object({
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  name: z.string().trim().min(2, "Nama template minimal 2 karakter.").max(120),
+  schemaJson: briefTemplateSchemaJson,
+});
+
+export const briefTemplateUpdateSchema = briefTemplateSchema.extend({
+  templateId: z.string().uuid("template_id tidak valid."),
+});
+
+export const setDefaultBriefTemplateSchema = z.object({
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  templateId: z.string().uuid("template_id tidak valid."),
+});
+
+/** Simpan brief ke content item (membuat versi baru via RPC 0008 — P3-05). */
+export const updateBriefSchema = z.object({
+  contentItemId: z.string().uuid("content_item_id tidak valid."),
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  briefSnapshot: briefSnapshotSchema,
+  changeSummary: z.string().trim().min(2, "Ringkasan perubahan wajib diisi.").max(500),
+});
+
+export const TASK_STATUSES = [
+  "todo",
+  "in_progress",
+  "in_review",
+  "done",
+  "blocked",
+  "cancelled",
+] as const;
+export const TASK_PRIORITIES = ["low", "medium", "high", "urgent"] as const;
+export const TASK_PARENT_TYPES = ["content_item", "campaign"] as const;
+
+export const taskSchema = z.object({
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  parentType: z.enum(TASK_PARENT_TYPES),
+  parentId: z.string().uuid("parent_id tidak valid."),
+  title: z.string().trim().min(2, "Judul task minimal 2 karakter.").max(200),
+  description: z.string().trim().max(2000).optional().default(""),
+  assigneeUserId: optionalUuid,
+  dueAt: optionalDatetime,
+  priority: z.enum(TASK_PRIORITIES).default("medium"),
+  estimateMinutes: z
+    .string()
+    .trim()
+    .refine((v) => v === "" || /^\d+$/.test(v), { message: "Estimasi harus angka menit." })
+    .transform((v) => (v === "" ? null : Number(v)))
+    .nullable()
+    .optional(),
+  checklist: z.array(z.string().trim().min(1).max(200)).max(20).default([]),
+});
+
+export const taskStatusSchema = z.object({
+  taskId: z.string().uuid("task_id tidak valid."),
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  toStatus: z.enum(TASK_STATUSES),
+});
+
+export const taskChecklistSchema = z.object({
+  taskId: z.string().uuid("task_id tidak valid."),
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  title: z.string().trim().min(1, "Judul item checklist wajib diisi.").max(200),
+});
+
+export const taskChecklistToggleSchema = z.object({
+  checklistItemId: z.string().uuid("checklist_item_id tidak valid."),
+  taskId: z.string().uuid("task_id tidak valid."),
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  isDone: z.enum(["true", "false"]),
+});
+
+export const COMMENT_TARGET_TYPES = ["content_item", "campaign", "task"] as const;
+
+export const commentSchema = z.object({
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  targetType: z.enum(COMMENT_TARGET_TYPES),
+  targetId: z.string().uuid("target_id tidak valid."),
+  parentCommentId: optionalUuid,
+  body: z.string().trim().min(1, "Isi komentar wajib diisi.").max(5000),
+  mentionedUserIds: z.array(z.string().uuid()).max(20).default([]),
+});
+
+export const commentEditSchema = z.object({
+  commentId: z.string().uuid("comment_id tidak valid."),
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  body: z.string().trim().min(1, "Isi komentar wajib diisi.").max(5000),
+});
+
+export const commentDeleteSchema = z.object({
+  commentId: z.string().uuid("comment_id tidak valid."),
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+});
+
+export const ASSET_USAGE_ROLES = ["primary", "reference", "thumbnail", "attachment"] as const;
+
+export const assetAttachSchema = z.object({
+  contentItemId: z.string().uuid("content_item_id tidak valid."),
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  assetId: z.string().uuid("asset_id tidak valid."),
+  usageRole: z.enum(ASSET_USAGE_ROLES).default("attachment"),
+});
+
+export const assetDetachSchema = z.object({
+  contentAssetId: z.string().uuid("content_asset_id tidak valid."),
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+});
+
+export const assetDeleteSchema = z.object({
+  assetId: z.string().uuid("asset_id tidak valid."),
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+});
+
+export const restoreVersionSchema = z.object({
+  contentItemId: z.string().uuid("content_item_id tidak valid."),
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  versionNumber: z.coerce.number().int().positive("Nomor versi tidak valid."),
+});
+
+export const clientCommentsSettingSchema = z.object({
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  allowed: z.enum(["true", "false"]),
+});
+
+export const markNotificationReadSchema = z.object({
+  notificationId: z.string().uuid("notification_id tidak valid."),
+});

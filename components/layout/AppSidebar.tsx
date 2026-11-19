@@ -44,20 +44,9 @@ export const NAV_SECTIONS: Array<{ title: string; items: NavItem[] }> = [
   {
     title: "Produksi",
     items: [
-      {
-        href: "/tugas",
-        label: "Tugas Saya",
-        icon: "✅",
-        available: false,
-        unavailableReason: "Belum tersedia di fase ini (Phase 3).",
-      },
-      {
-        href: "/pustaka",
-        label: "Pustaka Aset",
-        icon: "🖼️",
-        available: false,
-        unavailableReason: "Belum tersedia di fase ini (Phase 3).",
-      },
+      { href: "/tugas", label: "Tugas Saya", icon: "✅", available: true },
+      { href: "/pustaka", label: "Pustaka Aset", icon: "🖼️", available: true },
+      { href: "/template-brief", label: "Template Brief", icon: "📝", available: true },
     ],
   },
   {
@@ -201,7 +190,7 @@ export function AppSidebar({
         ))}
       </nav>
       <p className="px-4 py-3 text-[11px] text-white/40">
-        {collapsed ? "v0.2" : "MaTive v0.2.0 — Phase 2 (DRAF)"}
+        {collapsed ? "v0.3" : "MaTive v0.3.0 — Phase 3 (DRAF)"}
       </p>
     </aside>
   );

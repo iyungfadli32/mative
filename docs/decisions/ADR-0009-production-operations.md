@@ -8,16 +8,16 @@
 
 ### 1. Daftar nilai polimorfik dikunci (P3-A1)
 
-| Kolom | Nilai yang diizinkan (CHECK di DB) |
-| --- | --- |
-| `tasks.parent_type` | `content_item`, `campaign` |
-| `comments.target_type` | `content_item`, `campaign`, `task` |
-| `notifications.target_type` | `content_item`, `campaign`, `task`, `comment` |
-| `notifications.type` | `mention`, `task_assigned`, `task_status_change`, `comment_reply` |
-| `content_assets.usage_role` | `primary`, `reference`, `thumbnail`, `attachment` |
-| `tasks.status` | `todo`, `in_progress`, `in_review`, `done`, `blocked`, `cancelled` (P3-A2) |
-| `tasks.priority` | `low`, `medium`, `high`, `urgent` (P3-A2) |
-| `assets.processing_status` | `uploading`, `ready`, `failed` |
+| Kolom                       | Nilai yang diizinkan (CHECK di DB)                                         |
+| --------------------------- | -------------------------------------------------------------------------- |
+| `tasks.parent_type`         | `content_item`, `campaign`                                                 |
+| `comments.target_type`      | `content_item`, `campaign`, `task`                                         |
+| `notifications.target_type` | `content_item`, `campaign`, `task`, `comment`                              |
+| `notifications.type`        | `mention`, `task_assigned`, `task_status_change`, `comment_reply`          |
+| `content_assets.usage_role` | `primary`, `reference`, `thumbnail`, `attachment`                          |
+| `tasks.status`              | `todo`, `in_progress`, `in_review`, `done`, `blocked`, `cancelled` (P3-A2) |
+| `tasks.priority`            | `low`, `medium`, `high`, `urgent` (P3-A2)                                  |
+| `assets.processing_status`  | `uploading`, `ready`, `failed`                                             |
 
 - Nilai di luar daftar ditolak DB (CHECK), bukan hanya UI. Menambah nilai baru hanya lewat migrasi + ADR.
 - `approval_requests.target_type` (Phase 4) dicatat di sini sebagai `content_item`, `placement` (P3-A1) tetapi TIDAK dibuat tabelnya di fase ini.

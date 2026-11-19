@@ -1,12 +1,25 @@
 import Link from "next/link";
-import { getCurrentUser } from "@/lib/supabase/server";
+import { getCurrentUser, getSupabaseServerClient } from "@/lib/supabase/server";
 import { listMyWorkspaces } from "@/features/tenancy/actions";
 import { signOutAction } from "@/features/identity/auth";
 import { AppShell } from "@/components/layout/AppShell";
+import { getClientCommentsAllowed } from "@/features/production/queries";
+import { ClientCommentsToggle } from "@/features/production/components/ClientCommentsToggle";
 
 export default async function PengaturanPage() {
   const user = await getCurrentUser();
   const workspaces = await listMyWorkspaces();
+  const supabase = await getSupabaseServerClient();
+  const clientComments = supabase
+    ? await Promise.all(
+        workspaces.map(async (w) => ({
+          workspaceId: w.workspace.id,
+          workspaceName: w.workspace.name,
+          role: w.role,
+          allowed: await getClientCommentsAllowed(supabase, w.workspace.id),
+        })),
+      )
+    : [];
   const links = [
     {
       href: "/pengaturan/organisasi",
@@ -48,6 +61,21 @@ export default async function PengaturanPage() {
           </Link>
         ))}
       </div>
+      {clientComments.filter((c) => c.role === "owner" || c.role === "admin").length > 0 ? (
+        <div className="mt-6 flex flex-col gap-4">
+          <h2 className="text-lg font-bold">Komentar klien (Phase 3)</h2>
+          {clientComments
+            .filter((c) => c.role === "owner" || c.role === "admin")
+            .map((c) => (
+              <ClientCommentsToggle
+                key={c.workspaceId}
+                workspaceId={c.workspaceId}
+                workspaceName={c.workspaceName}
+                allowed={c.allowed}
+              />
+            ))}
+        </div>
+      ) : null}
     </AppShell>
   );
 }
