@@ -1,4 +1,21 @@
--- MaTive Phase 7 — RLS + RPC analytics foundation (pgTAP) — v1.4
+-- MaTive Phase 7 — RLS + RPC analytics foundation (pgTAP) — v1.5
+-- v1.5 (2026-11-20): perbaiki 1 kegagalan Run 7 (diagnostik v1.4, 76/77):
+--   T14c menghitung SEMUA baris campaign_metrics campaign A7 (tanpa filter
+--   periode) mengharapkan 5, padahal 6 — baris ke-6 adalah agregat reach
+--   periode Okt yang sah dari impor multi-brand T4h. Agregat RPC memang PER
+--   PERIODE, jadi count(*) atas agregat per-periode JUGA wajib difilter
+--   periode (pelajaran 38 diperluas: bukan hanya subquery skalar).
+--   T14c kini difilter period_start/period_end Nov 2026, tetap mengharapkan
+--   5. CATATAN JUJUR: Run 6 (kanonik v1.4) melaporkan finish() "failed 5
+--   tests of 77" tanpa identitas tesnya (panel hanya menampilkan finish()),
+--   sedangkan Run 7 diagnostik (isi tes IDENTIK) hanya menunjukkan 1
+--   kegagalan (T14c, have 6 want 5). Selisih 5-vs-1 ini TIDAK dapat
+--   dijelaskan dari bukti yang ada — tidak ada mekanisme pada pembungkus
+--   _tap_out yang mengubah hasil asersi; kemungkinan pembacaan grid
+--   _tap_out terlewat atau kondisi editor Run 6 berbeda, tapi keduanya
+--   tidak terbukti. Run ulang kanonik v1.5 menjadi penentunya: bila 77/77,
+--   Run 6 tersusul dua run yang konsisten; bila masih ada kegagalan lain,
+--   diagnosis ulang dengan diagnostik v1.5. Migrasi 0021 TIDAK berubah.
 -- v1.4 (2026-11-20): perbaiki abort 42501 Run 5 (v1.3): DELETE cleanup
 --   atas channel_credentials melempar 42501 karena cleanup berjalan
 --   sebagai authenticated (T12a v1.2 menegaskan lagi role authenticated
@@ -91,6 +108,9 @@
 --     pgTAP 07 Run 4 v1.2: T13b abort — baris Okt selamat karena T10f kini
 --     benar ditolak 42501, sedangkan di Run 3 baris itu ikut terhapus
 --     CASCADE lewat snapshot_id saat T10f menghapus snapshot).
+--     count(*) tanpa filter periode juga salah hitung: baris periode lain
+--     ikut terhitung (pelajaran 38 diperluas, pgTAP 07 Run 7: T14c have 6
+--     want 5 — baris Okt sah).
 --   - Cleanup defensif HARUS berjalan sebagai postgres: tegaskan `reset
 --     role;` sebelum blok cleanup. Authenticated TIDAK PUNYA grant atas
 --     channel_credentials (server-only) dan hanya SELECT atas tabel
@@ -766,9 +786,9 @@ select is(
   'T14b agregat campaign impressions = 3000'
 );
 select is(
-  (select count(*) from public.campaign_metrics where campaign_id = 'f7000000-0000-0000-0000-000000000001')::int,
+  (select count(*) from public.campaign_metrics where campaign_id = 'f7000000-0000-0000-0000-000000000001' and period_start = '2026-11-01' and period_end = '2026-11-30')::int,
   5,
-  'T14c lima baris campaign_metrics (reach, impressions, engagements, likes, engagement_rate)'
+  'T14c lima baris campaign_metrics periode Nov (reach, impressions, engagements, likes, engagement_rate)'
 );
 -- Cleanup HARUS sebagai postgres (reset role): authenticated TIDAK PUNYA
 -- grant apa pun atas channel_credentials (server-only) — DELETE cleanup
