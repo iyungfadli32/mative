@@ -770,8 +770,11 @@ live Phase 6:**
   (terakhir 19 Nov 19:08) — perbaikan pertama kali tidak ada di build.
   Aturan: selalu rebuild sebelum e2e.
 - (g) Residu e2e `org-p6-*`/`ws-p6-*` BELUM dibersihkan saat deklarasi
-  ini ditulis — dibersihkan segera sesudahnya (§8.1), verifikasi
-  seed-only menyusul.
+  ini ditulis — **dibersihkan 04:09 WIB sesudah deklarasi (§8.1),
+  verifikasi seed-only: 32 organisasi + 31 workspace dihapus (19 p6
+  + 13 pola lama p3/p4/p5/e2e dari run regresi), tersisa hanya seed
+  (organizations 1, workspaces 1, organization_members 1,
+  workspace_members 2, sisanya 0, workspace_settings 1).**
 
 **Keputusan:** Phase 6 DINYATAKAN LULUS. Buku rencana kini **8/11 =
 73%**. Lanjut Phase 7 (Integrasi + Analytics).
