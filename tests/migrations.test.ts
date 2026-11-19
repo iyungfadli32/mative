@@ -22,7 +22,7 @@ function migrationFiles(): Array<{ name: string; sql: string }> {
 }
 
 describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
-  it("memiliki 8 migrasi berversi berurutan 0001–0008", () => {
+  it("memiliki 10 migrasi berversi berurutan 0001–0010", () => {
     const files = migrationFiles();
     expect(files.map((f) => f.name)).toEqual([
       "0001_profiles.sql",
@@ -33,6 +33,8 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
       "0006_rls_recursion_fix.sql",
       "0007_planning_core.sql",
       "0008_planning_transactions.sql",
+      "0009_production_ops.sql",
+      "0010_production_transactions.sql",
     ]);
   });
 
@@ -40,8 +42,12 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
     for (const { name, sql } of migrationFiles()) {
       // 0006 hanya menulis ulang policy (DROP/CREATE POLICY), tidak membuat
       // tabel baru — RLS tabelnya sudah aktif sejak 0001–0005.
-      // 0008 hanya berisi fungsi RPC transaksional (tanpa tabel/policy baru).
-      if (name === "0008_planning_transactions.sql") {
+      // 0008 dan 0010 hanya berisi fungsi RPC transaksional (tanpa
+      // tabel/policy baru).
+      if (
+        name === "0008_planning_transactions.sql" ||
+        name === "0010_production_transactions.sql"
+      ) {
         expect(sql, `${name} tidak boleh membuat tabel`).not.toMatch(/create table/i);
         expect(sql, `${name} harus berisi fungsi RPC`).toMatch(/create or replace function/i);
         continue;
@@ -131,6 +137,50 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
     expect(m8).toMatch(/grant execute on function[\s\S]*to authenticated/i);
     expect(m8).not.toMatch(/remote_post_id\s*=/i);
     expect(m8).not.toMatch(/published_url\s*=/i);
+  });
+
+  it("migrasi 0009 berisi 9 tabel Production Operations + bucket privat (tanpa approval/publishing/analytics)", () => {
+    const m9 = migrationFiles().find((f) => f.name === "0009_production_ops.sql")?.sql ?? "";
+    for (const table of [
+      "brief_templates",
+      "tasks",
+      "task_checklist_items",
+      "assets",
+      "asset_versions",
+      "content_assets",
+      "comments",
+      "mentions",
+      "notifications",
+    ]) {
+      expect(m9, `0009 harus berisi tabel ${table}`).toContain(
+        `create table if not exists public.${table}`,
+      );
+    }
+    for (const table of ["approval_requests", "publishing_jobs", "analytics"]) {
+      expect(m9, `tabel ${table} TIDAK BOLEH dibuat di Phase 3`).not.toContain(
+        `create table if not exists public.${table}`,
+      );
+    }
+    expect(m9).toContain("mative-assets");
+    expect(m9).toContain("brands_logo_asset_id_fkey");
+    expect(m9).toMatch(/security definer/i);
+    expect(m9).toMatch(/search_path = public, pg_temp/);
+  });
+
+  it("migrasi 0010 berisi 5 RPC transaksional Phase 3 (SECURITY DEFINER, search_path terkunci)", () => {
+    const m10 = migrationFiles().find((f) => f.name === "0010_production_transactions.sql")?.sql ?? "";
+    for (const fn of [
+      "create_task_with_checklist",
+      "transition_task_status",
+      "create_comment_with_mentions",
+      "restore_content_version",
+      "set_default_brief_template",
+    ]) {
+      expect(m10, `0010 harus berisi fungsi ${fn}`).toContain(fn);
+    }
+    expect(m10).toMatch(/security definer/i);
+    expect(m10).toMatch(/search_path = public, pg_temp/);
+    expect(m10).toMatch(/grant execute on function[\s\S]*to authenticated/i);
   });
 
   it("token undangan disimpan sebagai hash, bukan token mentah", () => {
