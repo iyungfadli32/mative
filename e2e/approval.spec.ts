@@ -5,9 +5,11 @@ import { test, expect } from "@playwright/test";
  * Alur: buat brand → konten → pindah stage idea → Editing (5 langkah,
  * wajib — RPC 0014 hanya menerima submit dari editing/internal_review)
  * → tab Approval → tugaskan step ke diri sendiri (eksplisit,
- * pengecualian R4.3) → submit v1 → buat v2 → approve v1 DITOLAK (stale,
- * R4.1) → minta revisi v1 (komentar wajib) → submit v2 → setujui v2 →
- * Disetujui + produksi approved → antrean Approval Center.
+ * pengecualian R4.3) → submit v1 → minta revisi v1 (selagi v1 terbaru;
+ * RPC menolak SEMUA keputusan atas versi basi, jadi revisi atas v1
+ * basi tidak mungkin) → buat v2 → submit v2 → buat v3 → approve v2
+ * DITOLAK sebagai basi (R4.1) → submit v3 → setujui v3 → Disetujui +
+ * produksi approved → antrean Approval Center.
  *
  * BUTUH database live + migrasi 0013 + 0014 diterapkan + akun uji
  * (E2E_TEST_EMAIL/PASSWORD). Tes ini di-SKIP otomatis bila akun uji
@@ -79,7 +81,7 @@ test.describe("penerimaan Phase 4 — review & approval @needs-db", () => {
     // Semua expect di tes ini memakai 30 dtk (bukan default 5 dtk):
     // render halaman + round-trip aksi server ke Supabase dari VM ini
     // kerap >5 dtk (pola planning.spec.ts / production.spec.ts 2026-11-19).
-    test.setTimeout(240000);
+    test.setTimeout(300000);
     expect.configure({ timeout: 30000 });
     await signIn(page);
     const slug = `p4-${Date.now().toString(36)}`;
@@ -147,9 +149,17 @@ test.describe("penerimaan Phase 4 — review & approval @needs-db", () => {
     const decisionForm = page.locator("form", { has: page.getByText("Keputusan Anda") });
     await expect(decisionForm.getByLabel("Minta revisi", { exact: true })).toBeVisible();
 
-    // 6. Buat v2 (edit script) — request v1 kini menunjuk versi basi.
-    //    Ringkasan perubahan WAJIB diisi (HTML required + Zod min 2);
-    //    tanpa itu browser memblokir submit dan v2 tidak tercipta.
+    // 6. Minta revisi v1 (komentar wajib) SELAGI v1 masih terbaru →
+    //    request changes_requested + produksi kembali ke editing.
+    //    (Minta revisi atas versi BASI ditolak RPC — lihat langkah 9.)
+    await decisionForm.getByLabel("Minta revisi", { exact: true }).click();
+    await decisionForm.getByLabel(/Komentar/).fill("Caption perlu direvisi.");
+    await decisionForm.getByRole("button", { name: "Kirim keputusan" }).click();
+    await expect(page.getByText("dikembalikan untuk revisi")).toBeVisible({ timeout: 30000 });
+    await expect(page.getByText("Minta revisi").first()).toBeVisible({ timeout: 30000 });
+    await expect(page.getByText("Status produksi: editing.")).toBeVisible({ timeout: 30000 });
+
+    // 7. Buat v2 (edit script — revisi atas permintaan di atas).
     await page.getByRole("tab", { name: "Script" }).click();
     await page.locator('textarea[name="script"]').fill(`Skrip v2 P4 ${slug} — direvisi.`);
     await page
@@ -158,30 +168,38 @@ test.describe("penerimaan Phase 4 — review & approval @needs-db", () => {
     await page.getByRole("button", { name: "Simpan script (versi baru)" }).click();
     await expect(page.getByText(/versi v2/)).toBeVisible({ timeout: 30000 });
 
-    // 7. Kembali ke tab Approval: peringatan stale tampil; approve v1
-    //    DITOLAK server (R4.1) dengan pesan versi basi.
+    // 8. Submit v2 untuk approval.
+    await page.getByRole("tab", { name: "Approval" }).click();
+    await page.getByRole("button", { name: "Ajukan v2 untuk approval" }).click();
+    await expect(page.getByText("Konten diajukan untuk approval")).toBeVisible({
+      timeout: 30000,
+    });
+    await expect(decisionForm.getByLabel("Minta revisi", { exact: true })).toBeVisible();
+
+    // 9. Buat v3 → request v2 kini basi; approve v2 DITOLAK server (R4.1).
+    await page.getByRole("tab", { name: "Script" }).click();
+    await page.locator('textarea[name="script"]').fill(`Skrip v3 P4 ${slug} — direvisi lagi.`);
+    await page
+      .getByLabel("Ringkasan perubahan (wajib — tercatat di versi baru)")
+      .fill("Revisi skrip (v3).");
+    await page.getByRole("button", { name: "Simpan script (versi baru)" }).click();
+    await expect(page.getByText(/versi v3/)).toBeVisible({ timeout: 30000 });
     await page.getByRole("tab", { name: "Approval" }).click();
     await expect(page.getByText("menunjuk versi lama")).toBeVisible({ timeout: 30000 });
     await decisionForm.getByRole("button", { name: "Kirim keputusan" }).click();
     await expect(decisionForm.getByText("sudah basi")).toBeVisible({ timeout: 30000 });
 
-    // 8. Minta revisi v1 (komentar wajib) → request changes_requested.
-    await decisionForm.getByLabel("Minta revisi", { exact: true }).click();
-    await decisionForm.getByLabel(/Komentar/).fill("Caption perlu direvisi.");
-    await decisionForm.getByRole("button", { name: "Kirim keputusan" }).click();
-    await expect(page.getByText("dikembalikan untuk revisi")).toBeVisible({ timeout: 30000 });
-    await expect(page.getByText("Minta revisi").first()).toBeVisible({ timeout: 30000 });
-
-    // 9. Submit v2 untuk approval, lalu setujui v2.
-    await page.getByRole("button", { name: "Ajukan v2 untuk approval" }).click();
+    // 10. Submit v3 untuk approval, lalu setujui v3.
+    await page.getByRole("button", { name: "Ajukan v3 untuk approval" }).click();
     await expect(page.getByText("Konten diajukan untuk approval")).toBeVisible({
       timeout: 30000,
     });
+    await expect(decisionForm.getByLabel("Minta revisi", { exact: true })).toBeVisible();
     await decisionForm.getByRole("button", { name: "Kirim keputusan" }).click();
     await expect(page.getByText("disetujui")).toBeVisible({ timeout: 30000 });
     await expect(page.getByText("Status produksi: approved")).toBeVisible({ timeout: 30000 });
 
-    // 10. Approval Center: antrean Disetujui memuat konten ini; antrean
+    // 11. Approval Center: antrean Disetujui memuat konten ini; antrean
     //     Menunggu saya kosong.
     await page.goto("/persetujuan?tab=disetujui");
     await expect(page.getByRole("heading", { name: "Approval Center" })).toBeVisible();
@@ -193,7 +211,7 @@ test.describe("penerimaan Phase 4 — review & approval @needs-db", () => {
       timeout: 30000,
     });
 
-    // 11. Reload tab Approval: riwayat + status persist.
+    // 12. Reload tab Approval: riwayat + status persist.
     await page.goto("/konten");
     await page.getByRole("link", { name: `Konten P4 ${slug}` }).click();
     await page.getByRole("tab", { name: "Approval" }).click();
