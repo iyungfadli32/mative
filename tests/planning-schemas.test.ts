@@ -121,6 +121,31 @@ describe("Skema Zod Planning Core — P2-04 s.d. P2-11", () => {
     }
   });
 
+  it("placement: scheduledAt wall-clock dipertahankan mentah — BUKAN new Date(v) (cacat A6.2 Phase 6)", () => {
+    const base = {
+      workspaceId: "11111111-1111-4111-8111-111111111111",
+      contentItemId: "33333333-3333-4333-8333-333333333333",
+      socialChannelId: "44444444-4444-4444-8444-444444444444",
+      scheduledAt: "2026-11-26T19:53",
+    };
+    const parsed = placementSchema.safeParse(base);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      // Mentah — BUKAN "2026-11-26T19:53:00.000Z" (itu arti 19:53 UTC,
+      // geser 7 jam dari maksud pengguna WIB). Konversi ke UTC terjadi di
+      // action dengan zona placement (Asia/Jakarta → 12:53 UTC).
+      expect(parsed.data.scheduledAt).toBe("2026-11-26T19:53");
+    }
+    const empty = placementSchema.safeParse({ ...base, scheduledAt: "" });
+    expect(empty.success).toBe(true);
+    if (empty.success) expect(empty.data.scheduledAt).toBeNull();
+    // ISO ber-offset dari jalur edit (nilai lama DB) diterima apa adanya.
+    const iso = placementSchema.safeParse({ ...base, scheduledAt: "2026-11-26T12:53:00.000Z" });
+    expect(iso.success).toBe(true);
+    if (iso.success) expect(iso.data.scheduledAt).toBe("2026-11-26T12:53:00.000Z");
+    expect(placementSchema.safeParse({ ...base, scheduledAt: "kemarin" }).success).toBe(false);
+  });
+
   it("reschedule: force default false; tanggal wajib valid", () => {
     const base = {
       placementId: "44444444-4444-4444-8444-444444444444",

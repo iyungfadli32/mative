@@ -43,6 +43,27 @@ import {
 } from "./transitions";
 import { findCollision } from "./calendar";
 import type { ContentPlacement } from "./types";
+import { zonedWallClockToUtcIso } from "../publishing/utils";
+
+/**
+ * Normalisasi jadwal placement ke UTC ISO. Wall-clock polos ("YYYY-MM-DDTHH:mm"
+ * dari datetime-local) dibaca di zona placement; ISO ber-offset (jalur edit /
+ * nilai lama dari DB) dipakai apa adanya sebagai instan absolut. JANGAN
+ * `new Date(v)` untuk wall-clock polos — zona server UTC menggesernya 7 jam
+ * untuk WIB (cacat Phase 6, A6.2: placement menyimpan 19:53 UTC padahal
+ * pengguna maksud 19:53 WIB, lalu write-back job menembakkan trigger 0014).
+ */
+function placementScheduledAtToUtc(
+  value: string | null | undefined,
+  timeZone: string,
+): string | null {
+  if (!value) return null;
+  if (/[zZ]$|[+-]\d{2}:?\d{2}$/.test(value)) {
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  }
+  return zonedWallClockToUtcIso(value, timeZone);
+}
 
 export type PlanningActionResult = {
   ok: boolean;
@@ -837,6 +858,13 @@ export async function createPlacementAction(
     distributionStatus: formData.get("distributionStatus") ?? "draft",
   });
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Data tidak valid.");
+  // Jadwal wall-clock → UTC di zona placement (BUKAN new Date(v) — lihat
+  // placementScheduledAtToUtc). Bila konversi gagal, tolak dengan jelas.
+  const scheduledAtUtc = placementScheduledAtToUtc(
+    parsed.data.scheduledAt,
+    parsed.data.timezone,
+  );
+  if (parsed.data.scheduledAt && !scheduledAtUtc) return fail("Tanggal/waktu tidak valid.");
   const { supabase, user } = await requireUser();
   if (!supabase || !user)
     return fail(supabase ? "Anda harus masuk dulu." : SUPABASE_NOT_CONFIGURED_ID);
@@ -862,7 +890,7 @@ export async function createPlacementAction(
   if (!channel || channel.brand_id !== item.brand_id)
     return fail("Channel harus milik brand yang sama dengan konten ini.");
   // Collision: peringatan dini di server (keputusan akhir tetap di tangan pengguna lewat `force`).
-  if (parsed.data.scheduledAt) {
+  if (scheduledAtUtc) {
     const { data: siblings } = await supabase
       .from("content_placements")
       .select("id, social_channel_id, scheduled_at, content_item_id")
@@ -870,7 +898,7 @@ export async function createPlacementAction(
     const clash = findCollision(
       (siblings ?? []) as ContentPlacement[],
       parsed.data.socialChannelId,
-      parsed.data.scheduledAt,
+      scheduledAtUtc,
     );
     if (clash) {
       return fail(
@@ -886,7 +914,7 @@ export async function createPlacementAction(
       platform_format: parsed.data.platformFormat ?? null,
       platform_caption: parsed.data.platformCaption || null,
       platform_hashtags: parsed.data.platformHashtags,
-      scheduled_at: parsed.data.scheduledAt ?? null,
+      scheduled_at: scheduledAtUtc,
       timezone: parsed.data.timezone,
       distribution_status: parsed.data.distributionStatus,
       platform_metadata: {},
@@ -906,7 +934,7 @@ export async function createPlacementAction(
       platform_format: parsed.data.platformFormat ?? null,
       platform_caption: parsed.data.platformCaption || null,
       platform_hashtags: parsed.data.platformHashtags,
-      scheduled_at: parsed.data.scheduledAt ?? null,
+      scheduled_at: scheduledAtUtc,
       timezone: parsed.data.timezone,
       distribution_status: parsed.data.distributionStatus,
     },

@@ -109,6 +109,28 @@ const optionalDatetime = z
   .nullable()
   .optional();
 
+/**
+ * Jadwal wall-clock mentah dari input datetime-local ("YYYY-MM-DDTHH:mm").
+ * SENGAJA TIDAK dikonversi di sini: `new Date(v)` memakai zona server (UTC)
+ * sehingga wall-clock WIB bergeser 7 jam (cacat Phase 6, A6.2 — placement
+ * menyimpan 19:53 UTC padahal pengguna maksud 19:53 WIB). Nilai mentah
+ * dipertahankan; konversi ke UTC dilakukan di action dengan zona placement
+ * (zonedWallClockToUtcIso). Terima juga ISO ber-offset — jalur edit mengirim
+ * nilai lama dari DB apa adanya (diteruskan mentah, action yang
+ * menormalkannya sebagai instan absolut).
+ */
+const WALL_CLOCK_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/;
+
+const optionalWallClock = z
+  .string()
+  .trim()
+  .refine((v) => v === "" || WALL_CLOCK_RE.test(v) || !Number.isNaN(Date.parse(v)), {
+    message: "Tanggal/waktu tidak valid.",
+  })
+  .transform((v) => (v === "" ? null : v))
+  .nullable()
+  .optional();
+
 export const brandSchema = z.object({
   workspaceId: z.string().uuid("workspace_id tidak valid."),
   name: z.string().trim().min(2, "Nama brand minimal 2 karakter.").max(120),
@@ -372,7 +394,7 @@ export const placementSchema = z.object({
     .optional(),
   platformCaption: z.string().trim().max(5000).optional().default(""),
   platformHashtags: z.array(z.string().trim().min(1).max(60)).max(30).default([]),
-  scheduledAt: optionalDatetime,
+  scheduledAt: optionalWallClock,
   timezone: z.string().min(1).max(64).default("Asia/Jakarta"),
   distributionStatus: z
     .enum([
