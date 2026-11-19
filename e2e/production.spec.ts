@@ -158,10 +158,7 @@ test.describe("penerimaan Phase 3 — production operations @needs-db", () => {
     //    ikuti tautan "Pustaka Aset" di tab itu (membawa ?workspace= yang
     //    benar), unggah di sana, kembali, lalu lampirkan di tab Media.
     await page.getByRole("tab", { name: "Media" }).click();
-    await page
-      .locator("main")
-      .getByRole("link", { name: "Pustaka Aset" })
-      .click();
+    await page.locator("main").getByRole("link", { name: "Pustaka Aset" }).click();
     await expect(page.getByRole("heading", { name: "Pustaka Aset" })).toBeVisible();
     await page.getByLabel(/Pilih file \(PNG, JPEG, WebP, MP4, WebM, PDF/).setInputFiles({
       name: `aset-p3-${slug}.png`,
