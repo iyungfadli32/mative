@@ -173,12 +173,27 @@ export async function ApprovalTab({
             </ul>
           ) : null}
           {canDecide ? (
-            <DecisionForm requestId={activeRequest.id} workspaceId={workspaceId} />
+            <DecisionForm
+              key={activeRequest.id}
+              requestId={activeRequest.id}
+              workspaceId={workspaceId}
+            />
           ) : activeRequest.status === "in_review" ? (
             <p className="mt-2 text-sm text-[var(--mt-text-muted)]">
               Anda tidak ditugaskan di step saat ini, jadi tidak bisa memutuskan request ini.
             </p>
-          ) : null}
+          ) : (
+            // Request sudah diputuskan: form tetap mounted (disabled) supaya
+            // pesan sukses "Keputusan tercatat: ..." tidak hilang — pola
+            // Phase 3 (lihat komentar di DecisionForm). key per request
+            // supaya pesan tidak terbawa ke request berikutnya.
+            <DecisionForm
+              key={activeRequest.id}
+              requestId={activeRequest.id}
+              workspaceId={workspaceId}
+              disabled
+            />
+          )}
         </div>
       ) : (
         <p className="text-sm text-[var(--mt-text-muted)]">
@@ -186,9 +201,16 @@ export async function ApprovalTab({
         </p>
       )}
 
-      {canEdit && !activeRequest ? (
+      {/* Form submit SENGAJA tetap dirender walau ada request aktif — bila
+          di-unmount saat request tercipta, pesan sukses "Konten diajukan
+          untuk approval" hilang sebelum dibaca (pola Phase 3; cacat e2e
+          2026-11-19). Dobel-submit dicegah RPC ("Sudah ada request
+          approval aktif untuk versi ini."). key per versi supaya pesan
+          tidak terbawa ke versi berikutnya. */}
+      {canEdit ? (
         <div>
           <SubmitForApprovalForm
+            key={latestVersionId}
             workspaceId={workspaceId}
             contentItemId={contentItemId}
             contentVersionId={latestVersionId}
@@ -197,7 +219,7 @@ export async function ApprovalTab({
         </div>
       ) : null}
 
-      {internalApproved && clientReviewEnabled && !clientRequest ? (
+      {internalApproved && clientReviewEnabled ? (
         <div className="rounded-xl border border-[var(--mt-border)] bg-[var(--mt-canvas)] p-3">
           <p className="text-sm font-medium">Client review</p>
           <p className="mt-1 text-sm text-[var(--mt-text-muted)]">
@@ -206,6 +228,7 @@ export async function ApprovalTab({
           </p>
           <div className="mt-2">
             <SubmitClientReviewForm
+              key={latestApprovedRequest?.content_version_id ?? latestVersionId}
               workspaceId={workspaceId}
               contentItemId={contentItemId}
               contentVersionId={latestApprovedRequest?.content_version_id ?? latestVersionId}
