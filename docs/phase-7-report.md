@@ -314,10 +314,8 @@ npx vitest run tests/analytics.test.ts   # 27/27 sesudah fix 7314633
 npm run build               # exit 0 (5 route baru terdaftar)
 ```
 
-Catatan: total Vitest sesudah fix 7314633 adalah **217/217**
-(216 + 1 tes ASUMSI-7C baru). Full suite terakhir dijalankan sebelum
-fix (216); sesudah fix hanya file analytics yang dijalankan ulang
-(27/27) + typecheck + lint — file lain tidak disentuh fix itu.
+Catatan: full suite **217/217** (18 file) dijalankan sesudah fix
+`7314633` — angka di atas adalah hasil run final, bukan run sebelum fix.
 
 ## 6. Defect yang ditemukan & diperbaiki (tidak disembunyikan)
 
