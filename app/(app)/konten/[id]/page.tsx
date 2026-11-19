@@ -516,7 +516,7 @@ async function MediaTab({
           ))}
         </ul>
       )}
-      {canEdit && freeAssets.length > 0 ? (
+      {canEdit ? (
         <div className="mt-4 max-w-xl">
           <h3 className="text-sm font-semibold">Lampirkan aset dari pustaka</h3>
           <div className="mt-2">
@@ -527,10 +527,6 @@ async function MediaTab({
             />
           </div>
         </div>
-      ) : canEdit ? (
-        <p className="mt-3 text-sm text-[var(--mt-text-muted)]">
-          Semua aset siap di pustaka sudah dilampirkan ke konten ini.
-        </p>
       ) : null}
     </section>
   );
