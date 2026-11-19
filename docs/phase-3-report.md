@@ -437,11 +437,15 @@ select tablename from pg_tables
 where schemaname = 'public'
   and tablename in ('brief_templates','tasks','task_checklist_items','assets',
     'asset_versions','content_assets','comments','mentions','notifications');
-select tablename, row_security_enabled from pg_tables
-where schemaname = 'public'
-  and tablename in ('brief_templates','tasks','task_checklist_items','assets',
+select c.relname as tablename, c.relrowsecurity as row_security_enabled
+from pg_class c join pg_namespace n on n.oid = c.relnamespace
+where n.nspname = 'public'
+  and c.relname in ('brief_templates','tasks','task_checklist_items','assets',
     'asset_versions','content_assets','comments','mentions','notifications');
 -- Ekspektasi: 9 baris, semuanya row_security_enabled = true.
+-- (Koreksi 2026-11-19: pg_tables TIDAK punya kolom row_security_enabled di
+--  database ini — query lama gagal 42703; yang benar pakai
+--  pg_class.relrowsecurity, sudah terbukti live saat verifikasi 0009.)
 -- Bucket: select id, public from storage.buckets where id = 'mative-assets';
 -- Ekspektasi: 1 baris, public = false.
 
