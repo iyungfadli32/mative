@@ -326,7 +326,7 @@ create policy "visual_orders_select_member"
   );
 
 create policy "visual_orders_no_insert"
-  on public.visual_orders for insert to authenticated using (false);
+  on public.visual_orders for insert to authenticated with check (false);
 
 create policy "visual_orders_no_update"
   on public.visual_orders for update to authenticated using (false);

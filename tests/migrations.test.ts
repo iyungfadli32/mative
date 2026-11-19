@@ -394,6 +394,11 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
     expect(m17).toContain("revoke all on public.visual_orders from anon, authenticated");
     expect(m17).toContain("grant select on public.visual_orders to authenticated");
     expect(m17).toContain('create policy "visual_orders_no_insert"');
+    // Regresi 0017 (Run live 2026-11-19 gagal 42601): policy INSERT hanya
+    // boleh pakai WITH CHECK, bukan USING — pglast tidak menangkap ini.
+    expect(m17).toContain(
+      "on public.visual_orders for insert to authenticated with check (false);",
+    );
     // 5 trigger scope (pola 0007) + 2 helper template-member.
     for (const fn of [
       "validate_visual_order_scope",
