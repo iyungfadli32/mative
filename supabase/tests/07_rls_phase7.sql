@@ -1,4 +1,14 @@
--- MaTive Phase 7 — RLS + RPC analytics foundation (pgTAP) — v1.3
+-- MaTive Phase 7 — RLS + RPC analytics foundation (pgTAP) — v1.4
+-- v1.4 (2026-11-20): perbaiki abort 42501 Run 5 (v1.3): DELETE cleanup
+--   atas channel_credentials melempar 42501 karena cleanup berjalan
+--   sebagai authenticated (T12a v1.2 menegaskan lagi role authenticated
+--   dan tidak ada yang mengembalikannya) — authenticated memang TANPA
+--   grant atas channel_credentials (server-only, sesuai desain 0021).
+--   `reset role;` kini ditegaskan sebelum blok cleanup agar cleanup
+--   berjalan sebagai postgres (seperti v1.1/diagnostik). Abort terjadi
+--   SESUDAH TES 14 — ke-77 asersi kemungkinan sudah tereksekusi, tapi
+--   hasilnya tidak terlihat karena finish() tidak tercapai. Migrasi 0021
+--   TIDAK berubah.
 -- v1.3 (2026-11-20): perbaiki abort 21000 Run 4 (v1.2): subquery skalar
 --   T13b atas campaign_metrics tanpa filter periode mengembalikan 2 baris
 --   (Nov 1500 + Okt 3000 dari impor multi-brand T4h) — agregat RPC memang
@@ -81,6 +91,13 @@
 --     pgTAP 07 Run 4 v1.2: T13b abort — baris Okt selamat karena T10f kini
 --     benar ditolak 42501, sedangkan di Run 3 baris itu ikut terhapus
 --     CASCADE lewat snapshot_id saat T10f menghapus snapshot).
+--   - Cleanup defensif HARUS berjalan sebagai postgres: tegaskan `reset
+--     role;` sebelum blok cleanup. Authenticated TIDAK PUNYA grant atas
+--     channel_credentials (server-only) dan hanya SELECT atas tabel
+--     analytics — DELETE cleanup sebagai authenticated abort 42501
+--     sebelum finish() (pelajaran 39, pgTAP 07 Run 5 v1.3). Di v1.1
+--     cleanup berjalan sebagai postgres karena T12a belum menegaskan
+--     ulang role authenticated.
 --   - Pola throws_ok = pesan galat lengkap (nama constraint terpotong 63
 --     byte bila perlu); pola pendek GAGAL walau galatnya benar (pelajaran 05).
 --   - Cleanup defensif diurutkan daun → akar (pelajaran 06 v1.0: brands
@@ -753,6 +770,12 @@ select is(
   5,
   'T14c lima baris campaign_metrics (reach, impressions, engagements, likes, engagement_rate)'
 );
+-- Cleanup HARUS sebagai postgres (reset role): authenticated TIDAK PUNYA
+-- grant apa pun atas channel_credentials (server-only) — DELETE cleanup
+-- sebagai authenticated abort 42501 sebelum finish() (pelajaran 39,
+-- pgTAP 07 Run 5 v1.3). Di v1.1 cleanup berjalan sebagai postgres karena
+-- T12a belum menegaskan ulang role authenticated.
+reset role;
 
 -- ---------------------------------------------------------------------------
 -- Cleanup defensif (rollback di akhir membersihkan semuanya; delete di sini
