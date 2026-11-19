@@ -1,14 +1,17 @@
--- MaTive Phase 5 — RLS + RPC brand scope / visual planner / template (pgTAP) — v1.1
+-- MaTive Phase 5 — RLS + RPC brand scope / visual planner / template (pgTAP) — v1.2
 -- v1.0 (2026-11-19): file baru untuk migrasi 0016 (brand scope, P1-A7) +
 -- 0017 (visual planner + template). 59 asersi.
 -- v1.1 (2026-11-19): perbaikan diagnosis live (47/59): B WS-A = manager
 -- (bukan approver); pola throws_ok = pesan lengkap + nama constraint
 -- terpotong 63 byte; butuh migrasi 0018 (posisi 1-based + kode
 -- INVALID_STATE_TRANSITION untuk placement di luar scope).
+-- v1.2 (2026-11-19): TES 16 (T16a/T16b) — regresi e2e live: INSERT brand
+-- sebagai authenticated ditolak policy 0016 untuk SEMUA peran
+-- (brand_in_scope(id baru) selalu false); butuh migrasi 0019. 61 asersi.
 -- ============================================================================
 -- CARA MENJALANKAN (oleh koordinator — butuh DATABASE_URL / service role):
---   1. Terapkan migrasi 0001–0018 ke database BERSIH (lihat
---      docs/phase-5-report.md §8; urutan: 0016 lalu 0017).
+--   1. Terapkan migrasi 0001–0019 ke database BERSIH (lihat
+--      docs/phase-5-report.md §8; urutan: 0016 lalu 0017, lalu 0019).
 --   2. Aktifkan ekstensi pgTAP di proyek Supabase (Dashboard → Database →
 --      Extensions → pgtap), atau jalankan:  create extension if not exists pgtap;
 --   3. Buat 2 pengguna auth uji (mis. lewat Dashboard → Authentication →
@@ -48,7 +51,7 @@
 -- ============================================================================
 
 begin;
-select plan(59);
+select plan(61);
 
 -- ---------------------------------------------------------------------------
 -- Helper: set JWT claims untuk satu pengguna (simulasi auth.uid()).
@@ -636,6 +639,24 @@ select throws_ok(
   'T15c DENY: posisi yang sama tidak boleh dipakai dua placement dalam satu scope'
 );
 delete from public.visual_orders where placement_id = 'c1100000-0000-0000-0000-000000000001';
+
+-- ============================================================================
+-- TES 16 — INSERT brand sebagai authenticated (0019): policy INSERT 0016
+-- menolak SEMUA pembuatan brand (brand_in_scope(id baru) selalu false
+-- karena baris belum ada di tabel) — regresi e2e live 2026-11-19.
+-- ============================================================================
+set local role authenticated;
+select _set_user(:'user_a');
+select lives_ok(
+  $$ insert into public.brands (id, workspace_id, name, slug, status)
+     values ('e1000000-0000-0000-0000-000000000004', 'b1000000-0000-0000-0000-000000000001', 'Brand T16 (sample test)', 'brand-t16-test', 'active') $$,
+  'T16a ALLOW: owner WS-A (scope NULL) bisa membuat brand baru'
+);
+select is(
+  (select count(*) from public.brands where id = 'e1000000-0000-0000-0000-000000000004')::int,
+  1,
+  'T16b ALLOW: brand baru terlihat owner (scope NULL) sesudah INSERT'
+);
 
 -- ============================================================================
 -- Cleanup: hapus semua data uji + helper.

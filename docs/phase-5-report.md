@@ -351,6 +351,27 @@ hanya ditambahkan UI.
   (`(uuid, text[])`) — tidak ada overload ganda. Semantik = keanggotaan
   - scope (bukan cabang owner/brand/kampanye terpisah).
 
+### 6.9 Defect produk — INSERT brand ditolak RLS untuk semua peran (ditemukan e2e live 2026-11-19)
+
+e2e chromium: ketiga tes @needs-db (A5.1/A5.3/A5.5) gagal di langkah yang
+sama, sebelum menyentuh fitur Phase 5 — "Buat brand" mengembalikan
+`new row violates row-level security policy for table "brands"`,
+padahal pemanggil owner workspace dengan `brand_scope` NULL. Akar
+masalah di 0016: policy `brands_insert_owner_admin_manager` menuntut
+`brand_in_scope(brands.id)`, padahal helper itu mencari brand di
+`public.brands` — baris yang sedang di-INSERT belum ada di tabel, jadi
+INSERT ditolak untuk SEMUA peran. Policy INSERT lain di 0016 tidak kena
+(mereka memeriksa FK ke brand yang sudah ada / NULL). pgTAP 05 tidak
+menangkap ini (hanya SELECT brand + INSERT sebagai postgres).
+Perbaikan: **migrasi 0019** membuat ulang policy INSERT tanpa conjunct
+itu (pembuatan tetap owner/admin/manager; scope tetap ditegakkan di
+SELECT + UPDATE). pgTAP 05 naik ke **v1.2 (plan 61)** dengan TES 16
+(T16a/T16b: INSERT brand sebagai authenticated + terlihat owner).
+Batas jujur: anggota ber-scope terbatas yang membuat brand tidak
+langsung melihat brand itu sampai owner menambahkannya ke scope-nya
+(fail-safe di sisi baca). 0019 + v1.2 BELUM diterapkan/dijalankan live —
+menunggu parent (§8 Langkah 1–3 diulang untuk 0019 + pgTAP 05 v1.2).
+
 ## 7. Batas jujur — yang BELUM terbukti (wajib dibaca parent)
 
 1. **Migrasi 0016 + 0017 BELUM live.** Semua bukti RLS/RPC di atas adalah

@@ -22,7 +22,7 @@ function migrationFiles(): Array<{ name: string; sql: string }> {
 }
 
 describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
-  it("memiliki 18 migrasi berversi berurutan 0001–0018", () => {
+  it("memiliki 19 migrasi berversi berurutan 0001–0019", () => {
     const files = migrationFiles();
     expect(files.map((f) => f.name)).toEqual([
       "0001_profiles.sql",
@@ -43,6 +43,7 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
       "0016_brand_scope.sql",
       "0017_visual_planner_templates.sql",
       "0018_set_visual_order_fixes.sql",
+      "0019_brands_insert_scope_fix.sql",
     ]);
   });
 
@@ -88,7 +89,13 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
       // 0015 hanya mengganti fungsi trigger yang SUDAH ada (tanpa objek
       // baru, tanpa grant baru) — grant validate_notification_scope
       // tidak berubah sejak 0009, jadi tidak ada yang perlu di-revoke.
-      if (name === "0015_notification_scope_placement.sql") continue;
+      // 0019 hanya menulis ulang satu policy yang SUDAH ada (tanpa
+      // objek baru, tanpa grant baru) — tidak ada yang perlu di-revoke.
+      if (
+        name === "0015_notification_scope_placement.sql" ||
+        name === "0019_brands_insert_scope_fix.sql"
+      )
+        continue;
       expect(sql, `${name} harus revoke grant default`).toMatch(/revoke all on/i);
     }
   });
@@ -500,7 +507,7 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
     );
     expect(test05).not.toContain("\n  'workspace_members_brand_scope_check',\n");
     expect(test05).toContain(
-      "'new row for relation \"workspace_members\" violates check constraint \"workspace_members_brand_scope_check\"'",
+      '\'new row for relation "workspace_members" violates check constraint "workspace_members_brand_scope_check"\'',
     );
     expect(test05).not.toContain(
       "visual_orders_workspace_id_brand_id_social_channel_id_placement_id_key",
@@ -516,6 +523,41 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
     );
   });
 
+  it("migrasi 0019 memperbaiki INSERT brand (regresi e2e Phase 5 live)", () => {
+    const m19 =
+      migrationFiles().find((f) => f.name === "0019_brands_insert_scope_fix.sql")?.sql ?? "";
+    // Regresi — e2e live 2026-11-19 (A5.1/A5.3/A5.5 chromium gagal di
+    // "Buat brand"): policy INSERT 0016 menuntut
+    // brand_in_scope(brands.id), padahal brand_in_scope mencari brand
+    // di public.brands — baris yang sedang di-INSERT belum ada di
+    // tabel, jadi INSERT ditolak untuk SEMUA peran termasuk owner
+    // scope penuh. 0019 membuat ulang policy TANPA conjunct itu;
+    // pembuatan tetap dibatasi owner/admin/manager workspace.
+    expect(m19).toContain('create policy "brands_insert_owner_admin_manager"');
+    // 0016 TIDAK diubah (sudah live) — perbaikan hanya di 0019.
+    const m16 = migrationFiles().find((f) => f.name === "0016_brand_scope.sql")?.sql ?? "";
+    expect(m16).toContain("brand_in_scope(brands.id)");
+    // Periksa badan policy-nya (bukan seluruh file — komentar header
+    // 0019 memang menyebut brand_in_scope(brands.id) saat menjelaskan
+    // cacatnya).
+    const insertPolicy =
+      m19.match(/create policy "brands_insert_owner_admin_manager"[\s\S]*?;/i)?.[0] ?? "";
+    expect(insertPolicy.length).toBeGreaterThan(0);
+    expect(insertPolicy).not.toContain("brand_in_scope");
+    expect(insertPolicy).toContain(
+      "public.is_ws_member(brands.workspace_id, array['owner', 'admin', 'manager'])",
+    );
+    // pgTAP 05 v1.2: TES 16 (T16a/T16b) menguji INSERT brand sebagai
+    // authenticated — celah yang membuat cacat ini lolos (v1.1 hanya
+    // menguji SELECT brand + INSERT sebagai postgres).
+    const test05 = readFileSync(path.join(APP_ROOT, "supabase/tests/05_rls_phase5.sql"), "utf8");
+    expect(test05).toContain("select plan(61);");
+    expect(test05).toContain("T16a ALLOW: owner WS-A (scope NULL) bisa membuat brand baru");
+    expect(test05).toContain("T16b ALLOW: brand baru terlihat owner (scope NULL) sesudah INSERT");
+    expect(test05).toContain("lives_ok(");
+    expect(test05).toContain("'brand-t16-test'");
+  });
+
   it("pgTAP 04 ada dengan plan(64) + pola placeholder yang benar", () => {
     const test04 = readFileSync(path.join(APP_ROOT, "supabase/tests/04_rls_phase4.sql"), "utf8");
     expect(test04).toContain("select plan(64);");
@@ -524,9 +566,9 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
     expect(test04).toContain("select * from finish();");
   });
 
-  it("pgTAP 05 ada dengan plan(59) + pola placeholder yang benar", () => {
+  it("pgTAP 05 ada dengan plan(61) + pola placeholder yang benar", () => {
     const test05 = readFileSync(path.join(APP_ROOT, "supabase/tests/05_rls_phase5.sql"), "utf8");
-    expect(test05).toContain("select plan(59);");
+    expect(test05).toContain("select plan(61);");
     expect(test05).not.toContain("094e8752-eef4-4f0e-b6ae-2d5813445018");
     expect(test05).not.toContain("aabb1dab-77c1-4659-af0e-c703c9de279c");
     expect(test05).toContain("select * from finish();");
