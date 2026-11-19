@@ -84,7 +84,20 @@ async function NewJobContent({
   if (!placement.content_items || placement.content_items.workspace_id !== workspaceId) {
     notFound();
   }
-  const pre = await runPreflight(supabase, placementId, null, placement.timezone);
+  // Preflight memakai jadwal DEFAULT form (placement.scheduled_at) — BUKAN
+  // null. Form terisi jadwal itu (defaultWall di bawah); checklist harus
+  // menjawab pertanyaan yang sama dengan yang akan disubmit. Dengan null,
+  // checklist menjawab "job segera boleh dibuat?" — sehingga kunjungan ulang
+  // sesudah job terjadwal dibuat menampilkan "Preflight lolos" padahal
+  // pengiriman jadwal yang sama akan ditolak DUPLICATE_JOB (cacat A6.2:
+  // kriteria laporan Phase 6 §8 menuntut checklist menampilkan duplikat +
+  // tombol disabled sebelum submit).
+  const pre = await runPreflight(
+    supabase,
+    placementId,
+    placement.scheduled_at ?? null,
+    placement.timezone,
+  );
   const preflight = pre.ok ? pre.data : null;
   const defaultWall = utcIsoToZonedWallClock(placement.scheduled_at, placement.timezone);
   return (
