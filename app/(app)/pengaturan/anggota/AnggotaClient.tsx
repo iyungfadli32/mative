@@ -1,7 +1,11 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { inviteMemberAction, revokeInvitationAction } from "@/features/tenancy/actions";
+import {
+  inviteMemberAction,
+  removeMemberAction,
+  revokeInvitationAction,
+} from "@/features/tenancy/actions";
 import { setMemberBrandScopeAction } from "@/features/campaign/actions";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -115,6 +119,41 @@ function MemberScopeForm({
   );
 }
 
+/** Tombol hapus anggota (Phase 9, Dok 06 §8 butir 5) — hanya owner, dan
+ * hanya untuk anggota non-owner yang bukan diri sendiri. Penegakan akhir
+ * tetap di server action (removeMemberAction). */
+function RemoveMemberForm({
+  workspaceId,
+  member,
+  canRemove,
+}: {
+  workspaceId: string;
+  member: MemberRow;
+  canRemove: boolean;
+}) {
+  const [state, formAction, pending] = useActionState(removeMemberAction, {
+    ok: false,
+    message: "",
+  });
+  if (!canRemove) return <span className="text-[var(--mt-text-muted)]">—</span>;
+  return (
+    <div>
+      <form action={formAction}>
+        <input type="hidden" name="workspaceId" value={workspaceId} />
+        <input type="hidden" name="memberId" value={member.id} />
+        <Button type="submit" variant="secondary" size="sm" loading={pending}>
+          Hapus
+        </Button>
+      </form>
+      {state.message ? (
+        <p role={state.ok ? "status" : "alert"} className="mt-1 text-[13px]">
+          {state.message}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export default function AnggotaClient({
   workspaceId,
   workspaceName,
@@ -123,6 +162,8 @@ export default function AnggotaClient({
   brands,
   canInvite,
   canManageScope,
+  canRemoveMember,
+  currentUserId,
 }: {
   workspaceId: string;
   workspaceName: string;
@@ -131,6 +172,9 @@ export default function AnggotaClient({
   brands: BrandRow[];
   canInvite: boolean;
   canManageScope: boolean;
+  /** Hanya owner (server action removeMemberAction menegakkan hal yang sama). */
+  canRemoveMember: boolean;
+  currentUserId: string | null;
 }) {
   const [state, formAction, pending] = useActionState(inviteMemberAction, {
     ok: false,
@@ -232,6 +276,17 @@ export default function AnggotaClient({
                     member={r}
                     brands={brands}
                     canManageScope={canManageScope}
+                  />
+                ),
+              },
+              {
+                key: "action",
+                header: "Aksi",
+                render: (r) => (
+                  <RemoveMemberForm
+                    workspaceId={workspaceId}
+                    member={r}
+                    canRemove={canRemoveMember && r.role !== "owner" && r.userId !== currentUserId}
                   />
                 ),
               },

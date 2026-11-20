@@ -3,9 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { getSupabaseServerClient, getSupabaseAdminClient } from "@/lib/supabase/server";
-import { organizationSchema, workspaceSchema, invitationSchema } from "@/lib/validation/schemas";
+import {
+  organizationSchema,
+  workspaceSchema,
+  invitationSchema,
+  removeMemberSchema,
+} from "@/lib/validation/schemas";
 import { canInvite } from "@/lib/permissions";
 import { SUPABASE_NOT_CONFIGURED_ID } from "@/lib/env";
+import { getCallerRole } from "@/features/planning/context";
 
 /**
  * Server actions tenancy — features/tenancy/actions.ts (P1-08, P1-09).
@@ -229,6 +235,63 @@ export async function revokeInvitationAction(formData: FormData): Promise<void> 
     .eq("id", invitationId)
     .eq("status", "pending");
   revalidatePath("/pengaturan/anggota");
+}
+
+/**
+ * Hapus anggota workspace — pencabutan akses (Phase 9, Dok 06 §8 butir 5).
+ * Sebelumnya tidak ada jalur penghapusan anggota di aplikasi: owner hanya
+ * bisa mencabut UNDANGAN (pra-gabung), bukan anggota yang sudah bergabung.
+ * Aturan: hanya owner; role pemanggil dibaca dari sesi + workspace_members
+ * (tidak pernah dari body); diri sendiri tidak bisa dihapus; owner tidak
+ * bisa dihapus (mencegah workspace tanpa owner). Baris dihapus dari
+ * workspace_members sehingga seluruh pemeriksaan RLS is_ws_member langsung
+ * gagal — akses tercabut seketika. Kebijakan RLS delete (0006,
+ * ws_members_delete_owner) menegakkan hal yang sama di lapisan DB.
+ */
+export async function removeMemberAction(
+  _prevState: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const parsed = removeMemberSchema.safeParse({
+    workspaceId: formData.get("workspaceId"),
+    memberId: formData.get("memberId"),
+  });
+  if (!parsed.success) {
+    return { ok: false, message: parsed.error.issues[0]?.message ?? "Data tidak valid." };
+  }
+  const { supabase, user } = await requireUser();
+  if (!supabase || !user) {
+    return { ok: false, message: supabase ? "Anda harus masuk dulu." : SUPABASE_NOT_CONFIGURED_ID };
+  }
+  const callerRole = await getCallerRole(parsed.data.workspaceId, user.id);
+  if (callerRole !== "owner") {
+    return { ok: false, message: "Hanya owner workspace yang dapat menghapus anggota." };
+  }
+  const { data: target, error: targetError } = await supabase
+    .from("workspace_members")
+    .select("id, user_id, workspace_role")
+    .eq("id", parsed.data.memberId)
+    .eq("workspace_id", parsed.data.workspaceId)
+    .single();
+  if (targetError || !target) {
+    return { ok: false, message: "Anggota tidak ditemukan di workspace ini." };
+  }
+  if (target.user_id === user.id) {
+    return { ok: false, message: "Anda tidak dapat menghapus diri sendiri." };
+  }
+  if (target.workspace_role === "owner") {
+    return { ok: false, message: "Owner workspace tidak dapat dihapus." };
+  }
+  const { error } = await supabase
+    .from("workspace_members")
+    .delete()
+    .eq("id", parsed.data.memberId)
+    .eq("workspace_id", parsed.data.workspaceId);
+  if (error) {
+    return { ok: false, message: `Gagal menghapus anggota: ${error.message}` };
+  }
+  revalidatePath("/pengaturan/anggota");
+  return { ok: true, message: "Anggota dihapus — aksesnya ke workspace ini tercabut seketika." };
 }
 
 export async function acceptInvitationAction(token: string): Promise<ActionResult> {

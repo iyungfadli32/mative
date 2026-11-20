@@ -82,6 +82,8 @@ export default async function PengaturanAnggotaPage() {
             brands={brands}
             canInvite={canInvite(ws.role as WorkspaceRole)}
             canManageScope={canInvite(ws.role as WorkspaceRole)}
+            canRemoveMember={ws.role === "owner"}
+            currentUserId={user?.id ?? null}
           />
         )}
       </div>

@@ -63,6 +63,12 @@ export const invitationSchema = z.object({
   role: z.enum(WORKSPACE_ROLES, { message: "Role tidak dikenal." }),
 });
 
+/** Hapus anggota workspace (Phase 9, Dok 06 §8 butir 5 — pencabutan akses). */
+export const removeMemberSchema = z.object({
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  memberId: z.string().uuid("member_id tidak valid."),
+});
+
 /** Jenis resource yang boleh dibagikan ke klien lewat portal (P1-16). */
 export const SHAREABLE_RESOURCE_TYPES = ["content_item", "campaign"] as const;
 export type ShareableResourceType = (typeof SHAREABLE_RESOURCE_TYPES)[number];
@@ -778,23 +784,10 @@ export const reschedulePublishingJobSchema = z.object({
 export const importAnalyticsCsvSchema = z
   .object({
     workspaceId: z.string().uuid("workspace_id tidak valid."),
-    brandId: z
-      .string()
-      .uuid("brand_id tidak valid.")
-      .nullable()
-      .optional()
-      .default(null),
-    periodStart: z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, "Periode awal harus format YYYY-MM-DD."),
-    periodEnd: z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, "Periode akhir harus format YYYY-MM-DD."),
-    rawReference: z
-      .string()
-      .trim()
-      .max(200, "Referensi file maksimal 200 karakter.")
-      .default(""),
+    brandId: z.string().uuid("brand_id tidak valid.").nullable().optional().default(null),
+    periodStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Periode awal harus format YYYY-MM-DD."),
+    periodEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Periode akhir harus format YYYY-MM-DD."),
+    rawReference: z.string().trim().max(200, "Referensi file maksimal 200 karakter.").default(""),
     csvText: z.string().min(1, "Isi CSV wajib diisi — tempel CSV atau unggah file."),
   })
   .refine((v) => v.periodStart <= v.periodEnd, {
@@ -839,7 +832,12 @@ export const aiActionInputSchema = z
     contextId: z.string().uuid("context_id tidak valid.").nullable().optional().default(null),
     brandId: z.string().uuid("brand_id tidak valid.").nullable().optional().default(null),
     audience: z.string().trim().max(200, "audience maksimal 200 karakter.").optional().default(""),
-    objective: z.string().trim().max(500, "objective maksimal 500 karakter.").optional().default(""),
+    objective: z
+      .string()
+      .trim()
+      .max(500, "objective maksimal 500 karakter.")
+      .optional()
+      .default(""),
     pillar: z.string().trim().max(200, "pillar maksimal 200 karakter.").optional().default(""),
     channel: z.string().trim().max(100, "channel maksimal 100 karakter.").optional().default(""),
     targetChannel: z
@@ -948,10 +946,22 @@ export const aiSettingsSchema = z.object({
 export const insertAiDraftVersionSchema = z.object({
   workspaceId: z.string().uuid("workspace_id tidak valid."),
   contentItemId: z.string().uuid("content_item_id tidak valid."),
-  script: z.string().trim().min(1, "Script wajib diisi.").max(20000, "Script maksimal 20.000 karakter."),
-  caption: z.string().trim().min(1, "Caption wajib diisi.").max(5000, "Caption maksimal 5.000 karakter."),
+  script: z
+    .string()
+    .trim()
+    .min(1, "Script wajib diisi.")
+    .max(20000, "Script maksimal 20.000 karakter."),
+  caption: z
+    .string()
+    .trim()
+    .min(1, "Caption wajib diisi.")
+    .max(5000, "Caption maksimal 5.000 karakter."),
   cta: z.string().trim().max(500, "CTA maksimal 500 karakter.").optional().default(""),
-  briefSnapshot: z.string().trim().max(20000, "Brief snapshot maksimal 20.000 karakter.").default("{}"),
+  briefSnapshot: z
+    .string()
+    .trim()
+    .max(20000, "Brief snapshot maksimal 20.000 karakter.")
+    .default("{}"),
   changeSummary: z
     .string()
     .trim()
