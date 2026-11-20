@@ -128,12 +128,14 @@ test.describe("hapus anggota — owner mencabut akses anggota @needs-db", () => 
       const removeButton = ownerPage.getByRole("button", { name: "Hapus" });
       await expect(removeButton).toHaveCount(1);
       await removeButton.click();
+      // Pesan sukses aksi HARUS tampil di tingkat halaman (perbaikan Phase 9:
+      // dulu pesan dirender di dalam form Hapus pada baris yang dihapus,
+      // sehingga ikut ter-unmount saat revalidasi dan tidak pernah tampil).
+      await expect(
+        ownerPage.getByText("Anggota dihapus — aksesnya ke workspace ini tercabut seketika."),
+      ).toBeVisible({ timeout: 30000 });
       // BUKTI penghapusan = baris anggota hilang (UID tidak tampil lagi +
-      // tombol Hapus habis). Pesan sukses aksi ("Anggota dihapus — ...")
-      // TIDAK di-asersi: pesan itu dirender DI DALAM form Hapus pada baris
-      // yang dihapus, sehingga ikut ter-unmount saat revalidasi menghapus
-      // barisnya — pesan tidak pernah sempat tampil (cacat UX kelas yang
-      // sama dengan pelajaran 6; dilaporkan ke parent, bukan gate blocker).
+      // tombol Hapus habis).
       await expect(ownerPage.getByText(member2Uid)).toHaveCount(0);
       await expect(ownerPage.getByRole("button", { name: "Hapus" })).toHaveCount(0);
 

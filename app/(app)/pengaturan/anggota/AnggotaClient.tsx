@@ -121,36 +121,36 @@ function MemberScopeForm({
 
 /** Tombol hapus anggota (Phase 9, Dok 06 §8 butir 5) — hanya owner, dan
  * hanya untuk anggota non-owner yang bukan diri sendiri. Penegakan akhir
- * tetap di server action (removeMemberAction). */
+ * tetap di server action (removeMemberAction).
+ *
+ * PERBAIKAN Phase 9 (defect Low): action state TIDAK lagi dipegang form
+ * per baris — pesan sukses ("Anggota dihapus — ...") dulu dirender DI DALAM
+ * form Hapus pada baris yang dihapus, sehingga ikut ter-unmount saat
+ * revalidasi menghapus barisnya dan tidak pernah tampil (cacat UX kelas
+ * pelajaran 6). State kini dipegang AnggotaClient (tingkat halaman) dan
+ * pesan dirender di atas daftar anggota, di luar baris yang dihapus. */
 function RemoveMemberForm({
   workspaceId,
   member,
   canRemove,
+  formAction,
+  pending,
 }: {
   workspaceId: string;
   member: MemberRow;
   canRemove: boolean;
+  formAction: (formData: FormData) => void;
+  pending: boolean;
 }) {
-  const [state, formAction, pending] = useActionState(removeMemberAction, {
-    ok: false,
-    message: "",
-  });
   if (!canRemove) return <span className="text-[var(--mt-text-muted)]">—</span>;
   return (
-    <div>
-      <form action={formAction}>
-        <input type="hidden" name="workspaceId" value={workspaceId} />
-        <input type="hidden" name="memberId" value={member.id} />
-        <Button type="submit" variant="secondary" size="sm" loading={pending}>
-          Hapus
-        </Button>
-      </form>
-      {state.message ? (
-        <p role={state.ok ? "status" : "alert"} className="mt-1 text-[13px]">
-          {state.message}
-        </p>
-      ) : null}
-    </div>
+    <form action={formAction}>
+      <input type="hidden" name="workspaceId" value={workspaceId} />
+      <input type="hidden" name="memberId" value={member.id} />
+      <Button type="submit" variant="secondary" size="sm" loading={pending}>
+        Hapus
+      </Button>
+    </form>
   );
 }
 
@@ -177,6 +177,13 @@ export default function AnggotaClient({
   currentUserId: string | null;
 }) {
   const [state, formAction, pending] = useActionState(inviteMemberAction, {
+    ok: false,
+    message: "",
+  });
+  // State hapus anggota dipegang di tingkat halaman (bukan per baris) —
+  // lihat komentar RemoveMemberForm: pesan sukses harus bertahan sesudah
+  // revalidasi menghapus baris anggota yang dihapus.
+  const [removeState, removeFormAction, removePending] = useActionState(removeMemberAction, {
     ok: false,
     message: "",
   });
@@ -247,6 +254,14 @@ export default function AnggotaClient({
 
       <section>
         <h2 className="text-lg font-semibold">Anggota workspace</h2>
+        {removeState.message ? (
+          <p
+            role={removeState.ok ? "status" : "alert"}
+            className="mt-3 rounded-xl border border-[var(--mt-border)] p-3 text-sm"
+          >
+            {removeState.message}
+          </p>
+        ) : null}
         <div className="mt-3">
           <DataTable<MemberRow>
             caption="Daftar anggota workspace"
@@ -287,6 +302,8 @@ export default function AnggotaClient({
                     workspaceId={workspaceId}
                     member={r}
                     canRemove={canRemoveMember && r.role !== "owner" && r.userId !== currentUserId}
+                    formAction={removeFormAction}
+                    pending={removePending}
                   />
                 ),
               },
