@@ -168,8 +168,11 @@ test.describe("dashboard — menghormati ?workspace=", () => {
 
     // Pindah stage idea → editing (5 langkah) lalu submit v1 untuk
     // approval — pola approval.spec.ts (RPC 0014 hanya menerima submit
-    // dari editing/internal_review).
-    await page.goto("/konten");
+    // dari editing/internal_review). PENTING: /konten HARUS membawa
+    // ?workspace= — tanpa param, daftar menampilkan workspace PERTAMA
+    // (getPlanningContext) sehingga tautan konten workspace baru tidak
+    // pernah tampil dan klik kehabisan waktu (kegagalan run pertama).
+    await page.goto(`/konten?workspace=${wsId}`);
     await page.getByRole("link", { name: `Konten P9 ${slug}` }).click();
     await expect(page.getByRole("heading", { name: `Konten P9 ${slug}` })).toBeVisible();
     await walkToEditing(page);
