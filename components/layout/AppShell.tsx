@@ -46,7 +46,7 @@ export function AppShell({
         open={quickCreateOpen}
         onClose={() => setQuickCreateOpen(false)}
         title="Buat cepat"
-        description="Hanya aksi yang tersedia di fase ini yang bisa dipakai."
+        description="Aksi yang tersedia saat ini."
       >
         <div className="flex flex-col gap-2">
           <Link href="/konten/baru" onClick={() => setQuickCreateOpen(false)}>
@@ -57,6 +57,11 @@ export function AppShell({
           <Link href="/ide" onClick={() => setQuickCreateOpen(false)}>
             <Button variant="secondary" className="w-full justify-start">
               💡 Tangkap ide
+            </Button>
+          </Link>
+          <Link href="/pustaka" onClick={() => setQuickCreateOpen(false)}>
+            <Button variant="secondary" className="w-full justify-start">
+              🖼️ Unggah aset
             </Button>
           </Link>
           <Link href="/pengaturan/organisasi" onClick={() => setQuickCreateOpen(false)}>

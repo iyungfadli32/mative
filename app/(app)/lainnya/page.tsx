@@ -4,7 +4,7 @@ import { signOutAction } from "@/features/identity/auth";
 import { AppShell } from "@/components/layout/AppShell";
 import Link from "next/link";
 
-/** Halaman "Lainnya" mobile — tautan ke semua halaman yang tersedia di fase ini. */
+/** Halaman "Lainnya" mobile — tautan ke semua halaman MaTive. */
 export default async function LainnyaPage() {
   const user = await getCurrentUser();
   const workspaces = await listMyWorkspaces();
@@ -18,9 +18,22 @@ export default async function LainnyaPage() {
     { href: "/channel", label: "Channel", desc: "Registry channel (metadata saja)." },
     { href: "/pilar", label: "Pilar & Audiens", desc: "Pilar konten + audiens dasar." },
     { href: "/kampanye", label: "Campaign", desc: "Campaign dasar + brand." },
+    { href: "/template", label: "Template", desc: "Template konten." },
     { href: "/cari", label: "Pencarian", desc: "Cari konten, campaign, ide, brand." },
-    { href: "/publishing", label: "Publishing", desc: "Antrean publikasi manual + konfirmasi terbit." },
+    { href: "/tugas", label: "Tugas Saya", desc: "Tugas yang ditugaskan ke Anda." },
+    { href: "/pustaka", label: "Pustaka Aset", desc: "Aset privat workspace." },
+    { href: "/template-brief", label: "Template Brief", desc: "Template brief standar." },
+    {
+      href: "/publishing",
+      label: "Publishing",
+      desc: "Antrean publikasi manual + konfirmasi terbit.",
+    },
     { href: "/portal", label: "Portal Klien", desc: "Konten yang dibagikan ke klien." },
+    { href: "/analitik", label: "Analitik", desc: "Dashboard performa." },
+    { href: "/analitik/laporan", label: "Laporan", desc: "Laporan performa." },
+    { href: "/analitik/impor", label: "Impor Data", desc: "Impor metrik CSV." },
+    { href: "/integrasi", label: "Integrasi", desc: "Koneksi platform." },
+    { href: "/ai", label: "Asisten AI", desc: "Asisten AI (nonaktif — tanpa provider)." },
     {
       href: "/pengaturan/organisasi",
       label: "Organisasi & Workspace",
@@ -37,9 +50,7 @@ export default async function LainnyaPage() {
       onSignOut={signOutAction}
     >
       <h1 className="text-2xl font-bold">Lainnya</h1>
-      <p className="mt-1 text-sm text-[var(--mt-text-muted)]">
-        Semua halaman yang tersedia di Phase 2.
-      </p>
+      <p className="mt-1 text-sm text-[var(--mt-text-muted)]">Semua halaman MaTive.</p>
       <div className="mt-6 flex flex-col gap-3">
         {links.map((l) => (
           <Link
