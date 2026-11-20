@@ -22,7 +22,7 @@ function migrationFiles(): Array<{ name: string; sql: string }> {
 }
 
 describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
-  it("memiliki 21 migrasi berversi berurutan 0001–0021", () => {
+  it("memiliki 22 migrasi berversi berurutan 0001–0022", () => {
     const files = migrationFiles();
     expect(files.map((f) => f.name)).toEqual([
       "0001_profiles.sql",
@@ -46,6 +46,7 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
       "0019_brands_insert_scope_fix.sql",
       "0020_publishing_foundation.sql",
       "0021_analytics_foundation.sql",
+      "0022_ai_foundation.sql",
     ]);
   });
 
@@ -800,6 +801,101 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
     );
   });
 
+  it("migrasi 0022 membuat tabel ai_generations + RPC insert versi AI + retensi (Phase 8)", () => {
+    const m22 =
+      migrationFiles().find((f) => f.name === "0022_ai_foundation.sql")?.sql ?? "";
+    // 1 tabel baru + RLS aktif + revoke-all + grant select, insert saja.
+    expect(m22).toContain("create table if not exists public.ai_generations");
+    expect(m22).toMatch(/alter table public\.ai_generations enable row level security/i);
+    expect(m22).toContain("revoke all on public.ai_generations from anon, authenticated");
+    expect(m22).toContain("grant select, insert on public.ai_generations to authenticated");
+    expect(m22, "0022 TIDAK BOLEH grant update ai_generations").not.toMatch(
+      /grant\s+update\s+on\s+public\.ai_generations/i,
+    );
+    expect(m22, "0022 TIDAK BOLEH grant delete ai_generations").not.toMatch(
+      /grant\s+delete\s+on\s+public\.ai_generations/i,
+    );
+    // Kolom content_versions: ai_assisted + ai_generation_id (FK ke log,
+    // on delete set null — versi AI tetap ada walau lognya terhapus).
+    expect(m22).toContain("alter table public.content_versions");
+    expect(m22).toContain("add column if not exists ai_assisted boolean not null default false");
+    expect(m22).toContain("add column if not exists ai_generation_id uuid");
+    expect(m22).toContain("references public.ai_generations (id) on delete set null");
+    // TIDAK ADA kolom payload mentah (ASUMSI-8D — hanya referensi).
+    for (const col of ["input_text", "output_text", "raw_input", "raw_output"]) {
+      expect(m22, `0022 TIDAK BOLEH punya kolom ${col}`).not.toContain(col);
+    }
+    expect(m22).not.toMatch(/\bprompt\b(?!_injection)/);
+    expect(m22).not.toContain("system_prompt");
+    // 7 fitur + 4 status + error category di CHECK.
+    for (const feat of [
+      "content_ideas",
+      "brief",
+      "content_draft",
+      "repurpose",
+      "checklist",
+      "feedback_summary",
+      "campaign_summary",
+    ]) {
+      expect(m22, `0022 harus punya fitur ${feat}`).toContain(`'${feat}'`);
+    }
+    for (const st of ["completed", "failed", "blocked", "not_configured"]) {
+      expect(m22, `0022 harus punya status ${st}`).toContain(`'${st}'`);
+    }
+    for (const chk of [
+      "constraint ai_generations_feature_check",
+      "constraint ai_generations_status_check",
+      "constraint ai_generations_error_check",
+      "constraint ai_generations_input_tokens_check",
+      "constraint ai_generations_output_tokens_check",
+    ]) {
+      expect(m22, `0022 harus punya CHECK ${chk}`).toContain(chk);
+    }
+    // Fungsi: helper visibilitas + retensi 90 + pemakaian harian (zona
+    // Asia/Jakarta) + cleanup + RPC insert versi AI — SECURITY
+    // DEFINER/INVOKER, search_path terkunci, grant hanya ke authenticated.
+    for (const fn of [
+      "is_ai_generation_visible",
+      "ai_retention_days",
+      "ai_daily_usage_count",
+      "cleanup_ai_generations",
+      "insert_ai_draft_version",
+    ]) {
+      expect(m22, `0022 harus berisi fungsi ${fn}`).toContain(fn);
+    }
+    expect(m22).toMatch(/security definer/i);
+    expect(m22).toMatch(/security invoker/i);
+    expect(m22).toMatch(/search_path = public, pg_temp/);
+    expect(m22).toContain(
+      "grant execute on function public.insert_ai_draft_version(uuid, text, text, text, jsonb, text, uuid) to authenticated",
+    );
+    // viewer_client TIDAK ADA di daftar peran (komentar di-strip dulu).
+    const m22NoComments = m22.replace(/--[^\n]*/g, "");
+    expect(m22NoComments, "viewer_client TIDAK BOLEH ada di kode 0022").not.toContain(
+      "viewer_client",
+    );
+    // Retensi 90 hari + pemakaian hari kalender Jakarta + nomor versi
+    // max(version_number) — Postgres TIDAK punya max(uuid).
+    expect(m22).toContain("select 90;");
+    expect(m22).toContain("Asia/Jakarta");
+    expect(m22).toContain("make_interval(days => p_days)");
+    expect(m22).toContain("coalesce(max(version_number), 0) + 1");
+    expect(m22NoComments).not.toContain("max(uuid)");
+    // RPC insert versi AI TIDAK PERNAH melempar (mengembalikan jsonb kode).
+    for (const code of ["FORBIDDEN", "INVALID_ITEM", "INVALID_GENERATION", "INVALID_INPUT"]) {
+      expect(m22, `0022 harus mengembalikan kode ${code}`).toContain(code);
+    }
+    // Policy SELECT pakai helper; update/delete using(false) — append-only.
+    expect(m22).toContain("is_ai_generation_visible(ai_generations.id");
+    expect(m22).toContain("using (false)");
+    // TIDAK ADA embed()/vector search (ASUMSI-8C) dan TIDAK ADA fungsi
+    // adapter provider (AI NONAKTIF, ASUMSI-8A).
+    expect(m22).not.toContain("embed(");
+    for (const fn of ["generateStructuredDraft", "summarize", "classify"]) {
+      expect(m22, `0022 TIDAK BOLEH berisi adapter ${fn}`).not.toContain(fn);
+    }
+  });
+
   it("pgTAP 07 ada dengan plan(77) + pola placeholder yang benar", () => {
     const test07 = readFileSync(path.join(APP_ROOT, "supabase/tests/07_rls_phase7.sql"), "utf8");
     expect(test07).toContain("select plan(77);");
@@ -817,6 +913,34 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
     const itemsPos = test07.indexOf("delete from public.content_items where workspace_id in");
     expect(brandsPos).toBeGreaterThan(itemsPos);
     expect(test07).not.toContain("delete from public.metric_definitions");
+  });
+
+  it("pgTAP 08 ada dengan plan(52) + pola placeholder yang benar", () => {
+    const test08 = readFileSync(path.join(APP_ROOT, "supabase/tests/08_rls_phase8.sql"), "utf8");
+    expect(test08).toContain("select plan(52);");
+    expect(test08).not.toContain("094e8752-eef4-4f0e-b6ae-2d5813445018");
+    expect(test08).not.toContain("aabb1dab-77c1-4659-af0e-c703c9de279c");
+    expect(test08).toContain("select * from finish();");
+    expect(test08).toContain("insert_ai_draft_version");
+    expect(test08).toContain("ai_daily_usage_count");
+    expect(test08).toContain("cleanup_ai_generations");
+    expect(test08).toContain("T2c A sebagai viewer_client di WS-B8 melihat 0 baris log WS-B8");
+    expect(test08).toContain("T4a A insert versi AI untuk item A8-1 dengan g1");
+    expect(test08).toContain("T5f cleanup oleh A (owner) menghapus 1 baris");
+    // Cleanup daun → akar (pelajaran 06 v1.0 + 39, pgTAP 07 Run 5):
+    // ai_generations dihapus SEBELUM organizations, dan cleanup berjalan
+    // sebagai postgres (reset role sebelum blok cleanup).
+    expect(test08).toContain("delete from public.ai_generations where workspace_id in");
+    const genPos = test08.indexOf("delete from public.ai_generations where workspace_id in");
+    const orgPos = test08.indexOf("delete from public.organizations where id in");
+    expect(genPos).toBeGreaterThan(-1);
+    expect(orgPos).toBeGreaterThan(genPos);
+    const cleanupIdx = test08.lastIndexOf("reset role;");
+    expect(cleanupIdx).toBeGreaterThan(-1);
+    expect(test08.indexOf("delete from public.ai_generations", cleanupIdx)).toBeGreaterThan(
+      cleanupIdx,
+    );
+    expect(test08).toContain("rollback;");
   });
 });
 
