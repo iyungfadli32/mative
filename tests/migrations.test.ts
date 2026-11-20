@@ -955,9 +955,9 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
     expect(test07).not.toContain("delete from public.metric_definitions");
   });
 
-  it("pgTAP 08 ada dengan plan(52) + pola placeholder yang benar", () => {
+  it("pgTAP 08 ada dengan plan(53) + pola placeholder yang benar", () => {
     const test08 = readFileSync(path.join(APP_ROOT, "supabase/tests/08_rls_phase8.sql"), "utf8");
-    expect(test08).toContain("select plan(52);");
+    expect(test08).toContain("select plan(53);");
     expect(test08).not.toContain("094e8752-eef4-4f0e-b6ae-2d5813445018");
     expect(test08).not.toContain("aabb1dab-77c1-4659-af0e-c703c9de279c");
     expect(test08).toContain("select * from finish();");
@@ -966,6 +966,7 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
     expect(test08).toContain("cleanup_ai_generations");
     expect(test08).toContain("T2c A sebagai viewer_client di WS-B8 melihat 0 baris log WS-B8");
     expect(test08).toContain("T4a A insert versi AI untuk item A8-1 dengan g1");
+    expect(test08).toContain("T3f INSERT ... RETURNING log sendiri lolos (regresi 0023)");
     expect(test08).toContain("T5f cleanup oleh A (owner) menghapus 1 baris");
     // Cleanup daun → akar (pelajaran 06 v1.0 + 39, pgTAP 07 Run 5):
     // ai_generations dihapus SEBELUM organizations, dan cleanup berjalan

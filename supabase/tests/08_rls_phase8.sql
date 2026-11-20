@@ -1,4 +1,4 @@
--- MaTive Phase 8 — RLS + RPC AI Assistant (pgTAP) — v1.2
+-- MaTive Phase 8 — RLS + RPC AI Assistant (pgTAP) — v1.3
 -- v1.1: T3c/T3d dilewat helper _try_insert_log (tangkap 42501)
 -- (Run 1 v1.0 abort 42501 di T3c — INSERT pelanggar RLS melempar, bukan
 -- ditolak diam-diam). plan tetap 52, asersi tetap 52.
@@ -6,10 +6,14 @@
 -- T4b membaca max(version_number) — JANGAN panggil RPC dua kali
 -- (Run 2 v1.1: 48/52; T3d/T4b/T4e/T4o gagal, semuanya bug asersi,
 -- bukan cacat migrasi 0022). plan tetap 52, asersi tetap 52.
+-- v1.3 (Phase 9): T3f baru — INSERT ... RETURNING (regresi 0023:
+-- policy SELECT 0022 pakai helper self-lookup membuat RETURNING gagal
+-- 42501, log AI tidak tersimpan; INSERT biasa lolos sehingga pgTAP
+-- v1.2 52/52 tidak menangkapnya; e2e A8.4 yang menemukan). plan 52→53.
 -- File baru untuk migrasi 0022 v1.0 (ai_generations + kolom
 -- ai_assisted/ai_generation_id di content_versions + RPC
 -- insert_ai_draft_version + retensi + pemakaian harian).
--- 52 asersi. Menguji: tabel + RLS + grant, RLS baca log (member 8 peran
+-- 53 asersi. Menguji: tabel + RLS + grant, RLS baca log (member 8 peran
 -- non-klien + viewer_client TIDAK melihat + anon ditolak), tulis log
 -- pola actor, RPC insert versi AI (happy path + validasi + atomik
 -- nomor versi), retensi 90 hari + pemakaian harian (zona Asia/Jakarta),
@@ -84,7 +88,7 @@
 -- ============================================================================
 
 begin;
-select plan(52);
+select plan(53);
 
 -- ---------------------------------------------------------------------------
 -- Helper: set JWT claims untuk satu pengguna (simulasi auth.uid()).
@@ -288,7 +292,7 @@ select is(
 
 -- ============================================================================
 -- TES 3 — tulis log pola actor (insert sendiri lolos; aktor lain /
--- viewer_client 0 baris). (5)
+-- viewer_client 0 baris; INSERT ... RETURNING lolos). (6)
 -- ============================================================================
 select _set_user(:'user_a');
 insert into public.ai_generations (id, workspace_id, actor_user_id, feature, input_reference, status, error_category)
@@ -337,6 +341,28 @@ select is(
 );
 reset role;
 delete from public.ai_generations where id = 'a8100000-0000-0000-0000-000000000014';
+set local role authenticated;
+
+-- Regresi 0023 (Phase 9): INSERT ... RETURNING (pola PostgREST
+-- .insert().select() di logGeneration) HARUS lolos — policy SELECT 0022
+-- yang memakai helper self-lookup membuat RETURNING gagal 42501 dan
+-- log tidak pernah tersimpan, padahal INSERT biasa lolos (pgTAP 08
+-- v1.2 52/52 tidak menangkapnya; e2e A8.4 yang menemukan).
+-- Baris uji dihapus sesudah asersi (pola T3a/T3e) supaya hitungan
+-- TES 5 tidak berubah.
+select _set_user(:'user_a');
+with ins as (
+  insert into public.ai_generations (id, workspace_id, actor_user_id, feature, input_reference, status, error_category)
+  values ('a8100000-0000-0000-0000-000000000015', 'b8000000-0000-0000-0000-000000000001', :'user_a', 'brief', 'content_item:d8000000-0000-0000-0000-000000000001', 'completed', 'none')
+  returning id
+)
+select is(
+  (select count(*) from ins)::int,
+  1,
+  'T3f INSERT ... RETURNING log sendiri lolos (regresi 0023)'
+);
+reset role;
+delete from public.ai_generations where id = 'a8100000-0000-0000-0000-000000000015';
 set local role authenticated;
 
 -- ============================================================================

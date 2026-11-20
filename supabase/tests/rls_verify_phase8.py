@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Verifier statis Phase 8 — migrasi 0022 + pgTAP 08 (RLS AI Assistant).
 
-Pola dari rls_verify_phase7.py (316 baris). Adaptasi: 52 asersi, 0022
+Pola dari rls_verify_phase7.py (316 baris). Adaptasi: 53 asersi, 0022
 ai_generations + kolom content_versions + RPC insert_ai_draft_version +
 retensi + pemakaian harian. Gagal 1 → berhenti.
 
 Cara menjalankan (dari ~/workspace/mative/app):
     ~/workspace/.venv-pglast/bin/python supabase/tests/rls_verify_phase8.py
 
-Cek: pglast parse 0022 + tes 08; jumlah asersi == plan(52); pola
+Cek: pglast parse 0022 + tes 08; jumlah asersi == plan(53); pola
 throws_ok; tanpa UUID nyata; 0022: tepat 1 tabel baru + alter
 content_versions (2 kolom) + RLS + grant minimal + helper invoker/definer
 + RPC definer; tanpa viewer_client (komentar di-strip); tanpa kolom
@@ -173,10 +173,10 @@ def main():
     # 2. plan(N) == jumlah asersi; komposisi.
     plan_n = _plan_count(test_text)
     counts = _assertion_count(test_text)
-    check(plan_n == 52, f"plan harus 52, dapat {plan_n}")
+    check(plan_n == 53, f"plan harus 53, dapat {plan_n}")
     check(counts["total"] == plan_n,
           f"asersi terhitung {counts['total']} != plan({plan_n})")
-    check(counts["is"] == 44, f"is harus 44, dapat {counts['is']}")
+    check(counts["is"] == 45, f"is harus 45, dapat {counts['is']}")
     check(counts["throws_ok"] == 8, f"throws_ok harus 8, dapat {counts['throws_ok']}")
     check(counts["lives_ok"] == 0, f"lives_ok harus 0, dapat {counts['lives_ok']}")
 
@@ -410,7 +410,7 @@ def main():
     check("viewer_client" not in mig23_no_comments,
           "0023 tidak boleh menyebut viewer_client di luar komentar")
 
-    print("OK verifier Phase 8: semua cek lolos (0022 41 stmt, tes 08 52 asersi, 0023 2 stmt)")
+    print("OK verifier Phase 8: semua cek lolos (0022 41 stmt, tes 08 53 asersi, 0023 2 stmt)")
     return 0
 
 
