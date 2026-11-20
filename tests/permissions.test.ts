@@ -44,6 +44,16 @@ describe("RBAC — 9 role baseline (Dok 06 §2)", () => {
     expect(can("viewer_client", "view_portal_shared")).toBe(false);
   });
 
+  it("import_analytics: owner/admin/manager/strategist/analyst boleh; creator/editor/approver/viewer_client tidak (ADR-0013 §7)", () => {
+    for (const role of ["owner", "admin", "manager", "strategist", "analyst"] as const) {
+      expect(can(role, "import_analytics")).toBe(true);
+    }
+    for (const role of ["creator", "editor", "approver", "viewer_client"] as const) {
+      expect(can(role, "import_analytics")).toBe(false);
+    }
+    expect(PERMISSION_MATRIX.import_analytics.viewer_client).toBe(false);
+  });
+
   it("use_ai: owner/admin/manager/strategist/creator/editor/analyst boleh; approver/viewer_client tidak (ADR-0014 §5)", () => {
     for (const role of [
       "owner",
