@@ -160,7 +160,11 @@ test.describe("ai — setup state, aksi tanpa provider, kuota, injeksi, D-010", 
     // Log tercatat (status not_configured) sesudah revalidasi —
     // lingkupi ke region Log AI (status tampil di sel tabel log).
     const logRegion = page.getByRole("region", { name: "Log AI" });
-    await expect(logRegion.getByText("not_configured")).toBeVisible({ timeout: 30000 });
+    // exact:true — substring "not_configured" juga cocok dengan sel
+    // kategori galat "provider_not_configured" (strict mode violation).
+    await expect(logRegion.getByText("not_configured", { exact: true })).toBeVisible({
+      timeout: 30000,
+    });
     await expect(logRegion.getByText("content_item:")).toBeVisible();
   });
 
