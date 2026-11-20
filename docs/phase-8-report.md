@@ -13,7 +13,7 @@ Phase 8 selesai dibangun di 6 commit kode/tes + laporan ini, 34 file,
 | `cd49d99` | Unit test AI + harness evaluasi |
 | `c621e55` | Spek e2e AI (A8.1–A8.5 + smoke, tulis saja) |
 | `7a3baa6` | Visual QA /ai (belum masuk, 3 viewport) |
-| `TBD` | Laporan Phase 8 ini — ringkasan, defect, batas jujur, §8 live, §11 kosong (34 file, 5.432 insertions, 1 deletion termasuk laporan) |
+| `6105fbc` | Laporan Phase 8 ini — ringkasan, defect, batas jujur, §8 live, §11 kosong (34 file, 5.432 insertions, 1 deletion termasuk laporan) |
 
 **Keputusan paling penting (v2 §8 + ADR-0014): TIDAK ADA provider AI
 yang dipilih — AI NONAKTIF di MVP (Keputusan #11).** Yang dibangun:
