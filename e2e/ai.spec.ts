@@ -60,14 +60,8 @@ async function switchToWorkspace(
 }
 
 /** Navigasi dengan ?workspace= bila UUID diketahui. */
-async function gotoWs(
-  page: import("@playwright/test").Page,
-  path: string,
-  wsId: string | null,
-) {
-  const url = wsId
-    ? `${path}${path.includes("?") ? "&" : "?"}workspace=${wsId}`
-    : path;
+async function gotoWs(page: import("@playwright/test").Page, path: string, wsId: string | null) {
+  const url = wsId ? `${path}${path.includes("?") ? "&" : "?"}workspace=${wsId}` : path;
   await page.goto(url);
 }
 
@@ -124,10 +118,12 @@ test.describe("ai — setup state, aksi tanpa provider, kuota, injeksi, D-010", 
     const wsId = await setupContent(page, slug);
     await gotoWs(page, "/ai", wsId);
     await expect(page.getByRole("heading", { name: "Asisten AI" })).toBeVisible();
-    await expect(
-      page.getByText("AI belum dikonfigurasi — pilih provider dulu."),
-    ).toBeVisible({ timeout: 30000 });
-    await expect(page.getByText("Nonaktif (default)")).toBeVisible();
+    await expect(page.getByText("AI belum dikonfigurasi — pilih provider dulu.")).toBeVisible({
+      timeout: 30000,
+    });
+    // "Nonaktif (default)" muncul 2×: <dd> status di AiSetupState DAN
+    // <option> di form pengaturan — lingkupi ke role=status.
+    await expect(page.getByRole("status").getByText("Nonaktif (default)")).toBeVisible();
     await expect(page.getByText("Tidak ada (none)")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Log AI" })).toBeVisible();
     await expect(page.getByText("Belum ada aksi AI yang tercatat di workspace ini.")).toBeVisible();
@@ -148,18 +144,20 @@ test.describe("ai — setup state, aksi tanpa provider, kuota, injeksi, D-010", 
       .locator("#ai-context-id")
       .selectOption({ label: `Konten P8 ${slug} — Brand P8 ${slug}` });
     await page.getByRole("button", { name: "Jalankan aksi AI" }).click();
+    // Pesan aksi memakai AI_NOT_CONFIGURED_ID + akhiran "(Pemakaian
+    // hari ini: ...) Sumber: ..." — exact:true tidak pernah cocok.
+    // Lingkupi ke role=alert (bukan getByText polos: teks setup-state
+    // "AI belum dikonfigurasi — pilih provider dulu." mirip).
     await expect(
-      page.getByText("AI belum dikonfigurasi untuk workspace ini — pilih provider dulu.", {
-        exact: true,
-      }),
+      page.getByRole("alert", { name: "AI belum dikonfigurasi untuk workspace ini" }),
     ).toBeVisible({ timeout: 30000 });
     // D-010: tanpa draft, tidak ada tombol insert versi baru.
-    await expect(
-      page.getByRole("button", { name: "Masukkan sebagai versi baru" }),
-    ).toHaveCount(0);
-    // Log tercatat (status not_configured) sesudah revalidasi.
-    await expect(page.getByText("not_configured").first()).toBeVisible({ timeout: 30000 });
-    await expect(page.getByText(`content_item:`, { exact: false }).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Masukkan sebagai versi baru" })).toHaveCount(0);
+    // Log tercatat (status not_configured) sesudah revalidasi —
+    // lingkupi ke region Log AI (status tampil di sel tabel log).
+    const logRegion = page.getByRole("region", { name: "Log AI" });
+    await expect(logRegion.getByText("not_configured")).toBeVisible({ timeout: 30000 });
+    await expect(logRegion.getByText("content_item:")).toBeVisible();
   });
 
   test("A8.3 batas harian 0 → aksi ditolak dengan pesan batas pemakaian", async ({ page }) => {
@@ -192,7 +190,11 @@ test.describe("ai — setup state, aksi tanpa provider, kuota, injeksi, D-010", 
     await expect(
       page.getByText("Input terdeteksi mengandung upaya override instruksi"),
     ).toBeVisible({ timeout: 30000 });
-    await expect(page.getByText("blocked").first()).toBeVisible({ timeout: 30000 });
+    // Status "blocked" tampil di sel tabel log — lingkupi ke region
+    // Log AI.
+    await expect(page.getByRole("region", { name: "Log AI" }).getByText("blocked")).toBeVisible({
+      timeout: 30000,
+    });
   });
 
   test("A8.5 D-010 — tanpa draft tidak ada jalur insert versi baru", async ({ page }) => {
@@ -207,15 +209,13 @@ test.describe("ai — setup state, aksi tanpa provider, kuota, injeksi, D-010", 
       .locator("#ai-context-id")
       .selectOption({ label: `Konten P8 ${slug} — Brand P8 ${slug}` });
     await page.getByRole("button", { name: "Jalankan aksi AI" }).click();
+    // Sama seperti A8.2: pesan aksi ber-akhiran pemakaian + sumber —
+    // exact:true tidak pernah cocok; lingkupi ke role=alert.
     await expect(
-      page.getByText("AI belum dikonfigurasi untuk workspace ini — pilih provider dulu.", {
-        exact: true,
-      }),
+      page.getByRole("alert", { name: "AI belum dikonfigurasi untuk workspace ini" }),
     ).toBeVisible({ timeout: 30000 });
     await expect(page.getByText("Draft AI — tinjau sebelum dimasukkan")).toHaveCount(0);
-    await expect(
-      page.getByRole("button", { name: "Masukkan sebagai versi baru" }),
-    ).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Masukkan sebagai versi baru" })).toHaveCount(0);
   });
 });
 
