@@ -1,11 +1,12 @@
 # Laporan Fase 9 — Hardening & Launch, 9.1 s.d. 9.13 (MaTive DRAF)
 
-> **Status laporan ini: DISUSUN KOORDINATOR, BELUM DIDEKLARASIKAN.**
-> Koordinator Phase 9 (subagent) mengeksekusi dan melaporkan — deklarasi
-> LULUS / GO / NO-GO ada di tangan parent (main agent) dan persetujuan
-> go-live ada di tangan owner (Tuan Braderz). Rekomendasi koordinator ada
-> di §12. Tanpa persetujuan eksplisit owner, status akhir adalah
-> **READY FOR OWNER DEPLOYMENT**, bukan DEPLOYED/LIVE.
+> **Status laporan ini: DIDEKLARASIKAN PARENT 2026-11-20 15:10 WIB — Phase 9 LOLOS (build).**
+> Koordinator Phase 9 (subagent) mengeksekusi dan melaporkan; parent
+> (main agent) memverifikasi langsung tiap klaim (HEAD + commit + gate
+> lokal + hasil live) sebelum deklarasi. Status akhir: **READY FOR
+> OWNER DEPLOYMENT**, bukan DEPLOYED/LIVE — go-live publik masih
+> NO-GO sampai repo GitHub (B5), uji backup/restore staging, dan
+> persetujuan eksplisit owner (§16).
 
 ## 1. Ringkasan hasil
 
@@ -200,3 +201,61 @@ Bila butir 1–2 hijau dan butir 3 diuji, status dapat naik menjadi GO untuk go-
 | `829c955` | Error boundary + metadata /api/health                        |
 | `55f495f` | Hapus anggota workspace (owner-only)                         |
 | `595ae49` | Dokumen peluncuran + laporan ini                             |
+| `ed5d2c3` | Dashboard hormati `?workspace=` (defect High, e2e re-run)    |
+| `f227fb0` | Daftar anggota selalu kosong sejak Phase 1 (defect High)     |
+| `c75ff61` | Screenshot visual QA login Phase 9 (24 PNG)                  |
+| `4c279ad` | Tim & Peran hormati `?workspace=` (defect High)              |
+| `236322b` | Panel Antrean persetujuan tampilkan request nyata            |
+| `f5c4b91` | Spek e2e hapus anggota (undang → terima → hapus → akses hilang) |
+| `1106dc4` | Perbaikan 2 tes e2e                                          |
+| `e75eab6` | Tautan editor bawa `?workspace=` — konten non-pertama 404 (High) |
+| `5b57e59` | Langkah 7 member-removal hanya asersi workspace yang dihapus |
+| `74cecd5` | Pesan sukses hapus anggota tampil di tingkat halaman (Low)    |
+
+## 16. Deklarasi parent — Phase 9 LOLOS (build), 2026-11-20 15:10 WIB
+
+**Keputusan: Phase 9 LOLOS untuk pembangunan (build). Status: READY FOR
+OWNER DEPLOYMENT. Go-live publik: NO-GO (belum) — lihat §16.4.**
+
+### 16.1 Bukti yang diverifikasi langsung oleh parent (bukan hanya laporan koordinator)
+
+| Butir | Bukti |
+|---|---|
+| pgTAP 08 v1.3 live | **53/53 lolos** (~11:54 WIB). Snippet "pgTAP 08 v1.3" tersimpan (`.../sql/95fcd118-1187-4d8e-b54f-fb223671391b`); 646 baris ditempel kumulatif 11 bagian; baris terakhir `ok 53 - T7d`; finish() 0 baris; rollback menutup transaksi. T3f (INSERT ... RETURNING, regresi 0023) lolos. Catatan: angka kumulatif v1.2 (86/144) di instruksi awal sudah kedaluwarsa — angka benar v1.3 adalah 90/148 dst (blok komentar v1.3 = 4 baris); isi tempelan sudah benar sejak awal. |
+| e2e login re-run | **Chromium 27 lolos + 2 skip, mobile 27 lolos + 2 skip, 0 gagal** (auth, planning, production, approval, publishing, analytics, ai, dashboard). |
+| Flake impor CSV | **Tidak ter-reproduksi, 4/4 lolos** (A7.2 Chromium 29,5 dtk, mobile 35,1 dtk, ulangan `--repeat-each=2` 34,4 + 37,4 dtk). Mitigasi `67033c8` terbukti efektif. |
+| Hapus anggota e2e | **Terbukti 2/2** (`e2e/member-removal.spec.ts` Chromium + mobile): undang → terima → hapus → akun kedua kehilangan akses. Akun kedua dibuat parent via Dashboard (`mative-e2e-2@example.com`, UID `8fb5b250-…`, Confirmed 13:44 WIB). |
+| Panel Antrean persetujuan | **Terbukti 4/4** (`e2e/dashboard.spec.ts` 2 tes × 2 proyek): request `in_review` nyata untuk workspace aktif. |
+| Pesan sukses hapus anggota | **Terbukti 2/2** (member-removal Chromium + mobile, asersi `toBeVisible` lolos). |
+| Gate lokal akhir (HEAD `74cecd5`, diverifikasi parent) | tsc 0, eslint 0, Vitest **242/242** (20 file), build exit 0. |
+| Visual QA login | 24/24 PNG di `docs/visual-qa/phase9-login/` (7 layar + anggota × 3 viewport). |
+| Keamanan | 8/8 Dok 06 §8 (§9.4); hapus anggota kini terbukti end-to-end (butir 5 di atas). |
+| Residu | **126 organisasi + 126 workspace dihapus** (15:09 WIB); seed-only terverifikasi 15/15 hitungan (organizations 1, workspaces 1, organization_members 1, workspace_members 2, workspace_settings 1, brands 0, content_items 0, campaigns 0, brief_templates 0, ai_generations 0, analytics 0). Tidak ada akun auth yang disentuh. |
+
+### 16.2 Defect yang ditemukan SESUDAH laporan koordinator (semua diperbaiki + terbukti)
+
+| # | Defect | Commit | Bukti |
+|---|---|---|---|
+| High | Dashboard mengabaikan `?workspace=` (KPI + nama workspace salah) | `ed5d2c3` | `e2e/dashboard.spec.ts` 2/2 |
+| High | Daftar anggota SELALU kosong sejak Phase 1 (join `profiles(display_name)` tanpa FK → PGRST200) | `f227fb0` | Baris owner tampil di screenshot + regresi `auth.spec.ts` |
+| High | Tim & Peran selalu memakai `workspaces[0]` (anggota workspace lain tak bisa dikelola) | `4c279ad` | Member-removal e2e di workspace baru |
+| High | Tautan editor konten tanpa `?workspace=` → konten workspace non-pertama 404 (12 tautan, 8 file) | `e75eab6` | Tes panel dashboard |
+| Medium | Panel "Antrean persetujuan" hardcode empty state (padahal ada 2 request `in_review`) | `236322b` | Dashboard 4/4 |
+| Low | Pesan sukses hapus anggota tidak pernah tampil (render di form baris yang dihapus — kelas pelajaran 6) | `74cecd5` | Member-removal 2/2, asersi `toBeVisible` |
+
+**Defect Critical/High yang tersisa: 0.**
+
+### 16.3 Insiden selama verifikasi parent (jujur, bukan defect aplikasi)
+
+- VM di-restart 2× di tengah run e2e (SIGTERM); dependensi sistem WebKit hilang sesudah restart → `npx playwright install-deps webkit` (persetujuan user 2026-11-20 01:22 WIB mencakup instalasi ulang library yang sama). Rerun sesudahnya hijau.
+- Satu kartu persetujuan runtime muncul saat gate+build koordinator tindak lanjut (~13:51 WIB) dan **habis waktunya tanpa jawaban**; isi permintaannya tidak tercatat (`permissions.history` — tool call asal tidak tersedia). Tidak ada yang tertunda sesudahnya; pekerjaan selesai normal (Vitest 242/242, build exit 0). Dicatat di sini supaya tidak hilang.
+- Flake A6.1 (toast "Placement ditambahkan" tidak muncul dalam 30 dtk) muncul 1× di Chromium saat re-run; lolos di run pagi, run yang terbunuh, dan rerun khusus. Penyebab pasti belum terbukti — dicatat, bukan gate blocker.
+- Service-role key TIDAK ada di `.env.local` (brief koordinator sempat mengasumsikannya ada) — ternyata tidak dibutuhkan: alur undangan manual (token ditampilkan sekali ke pengundang) membuat bukti hapus anggota tetap mungkin.
+
+### 16.4 Yang masih terbuka — penentu GO/NO-GO publik
+
+1. **Backup/restore BELUM DIUJI.** Prosedur tertulis di runbook §5; pengujian butuh proyek staging + kredensial DATABASE_URL yang belum tersedia di lingkungan ini (`.env.local` tidak memuatnya; tidak ada `pg_dump`/`psql` di VM). Dijadwalkan sebelum go-live publik.
+2. **Repo GitHub (B5) BELUM ADA** — memblokir CI, preview Vercel, dan deploy apa pun. Butuh tindakan owner (install aplikasi Meta Muse AI / buat repo `mative` manual).
+3. **Persetujuan go-live eksplisit owner BELUM ADA.**
+
+**Rekomendasi akhir: GO untuk staging/preview — NO-GO untuk go-live publik (belum).** Bila butir 1–3 di atas hijau + persetujuan eksplisit, status dapat naik menjadi GO untuk go-live — keputusan akhir tetap di tangan owner (Tuan Braderz).
