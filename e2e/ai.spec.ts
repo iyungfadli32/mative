@@ -146,11 +146,15 @@ test.describe("ai — setup state, aksi tanpa provider, kuota, injeksi, D-010", 
     await page.getByRole("button", { name: "Jalankan aksi AI" }).click();
     // Pesan aksi memakai AI_NOT_CONFIGURED_ID + akhiran "(Pemakaian
     // hari ini: ...) Sumber: ..." — exact:true tidak pernah cocok.
-    // Lingkupi ke role=alert (bukan getByText polos: teks setup-state
-    // "AI belum dikonfigurasi — pilih provider dulu." mirip).
-    await expect(
-      page.getByRole("alert", { name: "AI belum dikonfigurasi untuk workspace ini" }),
-    ).toBeVisible({ timeout: 30000 });
+    // getByRole("alert", { name }) TIDAK PERNAH cocok di Playwright:
+    // role=alert dilarang punya accessible name (ARIA "naming
+    // prohibited") sehingga namanya dihitung kosong — dibuktikan repro
+    // minimal (nama lengkap pun count 0, getByText count 1). Pakai
+    // getByText substring — unik lawan teks setup-state "AI belum
+    // dikonfigurasi — pilih provider dulu." (tanpa "untuk workspace ini").
+    await expect(page.getByText("AI belum dikonfigurasi untuk workspace ini")).toBeVisible({
+      timeout: 30000,
+    });
     // D-010: tanpa draft, tidak ada tombol insert versi baru.
     await expect(page.getByRole("button", { name: "Masukkan sebagai versi baru" })).toHaveCount(0);
     // Log tercatat (status not_configured) sesudah revalidasi —
@@ -210,10 +214,11 @@ test.describe("ai — setup state, aksi tanpa provider, kuota, injeksi, D-010", 
       .selectOption({ label: `Konten P8 ${slug} — Brand P8 ${slug}` });
     await page.getByRole("button", { name: "Jalankan aksi AI" }).click();
     // Sama seperti A8.2: pesan aksi ber-akhiran pemakaian + sumber —
-    // exact:true tidak pernah cocok; lingkupi ke role=alert.
-    await expect(
-      page.getByRole("alert", { name: "AI belum dikonfigurasi untuk workspace ini" }),
-    ).toBeVisible({ timeout: 30000 });
+    // exact:true tidak pernah cocok; getByRole("alert", { name }) tidak
+    // pernah cocok (nama alert dihitung kosong — lihat komentar A8.2).
+    await expect(page.getByText("AI belum dikonfigurasi untuk workspace ini")).toBeVisible({
+      timeout: 30000,
+    });
     await expect(page.getByText("Draft AI — tinjau sebelum dimasukkan")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Masukkan sebagai versi baru" })).toHaveCount(0);
   });
