@@ -256,6 +256,6 @@ OWNER DEPLOYMENT. Go-live publik: NO-GO (belum) — lihat §16.4.**
 
 1. **Backup/restore DIUJI 21 November 2026** (detail lengkap di runbook §5): dump live → restore ke proyek staging `mative-staging` → hitungan identik (51 tabel + auth 5/5; selisih hanya 2 view milik extension pgtap) → cacat restore (grant hilang) ditemukan + diperbaiki (254/256 pernyataan) → alur kritis TERBUKTI di staging (10 lolos / 2 gagal / 0 skip; kedua gagal adalah cacat locator tes, bukan aplikasi). Prosedur runbook §5 kini berstatus DIUJI.
 2. **Repo GitHub (B5) SELESAI** — repo `mative` publik, kode ter-push (commit `c301a39`, 404 file), Vercel `mative` ter-deploy (https://mative-theta.vercel.app) + smoke test hijau 21 Nov 00:04 WIB. Deployment protection aktif (preview tertutup login Vercel).
-3. **Persetujuan go-live eksplisit owner BELUM ADA.**
+3. **Persetujuan go-live eksplisit owner DIBERIKAN 21 November 2026 02:03 WIB** ("Gas go-live, buka untuk publik").
 
-**Rekomendasi akhir: GO untuk staging/preview — go-live publik menunggu persetujuan eksplisit owner (butir 3).** Keputusan akhir tetap di tangan owner (Tuan Braderz).
+**GO-LIVE SELESAI 21 November 2026 02:04 WIB** (terverifikasi independen dari VM anonim 02:05 WIB: `/api/health` HTTP 200 `status ok`, beranda HTTP 200): Deployment Protection Vercel dimatikan (Vercel Authentication disabled); Redirect URL Supabase `https://mative-theta.vercel.app/**` ditambahkan (sebelumnya kosong; Site URL tetap `http://localhost:3000`); situs publik https://mative-theta.vercel.app tampil tanpa login; login akun tes dari situs publik berhasil sampai dashboard. **Status akhir: LIVE untuk publik.**
