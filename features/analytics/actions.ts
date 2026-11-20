@@ -18,10 +18,7 @@ import { SUPABASE_NOT_CONFIGURED_ID } from "@/lib/env";
 import { brandInScope, can } from "@/lib/permissions";
 import type { WorkspaceRole } from "@/lib/permissions";
 import { importAnalyticsCsvSchema } from "@/lib/validation/schemas";
-import {
-  getCallerBrandScope,
-  getCallerRole,
-} from "@/features/planning/context";
+import { getCallerBrandScope, getCallerRole } from "@/features/planning/context";
 import { parseAnalyticsCsv, validateAnalyticsCsvFile } from "./csv";
 import type { ValidatedAnalyticsCsvRow } from "./csv";
 import { ANALYTICS_TABLES_UNAVAILABLE_ID } from "./constants";
@@ -32,10 +29,11 @@ const ok = (message: string, extra?: Partial<AnalyticsActionResult>): AnalyticsA
   message,
   ...extra,
 });
-const fail = (
-  message: string,
-  extra?: Partial<AnalyticsActionResult>,
-): AnalyticsActionResult => ({ ok: false, message, ...extra });
+const fail = (message: string, extra?: Partial<AnalyticsActionResult>): AnalyticsActionResult => ({
+  ok: false,
+  message,
+  ...extra,
+});
 
 function isMissingTableMessage(message: string): boolean {
   return /Could not find the table|Could not find the function|does not exist|42P01|PGRST205/i.test(
@@ -191,12 +189,12 @@ export async function importAnalyticsCsvCore(
   const scope = await getCallerBrandScope(input.workspaceId, userId);
   for (const row of input.rows) {
     const brandId = resolved.brands.get(row.subjectRef);
-    if (!brandId) return fail(`Baris ${row.rowNumber}: subject tidak ditemukan.`, { code: "INVALID_SUBJECT" });
+    if (!brandId)
+      return fail(`Baris ${row.rowNumber}: subject tidak ditemukan.`, { code: "INVALID_SUBJECT" });
     if (input.brandId && brandId !== input.brandId) {
-      return fail(
-        `Baris ${row.rowNumber}: subject milik brand lain (bukan brand yang dipilih).`,
-        { code: "FORBIDDEN" },
-      );
+      return fail(`Baris ${row.rowNumber}: subject milik brand lain (bukan brand yang dipilih).`, {
+        code: "FORBIDDEN",
+      });
     }
     if (!input.brandId && !brandInScope(scope, brandId)) {
       return fail(`Baris ${row.rowNumber}: subject di luar scope brand Anda.`, {
@@ -285,8 +283,15 @@ export async function importAnalyticsCsvAction(
     rows: validated.data,
   });
   if (result.ok) {
-    revalidatePath("/analitik");
-    revalidatePath("/analitik/laporan");
+    // Hanya /analitik/impor yang direvalidasi — halaman yang sedang dilihat
+    // user. /analitik + /analitik/laporan memuat ulang datanya sendiri saat
+    // dikunjungi (semua fetch server memakai cache: "no-store"), jadi tidak
+    // perlu direvalidasi di sini. Alasan: revalidasi 3 path sekaligus
+    // memaksa router me-refetch 3 halaman saat action selesai; bila salah
+    // satu refetch lambat, `useActionState` pending tertahan dan tombol
+    // impor tampak menggantung walau data sudah tersimpan (flake hang UI
+    // Phase 7, 4× dalam 5 run — penyebab pasti belum terbukti, mitigasi ini
+    // mempersempit permukaan refetch ke 1 path).
     revalidatePath("/analitik/impor");
   }
   return result;
