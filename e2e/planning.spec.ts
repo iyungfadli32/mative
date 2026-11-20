@@ -223,6 +223,17 @@ test.describe("smoke — halaman perencanaan (tanpa login)", () => {
 
   test("sidebar menampilkan tautan perencanaan yang aktif", async ({ page }) => {
     await page.goto("/dashboard");
+    // Mobile: sidebar disembunyikan < md SESUAI DESAIN (Dok 02 §2) — periksa
+    // navigasi bawah ("Kalender") + halaman /lainnya ("Board Produksi",
+    // "Konten") sebagai gantinya.
+    if (test.info().project.name === "mobile") {
+      const bottomNav = page.getByRole("navigation", { name: "Navigasi bawah" });
+      await expect(bottomNav.getByRole("link", { name: "Kalender", exact: true })).toBeVisible();
+      await page.goto("/lainnya");
+      await expect(page.getByRole("link", { name: "Board Produksi", exact: true })).toBeVisible();
+      await expect(page.getByRole("link", { name: "Konten", exact: true })).toBeVisible();
+      return;
+    }
     await expect(page.getByRole("link", { name: "Kalender", exact: true }).first()).toBeVisible();
     await expect(
       page.getByRole("link", { name: "Board Produksi", exact: true }).first(),

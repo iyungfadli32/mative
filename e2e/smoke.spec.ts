@@ -63,6 +63,20 @@ test.describe("smoke — dashboard shell (belum masuk)", () => {
   }) => {
     await page.goto("/dashboard");
     // Kalender/Board/Ide/Konten kini aktif (Phase 2) — bukan lagi disabled.
+    // Mobile: sidebar disembunyikan < md SESUAI DESAIN (Dok 02 §2 — navigasi
+    // mobile = bottom nav + halaman /lainnya), jadi asersi sidebar hanya
+    // untuk desktop; mobile memeriksa navigasi bawah + /lainnya.
+    if (test.info().project.name === "mobile") {
+      const bottomNav = page.getByRole("navigation", { name: "Navigasi bawah" });
+      await expect(bottomNav.getByRole("link", { name: "Kalender", exact: true })).toBeVisible();
+      await page.goto("/lainnya");
+      await expect(page.getByRole("link", { name: "Board Produksi", exact: true })).toBeVisible();
+      await page.goto("/dashboard");
+      await bottomNav.getByRole("button", { name: /Buat cepat/ }).click();
+      const tugas = page.getByTitle("Belum tersedia di fase ini (Phase 3).");
+      await expect(tugas.first()).toBeVisible();
+      return;
+    }
     await expect(page.getByRole("link", { name: "Kalender", exact: true }).first()).toBeVisible();
     await expect(
       page.getByRole("link", { name: "Board Produksi", exact: true }).first(),

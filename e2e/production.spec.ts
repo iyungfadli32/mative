@@ -233,6 +233,15 @@ test.describe("smoke — halaman Phase 3 (tanpa login)", () => {
 
   test("sidebar menampilkan tautan produksi yang aktif", async ({ page }) => {
     await page.goto("/dashboard");
+    // Mobile: sidebar disembunyikan < md SESUAI DESAIN (Dok 02 §2) — ketiga
+    // tautan diperiksa di halaman /lainnya sebagai gantinya.
+    if (test.info().project.name === "mobile") {
+      await page.goto("/lainnya");
+      await expect(page.getByRole("link", { name: "Tugas Saya", exact: true })).toBeVisible();
+      await expect(page.getByRole("link", { name: "Pustaka Aset", exact: true })).toBeVisible();
+      await expect(page.getByRole("link", { name: "Template Brief", exact: true })).toBeVisible();
+      return;
+    }
     await expect(page.getByRole("link", { name: "Tugas Saya", exact: true }).first()).toBeVisible();
     await expect(
       page.getByRole("link", { name: "Pustaka Aset", exact: true }).first(),

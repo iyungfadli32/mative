@@ -6,8 +6,8 @@ import { cn } from "@/lib/utils";
 
 /**
  * MobileBottomNav — Dok 02 §2: Home / Calendar / Create / Approval / More.
- * Kalender + Approval belum ada di Phase 1 → disabled dengan alasan.
- * Quick-create membuka bottom sheet (di fase ini berisi aksi yang tersedia saja).
+ * Semua item aktif sejak Phase 2 (Kalender) dan Phase 4 (Approval).
+ * Quick-create membuka bottom sheet (berisi aksi yang tersedia saja).
  */
 export function MobileBottomNav({ onQuickCreate }: { onQuickCreate: () => void }) {
   const pathname = usePathname();
