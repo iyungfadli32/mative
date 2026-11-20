@@ -237,9 +237,16 @@ test.describe("smoke — halaman Phase 3 (tanpa login)", () => {
     // tautan diperiksa di halaman /lainnya sebagai gantinya.
     if (test.info().project.name === "mobile") {
       await page.goto("/lainnya");
-      await expect(page.getByRole("link", { name: "Tugas Saya", exact: true })).toBeVisible();
-      await expect(page.getByRole("link", { name: "Pustaka Aset", exact: true })).toBeVisible();
-      await expect(page.getByRole("link", { name: "Template Brief", exact: true })).toBeVisible();
+      // Nama aksesibel tautan /lainnya = label + deskripsi — tanpa exact,
+      // dilingkupi ke <main> supaya tautan sidebar tersembunyi tidak ikut
+      // tercocok.
+      await expect(page.getByRole("main").getByRole("link", { name: /^Tugas Saya/ })).toBeVisible();
+      await expect(
+        page.getByRole("main").getByRole("link", { name: /^Pustaka Aset/ }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("main").getByRole("link", { name: /^Template Brief/ }),
+      ).toBeVisible();
       return;
     }
     await expect(page.getByRole("link", { name: "Tugas Saya", exact: true }).first()).toBeVisible();

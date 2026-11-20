@@ -230,8 +230,13 @@ test.describe("smoke — halaman perencanaan (tanpa login)", () => {
       const bottomNav = page.getByRole("navigation", { name: "Navigasi bawah" });
       await expect(bottomNav.getByRole("link", { name: "Kalender", exact: true })).toBeVisible();
       await page.goto("/lainnya");
-      await expect(page.getByRole("link", { name: "Board Produksi", exact: true })).toBeVisible();
-      await expect(page.getByRole("link", { name: "Konten", exact: true })).toBeVisible();
+      // Nama aksesibel tautan /lainnya = label + deskripsi — tanpa exact,
+      // dilingkupi ke <main> supaya tautan sidebar tersembunyi tidak ikut
+      // tercocok.
+      await expect(
+        page.getByRole("main").getByRole("link", { name: /^Board Produksi/ }),
+      ).toBeVisible();
+      await expect(page.getByRole("main").getByRole("link", { name: /^Konten / })).toBeVisible();
       return;
     }
     await expect(page.getByRole("link", { name: "Kalender", exact: true }).first()).toBeVisible();
@@ -245,7 +250,13 @@ test.describe("smoke — halaman perencanaan (tanpa login)", () => {
     await page.goto("/cari");
     await expect(page.getByRole("heading", { name: "Pencarian" })).toBeVisible();
     await expect(page.getByText("Anda belum masuk")).toBeVisible();
-    // Pencarian global di topbar tetap terlihat (form hasil hanya untuk yang masuk).
+    // Pencarian global di topbar hanya terlihat di desktop — di mobile
+    // form-nya `hidden md:block` SESUAI DESAIN (topbar mobile menampilkan
+    // nama workspace), jadi mobile memeriksa sebaliknya.
+    if (test.info().project.name === "mobile") {
+      await expect(page.getByPlaceholder("Cari konten, campaign, ide, brand…")).toBeHidden();
+      return;
+    }
     await expect(page.getByPlaceholder("Cari konten, campaign, ide, brand…")).toBeVisible();
   });
 });

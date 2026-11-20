@@ -70,24 +70,48 @@ test.describe("smoke — dashboard shell (belum masuk)", () => {
       const bottomNav = page.getByRole("navigation", { name: "Navigasi bawah" });
       await expect(bottomNav.getByRole("link", { name: "Kalender", exact: true })).toBeVisible();
       await page.goto("/lainnya");
-      await expect(page.getByRole("link", { name: "Board Produksi", exact: true })).toBeVisible();
-      await page.goto("/dashboard");
-      await bottomNav.getByRole("button", { name: /Buat cepat/ }).click();
-      const tugas = page.getByTitle("Belum tersedia di fase ini (Phase 3).");
-      await expect(tugas.first()).toBeVisible();
+      // Nama aksesibel tautan /lainnya = label + deskripsi ("Board Produksi
+      // Kanban stage produksi.") — tanpa exact, dilingkupi ke <main> supaya
+      // tautan sidebar tersembunyi tidak ikut tercocok.
+      await expect(
+        page.getByRole("main").getByRole("link", { name: /^Board Produksi/ }),
+      ).toBeVisible();
       return;
     }
     await expect(page.getByRole("link", { name: "Kalender", exact: true }).first()).toBeVisible();
     await expect(
       page.getByRole("link", { name: "Board Produksi", exact: true }).first(),
     ).toBeVisible();
-    // Modul Phase 3+ masih disabled dengan alasan. Tombolnya ada di dalam
-    // dialog "Buat cepat" (Topbar) — Dialog hanya me-render isinya bila
-    // dibuka, jadi buka dialog dulu (perbaikan 2026-11-19: tes lama
-    // mengharapkan tombol tanpa membuka dialog, sehingga gagal
-    // "element(s) not found" walau aplikasinya benar).
-    await page.getByRole("button", { name: /Buat cepat/ }).click();
-    const tugas = page.getByTitle("Belum tersedia di fase ini (Phase 3).");
-    await expect(tugas.first()).toBeVisible();
+  });
+
+  test("buat cepat menampilkan aksi yang tersedia (bukan tombol mati)", async ({ page }) => {
+    await page.goto("/dashboard");
+    // Dulu (Phase 1): dialog "Buat cepat" menampilkan aksi fase berikut
+    // sebagai tombol disabled dengan alasan. Sejak semua fase selesai,
+    // dialog menampilkan aksi yang benar-benar tersedia — sama di desktop
+    // (dialog Topbar) maupun mobile (dialog bottom nav).
+    const quickCreate =
+      test.info().project.name === "mobile"
+        ? page
+            .getByRole("navigation", { name: "Navigasi bawah" })
+            .getByRole("button", { name: /Buat cepat/ })
+        : page.getByRole("button", { name: /Buat cepat/ });
+    await quickCreate.click();
+    const dialog = page.getByRole("dialog", { name: "Buat cepat" });
+    // Aksi dirender sebagai <Link> yang membungkus <Button> — peran yang
+    // terekspos di pohon aksesibilitas adalah button-nya, jadi asersi lewat
+    // button + href tautannya.
+    await expect(dialog.getByRole("button", { name: /Buat konten/ })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: /Tangkap ide/ })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: /Unggah aset/ })).toBeVisible();
+    await expect(
+      dialog.getByRole("button", { name: /Buat organisasi \/ workspace/ }),
+    ).toBeVisible();
+    await expect(dialog.locator("a[href='/konten/baru']")).toHaveCount(1);
+    await expect(dialog.locator("a[href='/ide']")).toHaveCount(1);
+    await expect(dialog.locator("a[href='/pustaka']")).toHaveCount(1);
+    await expect(dialog.locator("a[href='/pengaturan/organisasi']")).toHaveCount(1);
+    // Tidak ada lagi tombol disabled "belum tersedia di fase ini".
+    await expect(dialog.getByText(/belum tersedia di fase ini/)).toHaveCount(0);
   });
 });
