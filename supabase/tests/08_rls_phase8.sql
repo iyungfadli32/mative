@@ -1,7 +1,11 @@
--- MaTive Phase 8 — RLS + RPC AI Assistant (pgTAP) — v1.1
+-- MaTive Phase 8 — RLS + RPC AI Assistant (pgTAP) — v1.2
 -- v1.1: T3c/T3d dilewat helper _try_insert_log (tangkap 42501)
 -- (Run 1 v1.0 abort 42501 di T3c — INSERT pelanggar RLS melempar, bukan
 -- ditolak diam-diam). plan tetap 52, asersi tetap 52.
+-- v1.2: T3d dihitung sebagai B (A viewer_client melihat 0, bukan 2);
+-- T4b membaca max(version_number) — JANGAN panggil RPC dua kali
+-- (Run 2 v1.1: 48/52; T3d/T4b/T4e/T4o gagal, semuanya bug asersi,
+-- bukan cacat migrasi 0022). plan tetap 52, asersi tetap 52.
 -- File baru untuk migrasi 0022 v1.0 (ai_generations + kolom
 -- ai_assisted/ai_generation_id di content_versions + RPC
 -- insert_ai_draft_version + retensi + pemakaian harian).
@@ -68,6 +72,13 @@
 --     UPDATE/DELETE) — INSERT yang HARUS ditolak dilewat helper
 --     _try_insert_log (tangkap insufficient_privilege); asersi hitungan
 --     sesudahnya tetap membuktikan penolakan (Run 1 v1.0 abort di T3c).
+--   - Asersi hitungan HARUS dihitung sebagai pengguna yang BISA melihat
+--     barisnya: viewer_client melihat 0 baris (T2c) sehingga hitungan
+--     sebagai dia tidak membuktikan apa-apa — hitung sebagai member yang
+--     melihat (T3d: B, admin WS-B8) (Run 2 v1.1: T3d have 0 want 2).
+--   - RPC yang menyisipkan TIDAK BOLEH dipanggil dua kali untuk membaca
+--     hasilnya: panggilan kedua menyisipkan baris baru (T4b: v2 jadi v3,
+--     merembet ke T4e v4 dan T4o 4 versi) — baca dari tabel (Run 2 v1.1).
 --   - Postgres TIDAK punya max/min(uuid) — nomor versi memakai
 --     max(version_number integer) (aman); jangan pernah max(uuid).
 -- ============================================================================
@@ -308,6 +319,9 @@ select is(
 select _set_user(:'user_a');
 -- Sama seperti T3c: INSERT pelanggar RLS lewat helper penangkap 42501.
 select _try_insert_log('a8100000-0000-0000-0000-000000000013', 'b8000000-0000-0000-0000-000000000002', :'user_a', 'brief', 'content_item:d8000000-0000-0000-0000-000000000004');
+-- A sebagai viewer_client TIDAK melihat baris WS-B8 (T2c: 0) — hitung
+-- sebagai B (admin WS-B8, melihat 2) untuk membuktikan tidak ada baris baru.
+select _set_user(:'user_b');
 select is(
   (select count(*) from public.ai_generations where workspace_id = 'b8000000-0000-0000-0000-000000000002')::int,
   2,
@@ -337,11 +351,13 @@ select is(
   'true',
   'T4a A insert versi AI untuk item A8-1 dengan g1 (brief, completed) lolos'
 );
+-- JANGAN panggil RPC dua kali untuk membaca nomor versi: tiap panggilan
+-- menyisipkan versi BARU (T4a sudah membuat v2; panggilan kedua membuat
+-- v3 — Run 2 v1.1: T4b have 3, T4e have 4, T4o have 4). Baca langsung
+-- dari tabel.
 select is(
-  (public.insert_ai_draft_version(
-    'd8000000-0000-0000-0000-000000000001', 'Skrip AI v2', 'Caption AI v2', null, '{}'::jsonb, 'Draft AI: brief g1', 'a8100000-0000-0000-0000-000000000001'
-  ) ->> 'version_number'),
-  '2',
+  (select max(version_number) from public.content_versions where content_item_id = 'd8000000-0000-0000-0000-000000000001')::int,
+  2,
   'T4b versi baru bernomor v2 (max + 1)'
 );
 select is(
