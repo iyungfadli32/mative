@@ -801,3 +801,161 @@ export const importAnalyticsCsvSchema = z
     message: "Periode awal tidak boleh sesudah periode akhir.",
     path: ["periodEnd"],
   });
+
+/**
+ * Aksi AI (Phase 8, ADR-0014): 7 fitur, satu skema input per aksi.
+ * - feature = id kanonik (CHECK 0022 ai_generations_feature_check).
+ * - contextType/contextId = sumber data yang BOLEH dipakai aksi ini
+ *   (R8.9): content_item / campaign / comment_thread / manual.
+ * - sourceText = teks yang diberikan user (checklist, feedback) —
+ *   data TIDAK TEPERCAYA (bukan instruksi sistem), dipindai safety.ts.
+ * - locale default "id" (ASUMSI-8B: bahasa output mengikuti bahasa konten).
+ * Input mentah TIDAK disimpan ke ai_generations — hanya referensi
+ * (ASUMSI-8D).
+ */
+export const AI_FEATURES = [
+  "content_ideas",
+  "brief",
+  "content_draft",
+  "repurpose",
+  "checklist",
+  "feedback_summary",
+  "campaign_summary",
+] as const;
+
+export const aiFeatureSchema = z.enum(AI_FEATURES);
+
+export const aiActionInputSchema = z
+  .object({
+    workspaceId: z.string().uuid("workspace_id tidak valid."),
+    feature: aiFeatureSchema,
+    locale: z
+      .string()
+      .trim()
+      .min(2, "locale minimal 2 karakter.")
+      .max(5, "locale maksimal 5 karakter.")
+      .default("id"),
+    contextType: z.enum(["content_item", "campaign", "comment_thread", "manual"]),
+    contextId: z.string().uuid("context_id tidak valid.").nullable().optional().default(null),
+    brandId: z.string().uuid("brand_id tidak valid.").nullable().optional().default(null),
+    audience: z.string().trim().max(200, "audience maksimal 200 karakter.").optional().default(""),
+    objective: z.string().trim().max(500, "objective maksimal 500 karakter.").optional().default(""),
+    pillar: z.string().trim().max(200, "pillar maksimal 200 karakter.").optional().default(""),
+    channel: z.string().trim().max(100, "channel maksimal 100 karakter.").optional().default(""),
+    targetChannel: z
+      .string()
+      .trim()
+      .max(100, "targetChannel maksimal 100 karakter.")
+      .optional()
+      .default(""),
+    targetFormat: z
+      .string()
+      .trim()
+      .max(100, "targetFormat maksimal 100 karakter.")
+      .optional()
+      .default(""),
+    sourceText: z
+      .string()
+      .trim()
+      .max(20000, "Teks sumber maksimal 20.000 karakter.")
+      .optional()
+      .default(""),
+    periodStart: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Periode awal harus format YYYY-MM-DD.")
+      .nullable()
+      .optional()
+      .default(null),
+    periodEnd: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Periode akhir harus format YYYY-MM-DD.")
+      .nullable()
+      .optional()
+      .default(null),
+  })
+  .superRefine((v, ctx) => {
+    // brief + content_draft + repurpose + feedback_summary butuh context
+    // nyata di workspace ini (bukan teks bebas).
+    if (
+      (v.feature === "brief" ||
+        v.feature === "content_draft" ||
+        v.feature === "repurpose" ||
+        v.feature === "feedback_summary") &&
+      !v.contextId
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Aksi ini butuh context (konten/campaign/thread) yang dipilih.",
+        path: ["contextId"],
+      });
+    }
+    // campaign_summary butuh campaign + periode.
+    if (v.feature === "campaign_summary") {
+      if (!v.contextId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Rangkuman campaign butuh campaign yang dipilih.",
+          path: ["contextId"],
+        });
+      }
+      if (!v.periodStart || !v.periodEnd) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Rangkuman campaign butuh periode awal dan akhir.",
+          path: ["periodEnd"],
+        });
+      } else if (v.periodStart > v.periodEnd) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Periode awal tidak boleh sesudah periode akhir.",
+          path: ["periodEnd"],
+        });
+      }
+    }
+    // checklist + feedback_summary butuh teks sumber dari user.
+    if (
+      (v.feature === "checklist" || v.feature === "feedback_summary") &&
+      v.sourceText.trim() === ""
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Aksi ini butuh teks sumber yang diberikan user.",
+        path: ["sourceText"],
+      });
+    }
+    // repurpose butuh channel/format target.
+    if (v.feature === "repurpose" && (v.targetChannel === "" || v.targetFormat === "")) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Repurpose butuh channel dan format target.",
+        path: ["targetChannel"],
+      });
+    }
+  });
+
+/** Pengaturan AI per workspace (workspace_settings key "ai", ASUMSI-8E). */
+export const aiSettingsSchema = z.object({
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  enabled: z.enum(["true", "false"]).transform((v) => v === "true"),
+  dailyLimit: z.coerce
+    .number()
+    .int("Batas harian harus bilangan bulat.")
+    .min(0, "Batas harian minimal 0.")
+    .max(1000, "Batas harian maksimal 1000."),
+});
+
+/** Insert draft AI sebagai versi baru (RPC 0022 insert_ai_draft_version). */
+export const insertAiDraftVersionSchema = z.object({
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  contentItemId: z.string().uuid("content_item_id tidak valid."),
+  script: z.string().trim().min(1, "Script wajib diisi.").max(20000, "Script maksimal 20.000 karakter."),
+  caption: z.string().trim().min(1, "Caption wajib diisi.").max(5000, "Caption maksimal 5.000 karakter."),
+  cta: z.string().trim().max(500, "CTA maksimal 500 karakter.").optional().default(""),
+  briefSnapshot: z.string().trim().max(20000, "Brief snapshot maksimal 20.000 karakter.").default("{}"),
+  changeSummary: z
+    .string()
+    .trim()
+    .min(1, "Ringkasan perubahan wajib diisi.")
+    .max(500, "Ringkasan perubahan maksimal 500 karakter."),
+  aiGenerationId: z.string().uuid("ai_generation_id tidak valid."),
+});

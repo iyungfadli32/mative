@@ -41,6 +41,8 @@ export type Capability =
   | "view_analytics"
   | "import_analytics"
   | "export_data"
+  | "use_ai"
+  | "manage_ai_settings"
   | "view_portal_shared";
 
 /**
@@ -220,6 +222,28 @@ export const PERMISSION_MATRIX: Record<
     editor: false,
     approver: false,
     analyst: true,
+    viewer_client: false,
+  },
+  use_ai: {
+    owner: true,
+    admin: true,
+    manager: true,
+    strategist: true,
+    creator: true,
+    editor: true,
+    approver: false,
+    analyst: true,
+    viewer_client: false,
+  },
+  manage_ai_settings: {
+    owner: true,
+    admin: true,
+    manager: "limited",
+    strategist: false,
+    creator: false,
+    editor: false,
+    approver: false,
+    analyst: false,
     viewer_client: false,
   },
   view_portal_shared: {

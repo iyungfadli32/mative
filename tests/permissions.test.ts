@@ -44,14 +44,39 @@ describe("RBAC — 9 role baseline (Dok 06 §2)", () => {
     expect(can("viewer_client", "view_portal_shared")).toBe(false);
   });
 
-  it("import_analytics: owner/admin/manager/strategist/analyst boleh; creator/editor/approver/viewer_client tidak (ADR-0013 §7)", () => {
-    for (const role of ["owner", "admin", "manager", "strategist", "analyst"] as const) {
-      expect(can(role, "import_analytics")).toBe(true);
+  it("use_ai: owner/admin/manager/strategist/creator/editor/analyst boleh; approver/viewer_client tidak (ADR-0014 §5)", () => {
+    for (const role of [
+      "owner",
+      "admin",
+      "manager",
+      "strategist",
+      "creator",
+      "editor",
+      "analyst",
+    ] as const) {
+      expect(can(role, "use_ai")).toBe(true);
     }
-    for (const role of ["creator", "editor", "approver", "viewer_client"] as const) {
-      expect(can(role, "import_analytics")).toBe(false);
+    for (const role of ["approver", "viewer_client"] as const) {
+      expect(can(role, "use_ai")).toBe(false);
     }
-    expect(PERMISSION_MATRIX.import_analytics.viewer_client).toBe(false);
+    expect(PERMISSION_MATRIX.use_ai.viewer_client).toBe(false);
+    expect(PERMISSION_MATRIX.use_ai.approver).toBe(false);
+  });
+
+  it("manage_ai_settings: owner/admin penuh; manager limited; sisanya tidak (ADR-0014 §8)", () => {
+    expect(can("owner", "manage_ai_settings")).toBe(true);
+    expect(can("admin", "manage_ai_settings")).toBe(true);
+    expect(isLimited("manager", "manage_ai_settings")).toBe(true);
+    for (const role of [
+      "strategist",
+      "creator",
+      "editor",
+      "approver",
+      "analyst",
+      "viewer_client",
+    ] as const) {
+      expect(can(role, "manage_ai_settings")).toBe(false);
+    }
   });
 
   it("semua role bisa diundang; role di luar baseline ditolak", () => {

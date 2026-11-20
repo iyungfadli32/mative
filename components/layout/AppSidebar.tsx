@@ -73,6 +73,10 @@ export const NAV_SECTIONS: Array<{ title: string; items: NavItem[] }> = [
     ],
   },
   {
+    title: "AI",
+    items: [{ href: "/ai", label: "Asisten AI", icon: "🤖", available: true }],
+  },
+  {
     title: "Administrasi",
     items: [
       {
