@@ -137,12 +137,16 @@ test.describe("hapus anggota — owner mencabut akses anggota @needs-db", () => 
       await expect(ownerPage.getByText(member2Uid)).toHaveCount(0);
       await expect(ownerPage.getByRole("button", { name: "Hapus" })).toHaveCount(0);
 
-      // 7. Akun kedua: workspace hilang dari dashboard — akses tercabut.
+      // 7. Akun kedua: workspace YANG DIHAPUS hilang dari dashboard — akses
+      // tercabut. (Tidak di-asersi "Belum ada workspace": akun kedua bisa
+      // masih menjadi anggota workspace lain dari run sebelumnya yang
+      // terbunuh — mis. run yang mati SIGTERM saat VM di-restart. Yang
+      // dibuktikan di sini adalah workspace run ini sudah tidak bisa
+      // diakses, termasuk lewat URL langsung dengan ?workspace=.)
       await memberPage.goto("/dashboard");
       await expect(memberPage.getByText(`Workspace P9 ${slug}`)).toHaveCount(0);
-      await expect(memberPage.getByText("Belum ada workspace yang bisa Anda akses.")).toBeVisible({
-        timeout: 30000,
-      });
+      await memberPage.goto(`/dashboard?workspace=${wsId}`);
+      await expect(memberPage.getByText(`Workspace P9 ${slug}`)).toHaveCount(0);
     } finally {
       await ownerCtx.close();
       await memberCtx.close();
