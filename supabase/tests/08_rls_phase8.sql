@@ -1,4 +1,7 @@
--- MaTive Phase 8 — RLS + RPC AI Assistant (pgTAP) — v1.0
+-- MaTive Phase 8 — RLS + RPC AI Assistant (pgTAP) — v1.1
+-- v1.1: T3c/T3d dilewat helper _try_insert_log (tangkap 42501)
+-- (Run 1 v1.0 abort 42501 di T3c — INSERT pelanggar RLS melempar, bukan
+-- ditolak diam-diam). plan tetap 52, asersi tetap 52.
 -- File baru untuk migrasi 0022 v1.0 (ai_generations + kolom
 -- ai_assisted/ai_generation_id di content_versions + RPC
 -- insert_ai_draft_version + retensi + pemakaian harian).
@@ -60,6 +63,11 @@
 --     Run 5 v1.3).
 --   - Cleanup defensif diurutkan daun → akar (pelajaran 06 v1.0: brands
 --     TIDAK BOLEH dihapus sebelum content_items — RESTRICT).
+--   - INSERT telanjang yang melanggar RLS WITH CHECK melempar 42501 dan
+--     meng-abort SELURUH transaksi (bukan penolakan diam-diam seperti
+--     UPDATE/DELETE) — INSERT yang HARUS ditolak dilewat helper
+--     _try_insert_log (tangkap insufficient_privilege); asersi hitungan
+--     sesudahnya tetap membuktikan penolakan (Run 1 v1.0 abort di T3c).
 --   - Postgres TIDAK punya max/min(uuid) — nomor versi memakai
 --     max(version_number integer) (aman); jangan pernah max(uuid).
 -- ============================================================================
@@ -76,6 +84,22 @@ returns void language sql as $$
 $$;
 create or replace function _as_anon() returns void language sql as $$
   select set_config('request.jwt.claims', '{}', true);
+$$;
+
+-- Helper: coba insert log AI dan telan penolakan RLS 42501 (T3c/T3d).
+-- INSERT yang melanggar RLS WITH CHECK melempar 42501 dan meng-abort
+-- transaksi (bukan penolakan diam-diam seperti UPDATE/DELETE) — tanpa
+-- helper ini, asersi hitungan sesudahnya tidak pernah jalan (Run 1 v1.0
+-- abort di T3c). Actor dilewat sebagai parameter: placeholder :'user_x'
+-- TIDAK BOLEH di dalam $$...$$ (aturan file ini).
+create or replace function _try_insert_log(p_id uuid, p_ws uuid, p_actor uuid, p_feature text, p_ref text)
+returns void language plpgsql as $$
+begin
+  insert into public.ai_generations (id, workspace_id, actor_user_id, feature, input_reference)
+  values (p_id, p_ws, p_actor, p_feature, p_ref);
+exception when insufficient_privilege then
+  null;
+end;
 $$;
 
 -- Pengguna uji (GANTI dengan UUID auth user nyata dari database uji).
@@ -273,16 +297,17 @@ select is(
   'T3b baris uji T3a sudah dihapus (postgres) — kembali 8 baris WS-A8'
 );
 select _set_user(:'user_b');
-insert into public.ai_generations (id, workspace_id, actor_user_id, feature, input_reference)
-values ('a8100000-0000-0000-0000-000000000012', 'b8000000-0000-0000-0000-000000000001', :'user_a', 'brief', 'content_item:d8000000-0000-0000-0000-000000000001');
+-- INSERT pelanggar RLS (actor bukan pemanggil) melempar 42501 — helper
+-- _try_insert_log menangkapnya supaya transaksi tetap jalan.
+select _try_insert_log('a8100000-0000-0000-0000-000000000012', 'b8000000-0000-0000-0000-000000000001', :'user_a', 'brief', 'content_item:d8000000-0000-0000-0000-000000000001');
 select is(
   (select count(*) from public.ai_generations where workspace_id = 'b8000000-0000-0000-0000-000000000001')::int,
   8,
   'T3c B insert dengan actor=A (bukan diri sendiri) ditolak — tetap 8 baris'
 );
 select _set_user(:'user_a');
-insert into public.ai_generations (id, workspace_id, actor_user_id, feature, input_reference)
-values ('a8100000-0000-0000-0000-000000000013', 'b8000000-0000-0000-0000-000000000002', :'user_a', 'brief', 'content_item:d8000000-0000-0000-0000-000000000004');
+-- Sama seperti T3c: INSERT pelanggar RLS lewat helper penangkap 42501.
+select _try_insert_log('a8100000-0000-0000-0000-000000000013', 'b8000000-0000-0000-0000-000000000002', :'user_a', 'brief', 'content_item:d8000000-0000-0000-0000-000000000004');
 select is(
   (select count(*) from public.ai_generations where workspace_id = 'b8000000-0000-0000-0000-000000000002')::int,
   2,
@@ -575,6 +600,7 @@ delete from public.organizations where id in
   ('a8000000-0000-0000-0000-000000000001', 'a8000000-0000-0000-0000-000000000002');
 drop function if exists _set_user(uuid, text);
 drop function if exists _as_anon();
+drop function if exists _try_insert_log(uuid, uuid, uuid, text, text);
 
 select * from finish();
 rollback;
