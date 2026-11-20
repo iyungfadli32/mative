@@ -23,15 +23,32 @@ export default async function PengaturanAnggotaPage() {
   if (supabase && user && ws) {
     const { data: memberRows } = await supabase
       .from("workspace_members")
-      .select("id, user_id, workspace_role, membership_status, brand_scope, profiles(display_name)")
+      .select("id, user_id, workspace_role, membership_status, brand_scope")
       .eq("workspace_id", ws.workspace.id)
       .order("created_at", { ascending: true });
+    // PERBAIKAN Phase 9: join embed `profiles(display_name)` DIHAPUS — tidak
+    // ada FK workspace_members → profiles di skema, jadi PostgREST selalu
+    // gagal (PGRST200) dan daftar anggota SELALU kosong sejak Phase 1.
+    // display_name diambil lewat query kedua (RLS profiles mengizinkan
+    // profil sendiri + sesama anggota workspace aktif); fallback user_id
+    // bila profil belum ada (akun dibuat via API tanpa upsert profil).
+    const userIds = (memberRows ?? []).map((m) => m.user_id as string);
+    const nameByUserId = new Map<string, string>();
+    if (userIds.length > 0) {
+      const { data: profileRows } = await supabase
+        .from("profiles")
+        .select("id, display_name")
+        .in("id", userIds);
+      for (const p of profileRows ?? []) {
+        if ((p.display_name as string) !== "") {
+          nameByUserId.set(p.id as string, p.display_name as string);
+        }
+      }
+    }
     members = (memberRows ?? []).map((m) => ({
       id: m.id as string,
       userId: m.user_id as string,
-      email:
-        (m.profiles as unknown as { display_name?: string } | null)?.display_name ??
-        (m.user_id as string),
+      email: nameByUserId.get(m.user_id as string) ?? (m.user_id as string),
       role: m.workspace_role as WorkspaceRole,
       status: m.membership_status as string,
       brandScope: (m.brand_scope as string[] | null) ?? null,

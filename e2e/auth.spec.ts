@@ -23,7 +23,14 @@ test.describe("critical flow — auth + workspace @needs-db", () => {
     await page.getByLabel("Email").fill(email);
     await page.getByLabel("Kata sandi").fill(password);
     await page.getByRole("button", { name: "Masuk" }).click();
-    await expect(page.getByRole("heading", { name: "Command Center" })).toBeVisible();
+    // Timeout 15 dtk (bukan default 5 dtk): login melibatkan round-trip
+    // Supabase Auth + render dashboard; di mobile kerap >5 dtk (defect tes
+    // e2e 2026-11-19 yang sama seperti di planning.spec.ts — flaky, bukan
+    // defect aplikasi; terbukti 20 Nov 2026: tombol Masuk masih pending
+    // saat expect 5 dtk habis, rerun Chromium lolos).
+    await expect(page.getByRole("heading", { name: "Command Center" })).toBeVisible({
+      timeout: 15000,
+    });
 
     await page.goto("/pengaturan/organisasi");
     await page.getByLabel("Nama organisasi").fill(`Organisasi E2E ${slug}`);
@@ -44,9 +51,19 @@ test.describe("critical flow — auth + workspace @needs-db", () => {
     await page.getByLabel("Email").fill(email);
     await page.getByLabel("Kata sandi").fill(password);
     await page.getByRole("button", { name: "Masuk" }).click();
-    await expect(page.getByRole("heading", { name: "Command Center" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Command Center" })).toBeVisible({
+      timeout: 15000,
+    });
     await page.goto("/pengaturan/anggota");
     await expect(page.getByRole("heading", { name: /Undang anggota/ })).toBeVisible();
     await expect(page.getByLabel("Email yang diundang")).toBeVisible();
+    // Regresi Phase 9: daftar anggota SELALU kosong sejak Phase 1 karena
+    // query memakai join embed `profiles(display_name)` tanpa FK di skema
+    // (PostgREST PGRST200 → members = []). Pemilik workspace pertama
+    // (akun uji ini) WAJIB tampil di tabel: empty state tersembunyi,
+    // role Pemilik + status active terlihat.
+    await expect(page.getByText("Belum ada anggota")).toBeHidden({ timeout: 30000 });
+    await expect(page.getByRole("cell", { name: "Pemilik" })).toBeVisible();
+    await expect(page.getByRole("cell", { name: "active" })).toBeVisible();
   });
 });
