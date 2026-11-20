@@ -182,6 +182,7 @@ export async function runAiAction(
       status: "blocked",
       errorCategory: "prompt_injection",
     });
+    revalidatePath("/ai");
     return fail(AI_INJECTION_BLOCKED_ID, {
       code: "prompt_injection",
       generationId,
@@ -274,6 +275,7 @@ export async function runAiAction(
       status: "not_configured",
       errorCategory: result.code,
     });
+    revalidatePath("/ai");
     return fail(result.code === "provider_not_configured" ? AI_NOT_CONFIGURED_ID : result.message, {
       code: result.code,
       generationId,
@@ -293,6 +295,7 @@ export async function runAiAction(
       status: "failed",
       errorCategory: "invalid_output",
     });
+    revalidatePath("/ai");
     return fail("Output AI tidak lolos validasi struktur — aksi gagal, tidak ada yang disimpan.", {
       code: "invalid_output",
       generationId,
@@ -309,6 +312,7 @@ export async function runAiAction(
     status: "completed",
     errorCategory: "none",
   });
+  revalidatePath("/ai");
   return ok("Draft AI siap — tinjau, edit, lalu masukkan sebagai versi baru bila cocok.", {
     draft: validated.data,
     generationId,

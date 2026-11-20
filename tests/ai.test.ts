@@ -9,6 +9,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getAiAdapter, NullAdapter } from "@/features/ai/adapter";
+import type { AiAdapter } from "@/features/ai/adapter";
 import { scanUntrustedContent, buildPromptPayload } from "@/features/ai/safety";
 import { buildMetricPayload, verifyGroundingNumbers } from "@/features/ai/grounding";
 import { AI_SETTINGS_KEY, DEFAULT_AI_SETTINGS } from "@/features/ai/settings";
@@ -32,7 +33,9 @@ const MIGRATIONS_DIR = path.resolve(TESTS_DIR, "../supabase/migrations");
 
 describe("AI Assistant — adapter netral (tanpa provider)", () => {
   it("NullAdapter: provider none, model null, semua metode not_configured", async () => {
-    const adapter = new NullAdapter();
+    // Panggil lewat tipe interface AiAdapter (kontrak) — implementasi
+    // NullAdapter tidak memakai parameternya (tanpa provider).
+    const adapter: AiAdapter = new NullAdapter();
     expect(adapter.providerId).toBe("none");
     expect(adapter.model).toBeNull();
     const draft = await adapter.generateStructuredDraft(
