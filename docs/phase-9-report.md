@@ -188,15 +188,15 @@ Bila butir 1–2 hijau dan butir 3 diuji, status dapat naik menjadi GO untuk go-
 
 ## 15. Jejak commit Phase 9
 
-| Commit       | Isi                                                          |
-| ------------ | ------------------------------------------------------------ |
-| `2bf5228`    | pgTAP 08 v1.3 — T3f INSERT ... RETURNING (53 asersi)         |
-| `f9c5534`    | 3 tes sidebar smoke jadi viewport-aware                      |
-| `425a430`    | /lainnya lengkapi 9 tautan; dialog Buat cepat samakan 4 aksi |
-| `eba5cc1`    | Smoke mobile — locator /lainnya + dialog + /cari             |
-| `67033c8`    | Mitigasi flake impor CSV (revalidasi 1 path)                 |
-| `30bb460`    | Tombol aksi dashboard wrap; footer v0.9.0                    |
-| `771898a`    | Capture Visual QA Phase 9 (23 PNG)                           |
-| `829c955`    | Error boundary + metadata /api/health                        |
-| `55f495f`    | Hapus anggota workspace (owner-only)                         |
-| (berikutnya) | Dokumen peluncuran + laporan ini                             |
+| Commit    | Isi                                                          |
+| --------- | ------------------------------------------------------------ |
+| `2bf5228` | pgTAP 08 v1.3 — T3f INSERT ... RETURNING (53 asersi)         |
+| `f9c5534` | 3 tes sidebar smoke jadi viewport-aware                      |
+| `425a430` | /lainnya lengkapi 9 tautan; dialog Buat cepat samakan 4 aksi |
+| `eba5cc1` | Smoke mobile — locator /lainnya + dialog + /cari             |
+| `67033c8` | Mitigasi flake impor CSV (revalidasi 1 path)                 |
+| `30bb460` | Tombol aksi dashboard wrap; footer v0.9.0                    |
+| `771898a` | Capture Visual QA Phase 9 (23 PNG)                           |
+| `829c955` | Error boundary + metadata /api/health                        |
+| `55f495f` | Hapus anggota workspace (owner-only)                         |
+| `595ae49` | Dokumen peluncuran + laporan ini                             |
