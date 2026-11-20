@@ -22,7 +22,7 @@ function migrationFiles(): Array<{ name: string; sql: string }> {
 }
 
 describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
-  it("memiliki 22 migrasi berversi berurutan 0001–0022", () => {
+  it("memiliki 23 migrasi berversi berurutan 0001–0023", () => {
     const files = migrationFiles();
     expect(files.map((f) => f.name)).toEqual([
       "0001_profiles.sql",
@@ -47,6 +47,7 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
       "0020_publishing_foundation.sql",
       "0021_analytics_foundation.sql",
       "0022_ai_foundation.sql",
+      "0023_ai_generations_select_policy_fix.sql",
     ]);
   });
 
@@ -94,9 +95,12 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
       // tidak berubah sejak 0009, jadi tidak ada yang perlu di-revoke.
       // 0019 hanya menulis ulang satu policy yang SUDAH ada (tanpa
       // objek baru, tanpa grant baru) — tidak ada yang perlu di-revoke.
+      // 0023 sama: hanya menulis ulang policy SELECT ai_generations
+      // (0022) tanpa objek/grant baru.
       if (
         name === "0015_notification_scope_placement.sql" ||
-        name === "0019_brands_insert_scope_fix.sql"
+        name === "0019_brands_insert_scope_fix.sql" ||
+        name === "0023_ai_generations_select_policy_fix.sql"
       )
         continue;
       expect(sql, `${name} harus revoke grant default`).toMatch(/revoke all on/i);
@@ -663,8 +667,7 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
   });
 
   it("migrasi 0021 membuat 6 tabel analytics + RPC impor + seed 14 metrik (Phase 7)", () => {
-    const m21 =
-      migrationFiles().find((f) => f.name === "0021_analytics_foundation.sql")?.sql ?? "";
+    const m21 = migrationFiles().find((f) => f.name === "0021_analytics_foundation.sql")?.sql ?? "";
     // 6 tabel baru + RLS aktif untuk keenamnya.
     for (const table of [
       "metric_definitions",
@@ -802,8 +805,7 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
   });
 
   it("migrasi 0022 membuat tabel ai_generations + RPC insert versi AI + retensi (Phase 8)", () => {
-    const m22 =
-      migrationFiles().find((f) => f.name === "0022_ai_foundation.sql")?.sql ?? "";
+    const m22 = migrationFiles().find((f) => f.name === "0022_ai_foundation.sql")?.sql ?? "";
     // 1 tabel baru + RLS aktif + revoke-all + grant select, insert saja.
     expect(m22).toContain("create table if not exists public.ai_generations");
     expect(m22).toMatch(/alter table public\.ai_generations enable row level security/i);
@@ -894,6 +896,44 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
     for (const fn of ["generateStructuredDraft", "summarize", "classify"]) {
       expect(m22, `0022 TIDAK BOLEH berisi adapter ${fn}`).not.toContain(fn);
     }
+  });
+
+  it("migrasi 0023 menulis ulang policy SELECT ai_generations tanpa self-lookup (perbaikan e2e Phase 8)", () => {
+    const m23 =
+      migrationFiles().find((f) => f.name === "0023_ai_generations_select_policy_fix.sql")?.sql ??
+      "";
+    // Drop + buat ulang policy yang SAMA (bukan policy baru) — 0022
+    // tidak diubah (sudah live).
+    expect(m23).toContain(
+      'drop policy if exists "ai_generations_select_member" on public.ai_generations',
+    );
+    expect(m23).toContain('create policy "ai_generations_select_member"');
+    expect(m23).toMatch(/on public\.ai_generations for select/i);
+    expect(m23).toMatch(/to authenticated/i);
+    // Policy SELECT harus memakai is_ws_member LANGSUNG atas
+    // workspace_id baris itu — helper is_ai_generation_visible mencari
+    // barisnya di ai_generations sendiri, dan lookup-ke-diri-sendiri
+    // itu gagal di konteks INSERT ... RETURNING (PostgREST
+    // .insert().select() → 42501 + rollback; log AI tidak tersimpan).
+    // Komentar di-strip dulu: header file menyebut nama helper untuk
+    // menjelaskan cacatnya.
+    const m23NoCommentsEarly = m23.replace(/--[^\n]*/g, "");
+    expect(m23NoCommentsEarly).toContain(
+      "public.is_ws_member(ai_generations.workspace_id, array['owner', 'admin', 'manager', 'strategist', 'creator', 'editor', 'approver', 'analyst'])",
+    );
+    expect(
+      m23NoCommentsEarly,
+      "0023 TIDAK BOLEH memakai helper self-lookup di policy",
+    ).not.toContain("is_ai_generation_visible");
+    // Tidak ada objek/grant baru — hanya penulisan ulang policy.
+    expect(m23).not.toMatch(/create table/i);
+    expect(m23).not.toMatch(/grant /i);
+    expect(m23).not.toMatch(/revoke /i);
+    // viewer_client tetap tidak ada di daftar peran (komentar di-strip).
+    const m23NoComments = m23NoCommentsEarly;
+    expect(m23NoComments, "viewer_client TIDAK BOLEH ada di kode 0023").not.toContain(
+      "viewer_client",
+    );
   });
 
   it("pgTAP 07 ada dengan plan(77) + pola placeholder yang benar", () => {

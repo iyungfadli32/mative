@@ -14,8 +14,9 @@ content_versions (2 kolom) + RLS + grant minimal + helper invoker/definer
 + RPC definer; tanpa viewer_client (komentar di-strip); tanpa kolom
 payload mentah; CHECK feature/status/error/token; retensi 90 + zona
 Asia/Jakarta; nomor versi max(version_number) BUKAN max(uuid); tanpa
-embed()/adapter/using(true); referensi maju 0022; graf RLS 0001–0022
-tanpa siklus/self-loop.
+embed()/adapter/using(true); referensi maju 0022; graf RLS 0001–0023
+tanpa siklus/self-loop; 0023 menulis ulang policy SELECT
+ai_generations tanpa self-lookup (perbaikan INSERT ... RETURNING 42501).
 """
 
 import json
@@ -30,6 +31,9 @@ from pglast import parse_sql
 
 TEST_FILE = os.path.join("supabase", "tests", "08_rls_phase8.sql")
 MIG_FILE = os.path.join("supabase", "migrations", "0022_ai_foundation.sql")
+MIG23_FILE = os.path.join(
+    "supabase", "migrations", "0023_ai_generations_select_policy_fix.sql"
+)
 APP_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 MATIVE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
@@ -333,23 +337,41 @@ def main():
             with open(os.path.join(mig_dir, fname), "r", encoding="utf-8") as fh:
                 all_tables.update(_create_tables(fh.read()))
     missing = _ref_tables(mig_text) - all_tables
-    check(not missing, f"0022 merujuk tabel yang tidak ada di 0001–0022: {missing}")
+    check(not missing, f"0022 merujuk tabel yang tidak ada di 0001–0023: {missing}")
 
-    # 19. Graf RLS 0001–0022: tanpa siklus/self-loop (bukti 07: graf audit).
+    # 19. Graf RLS 0001–0023: tanpa siklus/self-loop (bukti 07: graf audit).
+    # Nama policy BOLEH dipakai ulang hanya bila file yang lebih baru
+    # men-drop policy itu dulu (penulisan ulang seperti 0006/0016/0019/
+    # 0023). Regex lama (\w+ tanpa kutip) tidak pernah cocok dengan nama
+    # policy yang dikutip — cek ini vacuous (0 nama); regex baru sadar
+    # kutip + sadar drop.
     rls_tables = _audit_rls_graph()
-    check("ai_generations" in rls_tables, "ai_generations harus RLS di 0001–0022")
+    check("ai_generations" in rls_tables, "ai_generations harus RLS di 0001–0023")
     policy_re = re.compile(
-        r"create\s+policy\s+(\w+)\s+on\s+public\.(\w+)\s+for\s+(select|insert|update|delete)\s+to\s+(\w+)",
+        r"create\s+policy\s+\"?(\w+)\"?\s+on\s+public\.(\w+)\s+for\s+(select|insert|update|delete)\s+to\s+(\w+)",
         re.IGNORECASE,
     )
-    policy_names = []
+    drop_re = re.compile(
+        r"drop\s+policy\s+(?:if\s+exists\s+)?\"?(\w+)\"?\s+on\s+public\.(\w+)",
+        re.IGNORECASE,
+    )
+    active_policies = {}
     for fname in sorted(os.listdir(mig_dir)):
         if re.match(r"00\d\d_.*\.sql", fname):
             with open(os.path.join(mig_dir, fname), "r", encoding="utf-8") as fh:
-                for m in policy_re.finditer(fh.read()):
-                    policy_names.append(m.group(1))
-    check(len(policy_names) == len(set(policy_names)),
-          "nama policy duplikat di 0001–0022")
+                ftext = fh.read()
+            events = []
+            for m in drop_re.finditer(ftext):
+                events.append((m.start(), "drop", m.group(1)))
+            for m in policy_re.finditer(ftext):
+                events.append((m.start(), "create", m.group(1)))
+            for _, kind, pname in sorted(events):
+                if kind == "drop":
+                    active_policies.pop(pname, None)
+                else:
+                    check(pname not in active_policies,
+                          f"nama policy duplikat di 0001–0023: {pname} ({fname})")
+                    active_policies[pname] = fname
 
     # 20. pgTAP 08: finish() + rollback; cleanup daun→akar sebagai postgres.
     check("select * from finish();" in test_text, "tes 08 harus finish()")
@@ -363,7 +385,32 @@ def main():
           cleanup_block.index("delete from public.organizations"),
           "cleanup tes 08 harus daun→akar (ai_generations sebelum organizations)")
 
-    print("OK verifier Phase 8: semua cek lolos (0022 41 stmt, tes 08 52 asersi)")
+    # 21. Migrasi 0023: penulisan ulang policy SELECT ai_generations
+    # (perbaikan e2e Phase 8 — INSERT ... RETURNING 42501).
+    mig23_text = _parse_file(MIG23_FILE)
+    mig23_no_comments = _strip_comments(mig23_text)
+    mig23_stmts = _pglast_parse(MIG23_FILE, mig23_text)
+    check(len(mig23_stmts) == 2, f"pglast 0023 harus 2 stmt, dapat {len(mig23_stmts)}")
+    check('drop policy if exists "ai_generations_select_member" on public.ai_generations'
+          in mig23_no_comments,
+          "0023 harus men-drop policy ai_generations_select_member dulu")
+    check(re.search(
+        r"create\s+policy\s+\"?ai_generations_select_member\"?\s+on\s+public\.ai_generations\s+for\s+select",
+        mig23_no_comments, re.IGNORECASE) is not None,
+        "0023 harus membuat ulang policy ai_generations_select_member (select)")
+    check("public.is_ws_member(ai_generations.workspace_id, array['owner', 'admin', 'manager', 'strategist', 'creator', 'editor', 'approver', 'analyst'])"
+          in mig23_no_comments,
+          "0023 policy SELECT harus pakai is_ws_member langsung (tanpa self-lookup)")
+    check("is_ai_generation_visible" not in mig23_no_comments,
+          "0023 TIDAK BOLEH memakai helper self-lookup is_ai_generation_visible")
+    check("create table" not in mig23_no_comments.lower(),
+          "0023 tidak boleh membuat tabel")
+    check("grant " not in mig23_no_comments.lower(),
+          "0023 tidak boleh menambah grant")
+    check("viewer_client" not in mig23_no_comments,
+          "0023 tidak boleh menyebut viewer_client di luar komentar")
+
+    print("OK verifier Phase 8: semua cek lolos (0022 41 stmt, tes 08 52 asersi, 0023 2 stmt)")
     return 0
 
 
