@@ -20,14 +20,27 @@ import { Button } from "@/components/ui/Button";
  * placements nyata (0 + empty state bila belum ada data).
  * Panel tugas/antrean persetujuan/milestone campaign: empty state dengan aksi berikutnya.
  */
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const user = await getCurrentUser();
   const workspaces = await listMyWorkspaces();
-  const workspaceName = workspaces[0]?.workspace.name ?? "Belum ada workspace";
+  const sp = await searchParams;
+  const workspaceParam = typeof sp.workspace === "string" ? sp.workspace : undefined;
+  // Workspace aktif mengikuti ?workspace= bila pemanggil memang member di
+  // sana (pola getPlanningContext); bila tidak, workspace pertama.
+  // Sebelum perbaikan ini (Phase 9) dashboard selalu memakai workspaces[0]
+  // sehingga KPI + nama workspace salah sesudah pindah workspace.
+  const active =
+    (workspaceParam ? workspaces.find((w) => w.workspace.id === workspaceParam) : undefined) ??
+    workspaces[0];
+  const workspaceName = active?.workspace.name ?? "Belum ada workspace";
   let kpis = EMPTY_KPIS;
   const supabase = await getSupabaseServerClient();
-  if (supabase && workspaces[0]) {
-    kpis = await getDashboardKpis(supabase, workspaces[0].workspace.id);
+  if (supabase && active) {
+    kpis = await getDashboardKpis(supabase, active.workspace.id);
   }
 
   return (
@@ -104,11 +117,11 @@ export default async function DashboardPage() {
         <KPIStatCard label="Terbit" value={kpis.published} icon="✅" empty={!kpis.hasData} />
       </section>
 
-      {user && workspaces[0] && can(workspaces[0].role as WorkspaceRole, "view_analytics") ? (
+      {user && active && can(active.role as WorkspaceRole, "view_analytics") ? (
         <section className="mt-6" aria-label="Ringkasan analitik">
           <DashboardAnalyticsSummary
-            workspaceId={workspaces[0].workspace.id}
-            timezone={workspaces[0].workspace.timezone}
+            workspaceId={active.workspace.id}
+            timezone={active.workspace.timezone}
           />
         </section>
       ) : null}
