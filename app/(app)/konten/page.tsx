@@ -167,7 +167,7 @@ async function KontenContent({
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <Link
-                    href={`/konten/${item.id}`}
+                    href={`/konten/${item.id}?workspace=${workspaceId}`}
                     className="font-semibold text-[var(--mt-teal-700)] underline"
                   >
                     {item.title}

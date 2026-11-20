@@ -173,7 +173,10 @@ async function TugasContent({
                       {task.parent_type === "content_item" && task.parent_id ? (
                         <>
                           {" · "}
-                          <Link href={`/konten/${task.parent_id}`} className="underline">
+                          <Link
+                            href={`/konten/${task.parent_id}?workspace=${workspaceId}`}
+                            className="underline"
+                          >
                             Buka konten
                           </Link>
                         </>

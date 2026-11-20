@@ -72,7 +72,10 @@ export function ConvertIdeaButton({
           {state.ok && state.contentItemId ? (
             <>
               {" "}
-              <a href={`/konten/${state.contentItemId}`} className="font-medium underline">
+              <a
+                href={`/konten/${state.contentItemId}?workspace=${workspaceId}`}
+                className="font-medium underline"
+              >
                 Lihat konten →
               </a>
             </>
@@ -80,7 +83,7 @@ export function ConvertIdeaButton({
         </span>
       ) : converted ? (
         <a
-          href={`/konten/${convertedContentItemId}`}
+          href={`/konten/${convertedContentItemId}?workspace=${workspaceId}`}
           className="text-sm font-medium text-[var(--mt-teal-700)] underline"
         >
           Lihat konten hasil konversi →

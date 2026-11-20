@@ -40,8 +40,7 @@ export function JobDetail({
           <PublishingStatusBadge status={job.status} />
         </div>
         <p className="text-sm text-[var(--mt-text-muted)]">
-          Status: {publishingStatusLabel(job.status)} · Zona waktu: {job.timezone} (zona
-          placement)
+          Status: {publishingStatusLabel(job.status)} · Zona waktu: {job.timezone} (zona placement)
         </p>
         <p className="text-sm">
           Jadwal:{" "}
@@ -55,7 +54,7 @@ export function JobDetail({
           {job.placement?.channel_account ? ` (${job.placement.channel_account})` : ""} · Konten:{" "}
           {job.placement ? (
             <Link
-              href={`/konten/${job.placement.content_item_id}`}
+              href={`/konten/${job.placement.content_item_id}?workspace=${workspaceId}`}
               className="underline underline-offset-2"
             >
               Lihat konten
@@ -77,8 +76,8 @@ export function JobDetail({
           </p>
         ) : null}
         <p className="text-sm text-[var(--mt-text-muted)]">
-          Kunci idempotency: <code>{job.idempotency_key}</code> · Percobaan:{" "}
-          {job.attempt_count} · Dibuat {formatInTimezone(job.created_at, job.timezone)}
+          Kunci idempotency: <code>{job.idempotency_key}</code> · Percobaan: {job.attempt_count} ·
+          Dibuat {formatInTimezone(job.created_at, job.timezone)}
         </p>
       </section>
 

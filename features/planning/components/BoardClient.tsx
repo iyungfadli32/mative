@@ -176,7 +176,7 @@ export function BoardClient({
                     } ${canEdit ? "cursor-grab" : ""}`}
                   >
                     <Link
-                      href={`/konten/${card.contentItemId}`}
+                      href={`/konten/${card.contentItemId}?workspace=${workspaceId}`}
                       className="font-medium text-[var(--mt-teal-700)] underline"
                     >
                       {card.title}

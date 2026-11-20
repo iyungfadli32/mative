@@ -197,7 +197,7 @@ async function IdeContent({
               />
             ) : detailIdea.converted_content_item_id ? (
               <Link
-                href={`/konten/${detailIdea.converted_content_item_id}`}
+                href={`/konten/${detailIdea.converted_content_item_id}?workspace=${workspaceId}`}
                 className="text-sm font-medium text-[var(--mt-teal-700)] underline"
               >
                 Lihat konten hasil konversi →
@@ -270,7 +270,7 @@ async function IdeContent({
                       />
                     ) : idea.converted_content_item_id ? (
                       <Link
-                        href={`/konten/${idea.converted_content_item_id}`}
+                        href={`/konten/${idea.converted_content_item_id}?workspace=${workspaceId}`}
                         className="text-sm font-medium text-[var(--mt-teal-700)] underline"
                       >
                         Lihat konten hasil konversi →

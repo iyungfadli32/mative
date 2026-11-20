@@ -217,7 +217,10 @@ async function CampaignDetailContent({
             {deliverables.map((d) => (
               <li key={d.id} className="rounded-xl border border-[var(--mt-border)] p-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Link href={`/konten/${d.id}`} className="font-medium underline">
+                  <Link
+                    href={`/konten/${d.id}?workspace=${workspaceId}`}
+                    className="font-medium underline"
+                  >
                     {d.title}
                   </Link>
                   <StatusBadge

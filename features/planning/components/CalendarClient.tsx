@@ -249,7 +249,10 @@ export function CalendarClient({
                                   draggingId === t.placementId ? "opacity-50" : ""
                                 } ${canSchedule ? "cursor-grab" : ""}`}
                               >
-                                <Link href={`/konten/${t.contentItemId}`} className="block">
+                                <Link
+                                  href={`/konten/${t.contentItemId}?workspace=${workspaceId}`}
+                                  className="block"
+                                >
                                   <span className="flex items-center gap-1 text-xs font-medium">
                                     <ChannelIcon platform={t.platform} size="sm" />
                                     <span className="truncate">{t.title}</span>
@@ -298,7 +301,7 @@ export function CalendarClient({
                     >
                       <ChannelIcon platform={t.platform} />
                       <Link
-                        href={`/konten/${t.contentItemId}`}
+                        href={`/konten/${t.contentItemId}?workspace=${workspaceId}`}
                         className="font-medium text-[var(--mt-teal-700)] underline"
                       >
                         {t.title}
@@ -336,7 +339,7 @@ export function CalendarClient({
               >
                 <ChannelIcon platform={t.platform} />
                 <Link
-                  href={`/konten/${t.contentItemId}`}
+                  href={`/konten/${t.contentItemId}?workspace=${workspaceId}`}
                   className="font-medium text-[var(--mt-teal-700)] underline"
                 >
                   {t.title}
