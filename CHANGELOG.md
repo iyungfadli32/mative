@@ -2,6 +2,107 @@
 
 Format: [Versi] — tanggal (WIB) — ringkasan.
 
+## [0.9.0] — 2026-11-20 — Phase 9: Hardening & Launch (DRAF)
+
+### Ditambahkan
+
+- pgTAP 08 v1.3: asersi baru T3f `INSERT ... RETURNING` pada `ai_generations` (regresi defect 0023 — SELECT policy self-lookup memblokir RETURNING; menutup celah cakupan butir 7 laporan Phase 8 §11). Plan 52 → 53 asersi; verifikasi statis pglast 135 statement.
+- Server action `removeMemberAction` (owner-only) + tombol "Hapus" di Tim & Peran — menutup celah Dok 06 §8 butir 5: sebelumnya owner hanya bisa mencabut undangan (pra-gabung), bukan menghapus anggota yang sudah bergabung. Guard: pemanggil harus owner (dibaca dari sesi, bukan body), diri sendiri dan owner tidak bisa dihapus; kebijakan RLS `ws_members_delete_owner` (0006) menegakkan hal yang sama di DB.
+- Error boundary: `app/(app)/error.tsx`, `app/error.tsx`, `app/global-error.tsx` — sebelumnya tidak ada error boundary di mana pun (gap 9.1 a). Terverifikasi di browser nyata: halaman uji yang melempar menampilkan fallback "Terjadi kesalahan" + tombol muat ulang.
+- Visual QA Phase 9: 21 capture logged-out (7 layar × 3 viewport) + 2 capture after-fix di `docs/visual-qa/phase9/`.
+- Dokumen peluncuran: `PRIVACY.md`, `TERMS.md`, `docs/RELEASE_RUNBOOK.md`, `docs/phase-9-report.md`.
+
+### Diperbaiki
+
+- Navigasi mobile: halaman `/lainnya` hanya memuat 16 dari 25 tujuan sidebar — Tugas Saya, Pustaka Aset, Template Brief, Template, Analitik, Laporan, Impor Data, Integrasi, Asisten AI tidak bisa dicapai lewat navigasi mobile. Ditambah kesembilan tautan + subjudul usang "Phase 2" diperbarui.
+- Dialog "Buat cepat" Topbar (desktop) masih menampilkan Buat konten / Tangkap ide / Unggah aset sebagai tombol disabled "belum tersedia (Phase 2/3)" padahal ketiganya sudah rilis — diganti 4 aksi tersedia, sama dengan dialog mobile (yang juga ditambah "Unggah aset").
+- Tes smoke mobile (3 kegagalan pra-Phase 9): locator `/lainnya` (nama aksesibel = label + deskripsi), tes "modul fase berikut disabled" yang sudah usang diganti tes dialog Buat cepat, asersi pencarian topbar di mobile diubah jadi `toBeHidden` (form `hidden md:block` sesuai desain). Smoke suite kini 26 lolos + 4 skip, 0 gagal (chromium + mobile).
+- Baris tombol aksi Command Center meluber di viewport 390px ("Undang anggota" terpotong) — tambah `flex-wrap`; terverifikasi lewat screenshot ulang.
+- Footer sidebar "MaTive v0.3.0 — Phase 3 (DRAF)" di semua halaman — diperbarui ke v0.9.0 Phase 9 (DRAF); `package.json` 0.1.0 → 0.9.0; `/api/health` kini melaporkan `phase: "9-hardening-launch"` + `version` dari `package.json` (sebelumnya hardcode "1-foundation" / "0.1.0").
+- Mitigasi flake hang UI impor CSV (Phase 7, 4× dalam 5 run): `importAnalyticsCsvAction` kini hanya merevalidasi `/analitik/impor` (sebelumnya 3 path sekaligus). Penyebab pasti belum terbukti; pembuktian butuh re-run e2e login.
+
+### Keamanan (review 9.4 — 8 tes Dok 06 §8)
+
+- (1) Cross-tenant UUID guessing: DENY — pgTAP 01 T1, 02 T1b/T1c. (2) Ubah role sendiri: ditolak — tidak ada endpoint ubah role; kebijakan `ws_members_update_owner_admin` (0006) mensyaratkan owner/admin di USING + WITH CHECK. (3) Creator tidak bisa approve tanpa penugasan — pgTAP 04. (4) Viewer tidak bisa mutasi — pgTAP 02 T3b/T3c/T6b. (5) Member dicabut kehilangan akses seketika — pgTAP 01 T6 (DB) + aksi hapus anggota baru (aplikasi). (6) Signed URL aset privat kedaluwarsa 1 jam. (7) Idempotency publishing via `idempotency_key`. (8) Tidak ada secret di bundle browser (verifikasi 9.1).
+- Ancaman AI (Dok 09 §5): tidak berlaku selama AI nonaktif — tidak ada data yang dikirim ke model eksternal; verifikasi ulang sebelum aktivasi AI.
+
+### Performa terukur (9.5, localhost, server production)
+
+- Ambang yang dipakai (ASUMSI-9C — kit tidak memberi angka): TTFB hangat < 500 ms per rute; total JS gzip < 600 KB; chunk tunggal gzip < 100 KB.
+- Terukur: TTFB hangat 10–35 ms per rute (`/dashboard` 16–33 ms, `/kalender` ~13 ms, `/ai` 11–23 ms, `/analitik` 12–16 ms, `/` 29 ms); total JS gzip ≈ 503 KB; chunk terbesar 72 KB gzip. Semua di bawah ambang.
+
+### Aksesibilitas (9.6 — review statis)
+
+- Tidak ada temuan High: semua `<img>` punya alt; semua tombol punya nama aksesibel (teks atau aria-label); semua input punya label (termasuk label sr-only); focus-visible ada di komponen Button; Dialog punya role + aria-label; alert/status memakai role yang benar. Catatan: belum ada run axe otomatis — review statis saja.
+
+### Diketahui belum selesai / blocker
+
+- pgTAP 08 v1.3 (53 asersi) + e2e login lengkap (termasuk re-run flake impor CSV + hapus anggota) BELUM di-run live — butuh tugas browser + kredensial (dipegang parent).
+- Visual QA layar kerja yang butuh login (grid kalender, kanban, editor, antrean approval berisi data) hanya menampilkan login gate saat logged-out — butuh re-run dengan kredensial.
+- Backup/restore + rollback BELUM diuji (prosedur tertulis di `docs/RELEASE_RUNBOOK.md`; pengujian butuh akses DB staging — dipegang parent).
+- Monitoring masih minimal: endpoint `/api/health` + jejak audit `activity_logs` saja; tidak ada structured logging dan tidak ada layanan alerting (tanpa persetujuan user — ASUMSI-9B).
+- Aset tanpa pemindaian virus (batas desain, sejak Phase 3).
+- GitHub repo (B5) tetap belum dibuat — CI + deploy Vercel + publish worker menunggu user; status akhir: READY FOR OWNER DEPLOYMENT, bukan DEPLOYED/LIVE.
+
+## [0.8.0] — 2026-11-20 — Phase 8: AI Assistant (DRAF)
+
+### Ditambahkan
+
+- Migrasi `0022_ai_foundation.sql` — fondasi AI: 2 kolom baru `content_versions`, retensi 90 hari, tabel `ai_generations` (log pemakaian AI); migrasi `0023_ai_generations_select_policy_fix.sql` — perbaikan defect nyata: SELECT policy memakai self-lookup `is_ai_generation_visible` sehingga `INSERT ... RETURNING` gagal 42501 dan log AI tidak pernah tersimpan; policy ditulis ulang ke `is_ws_member` langsung.
+- Asisten AI (`/ai`): nonaktif — tanpa provider yang dikonfigurasi; seluruh keluaran AI adalah draf sampai disetujui manusia.
+- Tes: pgTAP 08 v1.2 52/52 lolos live; e2e Chromium 6/6 + mobile 6/6 (A8.1–A8.5 + smoke); Vitest 241/241; visual QA login `/ai` 9 screenshot.
+
+### Diperbaiki
+
+- Defect 0023 (di atas) — ditemukan e2e, bukan pgTAP: pgTAP tanpa RETURNING tidak bisa menangkapnya. Pelajaran dicatat: pgTAP 08 v1.3 (Phase 9) menambah tes RETURNING.
+
+### Diketahui belum selesai / blocker
+
+- pgTAP 08 tidak mencakup `INSERT ... RETURNING` (ditutup di Phase 9, T3f).
+- GitHub repo (B5) tetap belum dibuat.
+
+## [0.7.0] — 2026-11-20 — Phase 7: First Official Integration + Analytics (DRAF)
+
+### Ditambahkan
+
+- Migrasi `0021_analytics_foundation.sql` — fondasi analitik: metrik, impor CSV, laporan.
+- Analitik (`/analitik`, `/analitik/laporan`, `/analitik/impor`): dashboard performa, laporan, impor metrik CSV.
+- Tes: pgTAP 07 v1.5 77/77 lolos live; e2e Chromium 6 lolos + 1 skip, mobile 6 lolos + 1 skip; Vitest 217/217.
+
+### Diperbaiki
+
+- Defect nyata: kolom query analitik hilang → PostgREST 400 (commit `cbca252`).
+
+### Diketahui belum selesai / blocker
+
+- Flake hang UI impor CSV (4× dalam 5 run): DB ter-commit, tombol tetap disabled + alert kosong > 30 dtk — penyebab belum terbukti; mitigasi di Phase 9.
+- GitHub repo (B5) tetap belum dibuat.
+
+## [0.6.0] — 2026-11-20 — Phase 6: Publishing Foundation (DRAF)
+
+### Ditambahkan
+
+- Migrasi `0020_publishing_foundation.sql` — fondasi publishing: antrean job, lease, `idempotency_key`, status manual.
+- Publishing (`/publishing`): antrean publikasi manual + konfirmasi terbit; pemrosesan lease-based, max 20 job per run, body tervalidasi Zod.
+- Tes: pgTAP 06 v1.1 109/109 lolos live; e2e publishing 6/6.
+
+### Diketahui belum selesai / blocker
+
+- Publish otomatis ke platform (worker) menunggu repo GitHub (B5) + kredensial platform; saat ini hanya publikasi manual.
+- GitHub repo (B5) tetap belum dibuat.
+
+## [0.5.0] — 2026-11-20 — Phase 5: Campaign & Visual Planning (DRAF)
+
+### Ditambahkan
+
+- Migrasi `0016_brand_scope.sql` (brand scope per anggota), `0017_visual_planner_templates.sql` (template visual), `0018_set_visual_order_fixes.sql`, `0019_brands_insert_scope_fix.sql` (perbaikan defect: WITH CHECK policy tidak boleh self-lookup ke baris yang disisipkan — pola yang sama dengan defect 0022/0023).
+- Campaign & Visual Planning: brand scope anggota, template visual, pengurutan visual.
+- Tes: pgTAP 05 v1.2 61/61 lolos live; e2e Chromium 13 lolos + 1 skip, mobile 4/4; Vitest 165/165.
+
+### Diketahui belum selesai / blocker
+
+- GitHub repo (B5) tetap belum dibuat.
+
 ## [0.4.0] — 2026-11-19 — Phase 4: Review & Approval (DRAF)
 
 ### Ditambahkan
