@@ -46,7 +46,7 @@ export default async function DashboardPage() {
               : "Anda belum masuk — masuk untuk melihat workspace Anda."}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Link href="/konten/baru">
             <Button variant="secondary">＋ Buat konten</Button>
           </Link>

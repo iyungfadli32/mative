@@ -204,7 +204,7 @@ export function AppSidebar({
         ))}
       </nav>
       <p className="px-4 py-3 text-[11px] text-white/40">
-        {collapsed ? "v0.3" : "MaTive v0.3.0 — Phase 3 (DRAF)"}
+        {collapsed ? "v0.9" : "MaTive v0.9.0 — Phase 9 (DRAF)"}
       </p>
     </aside>
   );
