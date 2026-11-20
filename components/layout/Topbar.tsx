@@ -118,23 +118,32 @@ export function Topbar({
         title="Buat cepat"
         description="Aksi yang tersedia saat ini."
       >
+        {/* prefetch={false}: tautan dialog diklik segera setelah dialog
+            terbuka — prefetch yang masih berjalan membuat router MENUNGGU
+            tanpa umpan balik apa pun sampai prefetch selesai (~1 dtk),
+            persis keluhan D3. Tanpa prefetch, klik langsung memulai
+            navigasi + loading.tsx tampil instan. */}
         <div className="flex flex-col gap-2">
-          <Link href="/konten/baru" onClick={() => setQuickCreateOpen(false)}>
+          <Link href="/konten/baru" prefetch={false} onClick={() => setQuickCreateOpen(false)}>
             <Button variant="secondary" className="w-full justify-start">
               📝 Buat konten
             </Button>
           </Link>
-          <Link href="/ide" onClick={() => setQuickCreateOpen(false)}>
+          <Link href="/ide" prefetch={false} onClick={() => setQuickCreateOpen(false)}>
             <Button variant="secondary" className="w-full justify-start">
               💡 Tangkap ide
             </Button>
           </Link>
-          <Link href="/pustaka" onClick={() => setQuickCreateOpen(false)}>
+          <Link href="/pustaka" prefetch={false} onClick={() => setQuickCreateOpen(false)}>
             <Button variant="secondary" className="w-full justify-start">
               🖼️ Unggah aset
             </Button>
           </Link>
-          <Link href="/pengaturan/organisasi" onClick={() => setQuickCreateOpen(false)}>
+          <Link
+            href="/pengaturan/organisasi"
+            prefetch={false}
+            onClick={() => setQuickCreateOpen(false)}
+          >
             <Button variant="secondary" className="w-full justify-start">
               🏢 Buat organisasi / workspace
             </Button>

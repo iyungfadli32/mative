@@ -91,14 +91,27 @@ export default async function DashboardPage({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link href="/konten/baru">
-            <Button variant="secondary">＋ Buat konten</Button>
-          </Link>
+          {workspaces.length === 0 ? (
+            <>
+              <Link href="/pengaturan/organisasi">
+                <Button>＋ Buat organisasi &amp; workspace</Button>
+              </Link>
+              <Link href="/konten/baru">
+                <Button variant="secondary">＋ Buat konten</Button>
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link href="/konten/baru">
+                <Button variant="secondary">＋ Buat konten</Button>
+              </Link>
+              <Link href="/pengaturan/organisasi">
+                <Button variant="secondary">＋ Buat workspace</Button>
+              </Link>
+            </>
+          )}
           <Link href="/kalender">
             <Button variant="secondary">📅 Kalender</Button>
-          </Link>
-          <Link href="/pengaturan/organisasi">
-            <Button variant="secondary">＋ Buat workspace</Button>
           </Link>
           <Link href="/pengaturan/anggota">
             <Button variant="secondary">Undang anggota</Button>

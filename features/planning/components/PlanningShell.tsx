@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { AppShell } from "@/components/layout/AppShell";
+import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/States";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { signOutAction } from "@/features/identity/auth";
@@ -78,18 +79,18 @@ export async function PlanningShell({
           </p>
         </div>
       ) : !ctx ? (
-        <div className="mt-4">
-          <EmptyState
-            title="Belum ada workspace"
-            description="Buat organisasi + workspace dulu sebelum merencanakan konten."
-            icon="🏢"
-          />
-          <p className="mt-2 text-center text-sm">
-            <Link
-              href="/pengaturan/organisasi"
-              className="font-medium text-[var(--mt-teal-700)] underline"
-            >
-              Buat organisasi + workspace →
+        <div className="mt-4 rounded-2xl border border-[var(--mt-border)] bg-[var(--mt-surface)] p-6 text-center">
+          <p className="text-3xl" aria-hidden="true">
+            🏢
+          </p>
+          <h2 className="mt-2 text-lg font-semibold text-[var(--mt-text)]">Belum ada workspace</h2>
+          <p className="mx-auto mt-1 max-w-md text-sm text-[var(--mt-text-muted)]">
+            Buat organisasi + workspace dulu sebelum merencanakan konten — baru setelah itu konten,
+            ide, dan aset bisa dibuat.
+          </p>
+          <p className="mt-4">
+            <Link href="/pengaturan/organisasi">
+              <Button>＋ Buat organisasi &amp; workspace</Button>
             </Link>
           </p>
         </div>
