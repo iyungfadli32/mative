@@ -85,4 +85,12 @@ for (const vp of VIEWPORTS) {
     await expect(page.getByRole("heading", { name: "Template Brief" })).toBeVisible();
     await page.screenshot({ path: `docs/visual-qa/template-brief-${vp.name}.png`, fullPage: true });
   });
+
+  test(`visual — asisten AI (belum masuk) @ ${vp.name}`, async ({ page }) => {
+    await page.setViewportSize({ width: vp.width, height: vp.height });
+    await page.goto("/ai");
+    await expect(page.getByRole("heading", { name: "Asisten AI" })).toBeVisible();
+    await expect(page.getByText("Anda belum masuk")).toBeVisible();
+    await page.screenshot({ path: `docs/visual-qa/ai-${vp.name}.png`, fullPage: true });
+  });
 }
