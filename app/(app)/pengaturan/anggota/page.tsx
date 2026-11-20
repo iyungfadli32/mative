@@ -11,10 +11,22 @@ import AnggotaClient, {
 import { canInvite, type WorkspaceRole } from "@/lib/permissions";
 import { EmptyState } from "@/components/ui/States";
 
-export default async function PengaturanAnggotaPage() {
+export default async function PengaturanAnggotaPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const user = await getCurrentUser();
   const workspaces = await listMyWorkspaces();
-  const ws = workspaces[0];
+  const sp = await searchParams;
+  const workspaceParam = typeof sp.workspace === "string" ? sp.workspace : undefined;
+  // Workspace aktif mengikuti ?workspace= bila pemanggil memang member di
+  // sana (pola dashboard, perbaikan ed5d2c3); bila tidak, workspace pertama.
+  // Sebelum perbaikan ini halaman ini selalu memakai workspaces[0] sehingga
+  // anggota workspace lain tidak pernah bisa dikelola lewat UI.
+  const ws =
+    (workspaceParam ? workspaces.find((w) => w.workspace.id === workspaceParam) : undefined) ??
+    workspaces[0];
   const supabase = await getSupabaseServerClient();
 
   let members: MemberRow[] = [];
