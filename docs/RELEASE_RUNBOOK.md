@@ -1,7 +1,7 @@
 # Release Runbook — MaTive
 
 Versi: 0.9.0 (Phase 9, 20 November 2026 — DRAF).
-Status prosedur backup/restore: **DITULIS, BELUM DIUJI** (lihat §5 — pengujian butuh akses DB staging yang belum tersedia di lingkungan ini).
+Status prosedur backup/restore: **DIUJI 21 November 2026** (lihat §5).
 
 ## 1. Checklist pra-rilis (semua harus hijau)
 
@@ -55,11 +55,14 @@ Prinsip: **migrasi hanya maju, tidak ada down-migration.** Rollback = (a) redepl
 
 ## 5. Restore — status pengujian
 
-**BELUM DIUJI.** Prosedur di atas ditulis dari dokumentasi Supabase + pola migrasi proyek, tetapi belum pernah dijalankan end-to-end di lingkungan staging (tidak ada DB staging / kredensial DATABASE_URL di lingkungan kerja ini). Sebelum go-live publik, owner harus:
+**DIUJI 21 November 2026** (proyek staging `mative-staging`, ref `fharxhdpgjdrcspsvdou`, ap-southeast-1, Nano):
 
-1. Buat proyek Supabase staging (atau gunakan backup harian Free).
-2. Jalankan backup manual (§3.2) → restore ke staging → verifikasi hitungan tabel + login + satu alur kritis (masuk → buat konten → approve → jadwalkan).
-3. Catat hasil uji di `docs/phase-9-report.md` (atau laporan fase berikutnya) dan ubah status bagian ini menjadi DIUJI + tanggal.
+- **Dump:** `pg_dump` live via pooler dari GitHub Codespace (pg_dump langsung dari VM diblokir jaringan VM — port 5432 dijawab invalid SSL; Codespace memakai postgresql-client-17 karena server PG 17.12 menolak pg_dump 16.15). File: public 438.486 byte + auth 5.506 byte (tersimpan di `/tmp` Codespace "scaling robot").
+- **Restore:** pooler staging ada di host `aws-1` (bukan `aws-0` seperti live — ambil host persis dari dashboard Connect → Session pooler). Dua rintangan: (a) `CREATE SCHEMA public` di dump gagal karena skema sudah ada → restore memakai salinan dump tanpa baris itu; (b) FK ke `auth.users` gagal bila public di-restore dulu → urutan benar: restore auth dulu, baru public (skema public sempat dikosongkan ulang `DROP SCHEMA public CASCADE` untuk mengulang dari bersih).
+- **Hitungan identik:** live 53 tabel public (8 berisi) + auth.users 5 + auth.identities 5; staging sesudah restore 51 tabel, semua nilai sama persis + auth 5/5. Selisih hanya 2 VIEW milik extension pgtap (`pg_all_foreign_keys`, `tap_funky`) — pg_dump tidak menyertakan objek milik extension, bukan data aplikasi; staging tidak memasang pgtap.
+- **Cacat restore yang ditemukan + diperbaiki:** restore kehilangan seluruh grant (dump memakai `--no-privileges`, dan `DROP SCHEMA public CASCADE` menghapus USAGE default skema). Gejala: buat organisasi gagal `permission denied for schema public` (42501), REST `GET /rest/v1/organizations` 403; login tetap jalan. Perbaikan: skrip 256 pernyataan (seluruh REVOKE/GRANT migrasi 0001–0023 + `USAGE ON SCHEMA public`) — `backup-test/staging-grants-fix.sql`; 254/256 diterapkan (2 dilewati: `convert_idea_to_content(uuid, text)` 2-arg sudah tidak ada, diganti versi 3-arg). Verifikasi grant: auth_usage true, anon_usage true, table_privs_authenticated 159, table_privs_anon 0, fn_privs_authenticated 73 (73 sudah benar: 76 hitungan kasar − 2 grant ganda untuk fungsi yang sama − 1 fungsi usang).
+- **Alur kritis TERBUKTI di staging** (aplikasi lokal menunjuk staging, Chromium, 21 Nov 01:49 WIB, 12 tes, 10 lolos / 2 gagal / 0 skip, 5,2 menit): masuk → buat organisasi + workspace → buat konten (2 placement, kalender, edit, pindah stage, reschedule) → submit v1 → revisi → v2 → stale ditolak → v3 → setujui → Disetujui → jadwalkan segera → handoff manual → konfirmasi → Published. Kedua kegagalan adalah cacat locator tes, bukan aplikasi: (a) `approval.spec.ts:230` — `getByText('disetujui')` cocok ke 3 elemen (snapshot membuktikan keputusan approver tercatat; tes dua-peran ini baru pertama kali dieksekusi — sebelumnya selalu skip karena `E2E_APPROVER_*` kosong); (b) `auth.spec.ts:47` — `getByRole('cell', {name: 'active'})` cocok ke 2 elemen karena tes dua-peran berjalan paralel (isolasi tes, bukan aplikasi). Perbaikan locator belum diterapkan.
+- **Catatan:** password DB live di-reset atas persetujuan owner untuk uji ini (password baru tidak disimpan di mana pun); hang `POST /auth/v1/token` staging ±20 menit pada uji pertama, pulih sendiri, tidak terulang pada uji ulang. File dump tidak dipertahankan sebagai arsip (hanya di `/tmp` Codespace) — untuk arsip backup, ikuti §3.2.
 
 ## 6. Insiden
 

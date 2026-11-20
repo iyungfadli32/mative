@@ -254,8 +254,8 @@ OWNER DEPLOYMENT. Go-live publik: NO-GO (belum) — lihat §16.4.**
 
 ### 16.4 Yang masih terbuka — penentu GO/NO-GO publik
 
-1. **Backup/restore BELUM DIUJI.** Prosedur tertulis di runbook §5; pengujian butuh proyek staging + kredensial DATABASE_URL yang belum tersedia di lingkungan ini (`.env.local` tidak memuatnya; tidak ada `pg_dump`/`psql` di VM). Dijadwalkan sebelum go-live publik.
-2. **Repo GitHub (B5) BELUM ADA** — memblokir CI, preview Vercel, dan deploy apa pun. Butuh tindakan owner (install aplikasi Meta Muse AI / buat repo `mative` manual).
+1. **Backup/restore DIUJI 21 November 2026** (detail lengkap di runbook §5): dump live → restore ke proyek staging `mative-staging` → hitungan identik (51 tabel + auth 5/5; selisih hanya 2 view milik extension pgtap) → cacat restore (grant hilang) ditemukan + diperbaiki (254/256 pernyataan) → alur kritis TERBUKTI di staging (10 lolos / 2 gagal / 0 skip; kedua gagal adalah cacat locator tes, bukan aplikasi). Prosedur runbook §5 kini berstatus DIUJI.
+2. **Repo GitHub (B5) SELESAI** — repo `mative` publik, kode ter-push (commit `c301a39`, 404 file), Vercel `mative` ter-deploy (https://mative-theta.vercel.app) + smoke test hijau 21 Nov 00:04 WIB. Deployment protection aktif (preview tertutup login Vercel).
 3. **Persetujuan go-live eksplisit owner BELUM ADA.**
 
-**Rekomendasi akhir: GO untuk staging/preview — NO-GO untuk go-live publik (belum).** Bila butir 1–3 di atas hijau + persetujuan eksplisit, status dapat naik menjadi GO untuk go-live — keputusan akhir tetap di tangan owner (Tuan Braderz).
+**Rekomendasi akhir: GO untuk staging/preview — go-live publik menunggu persetujuan eksplisit owner (butir 3).** Keputusan akhir tetap di tangan owner (Tuan Braderz).
