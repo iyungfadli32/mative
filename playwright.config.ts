@@ -14,6 +14,11 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   workers: process.env.CI ? 1 : undefined,
+  // Timeout per tes 120 dtk (bukan default 30 dtk): tiap tes setup-heavy
+  // (masuk + buat org + workspace + brand + konten) memakan 20–28 dtk
+  // sendiri — dengan 30 dtk, Run 5 e2e Phase 7 (A7.2/A7.3) mati kehabisan
+  // anggaran padahal aksi servernya selesai normal sesudah tes mati.
+  timeout: 120_000,
   reporter: [["list"]],
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000",
