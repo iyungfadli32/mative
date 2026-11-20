@@ -231,6 +231,32 @@ tetap disabled — tersangka belum terbukti). Detail lengkap:
 `docs/phase-7-report.md` §11 (deklarasi).
 **Migrasi kini 0001–0021.**
 
+**Phase 8 — 0022 DITERAPKAN live 20 Nov 2026 09:02–09:07 WIB**
+(351 baris; RLS aktif + 4 policy + 5 fungsi + 2 kolom baru di
+`content_versions` + retensi 90, terverifikasi). **pgTAP 08 v1.2:
+52/52 PASS live 20 Nov 2026 ~10:05 WIB** (v1.0 abort 42501 T3c —
+INSERT telanjang pelanggar RLS WITH CHECK menggugurkan transaksi;
+v1.1 helper `_try_insert_log`, commit `e38487b`; Run 2 48/52;
+diagnostik `_tap_out` membuktikan 4 gagal = bug asersi T3d/T4b/
+T4e/T4o; v1.2 commit `d813a95`). **Cacat nyata ditemukan e2e:**
+policy SELECT 0022 memakai helper self-lookup
+`is_ai_generation_visible` → `INSERT ... RETURNING` 42501, log AI
+tidak tersimpan (pgTAP tidak menangkapnya — SQL biasa tanpa
+RETURNING). **0023 (perbaikan policy SELECT ke `is_ws_member`
+langsung, 2 stmt, commit `4dfa67c`) DITERAPKAN live 20 Nov 2026
+~10:24 WIB, terverifikasi** (4 policy; `qual` SELECT =
+`is_ws_member(workspace_id, ARRAY[8 peran])`; helper tetap ada,
+0022 tidak diubah). **E2E AI live (Chromium + mobile iPhone 13,
+`--workers=1`): 6/6 + 6/6, 20 Nov 2026 ~10:41 WIB** — run pertama
+2/6 (locator test-only + cacat 0023); locator diperbaiki
+`93fe22c`/`404c2e4`/`2740594` (getByRole alert+name tidak pernah
+cocok — ARIA melarang nama pada alert; asersi log butuh
+`exact: true`). A8.2/A8.4 run ulang membuktikan 0023 di live
+(log tercatat). Visual QA login /ai 9 PNG
+(`docs/visual-qa/ai-login-*.png`). Detail lengkap:
+`docs/phase-8-report.md` §11 (deklarasi).
+**Migrasi kini 0001–0023.**
+
 ## Seed demo (local/preview SAJA — JANGAN di database produksi)
 
 ```bash

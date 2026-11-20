@@ -684,8 +684,106 @@ Tidak ada residu AI di luar workspace e2e.
     langsung lewat policy actor (pola `integration_events` 0021) —
     RPC tambahan hanya dead code + permukaan serangan. (§3)
 
-## 11. Deklarasi — (KOSONG, diisi parent)
+## 11. Deklarasi — Phase 8 LULUS (20 Nov 2026, ~10:41 WIB)
 
-_Bagian ini KOSONG — diisi parent saat menyatakan Phase 8 LULUS
-(tanggal + bukti live: migrasi 0022, pgTAP 08, e2e AI + batas jujur
-baru). Koordinator build TIDAK BOLEH mengisi deklarasi._
+**Phase 8 dinyatakan LULUS oleh parent.** Semua gate live lolos. AI
+tetap NONAKTIF (tidak ada provider, tidak ada model yang dipanggil,
+tidak ada biaya) — yang lulus adalah fondasi AI yang jujur: adapter
+netral, 7 aksi tervalidasi, review manusia (D-010), grounding,
+trust & safety, kontrol workspace, log `ai_generations`, dan harness
+evaluasi.
+
+### Bukti live
+
+- **Migrasi 0022 live + terverifikasi (20 Nov 2026 09:02–09:07 WIB,
+  snippet "0022 AI foundation", 351 baris):** RLS aktif (1), 4
+  policy, 5 fungsi, 2 kolom baru di `content_versions`
+  (`ai_assisted`, `ai_generation_id`), `ai_retention_days()` = 90,
+  `ai_generations` 0 baris.
+- **pgTAP 08 v1.2: 52/52 PASS live (20 Nov 2026 ~10:05 WIB, snippet
+  "pgTAP 08 v1.2", 620 baris editor, baris terakhir `ok 52 - T7d`).**
+  Riwayat: Run 1 v1.0 abort 42501 di T3c — INSERT telanjang yang
+  melanggar RLS WITH CHECK menggugurkan seluruh transaksi (bukan
+  penolakan diam seperti UPDATE/DELETE); diperbaiki v1.1
+  (`e38487b`, helper `_try_insert_log` penangkap
+  `insufficient_privilege`). Run 2 v1.1: 48/52. Run diagnostik
+  `_tap_out` membuktikan keempat kegagalan adalah bug asersi, bukan
+  cacat migrasi: T3d menghitung sebagai viewer_client (melihat 0 —
+  bertentangan dengan T2c), T4b memanggil RPC penyisip dua kali
+  (v2→v3) dengan kaskade ke T4e (v4) dan T4o (4 versi). Diperbaiki
+  v1.2 (`d813a95`): T3d menghitung sebagai B, T4b membaca
+  `max(version_number)` dari tabel. Kanonik v1.2: 623 baris, pglast
+  130 stmt, plan(52), 44 `is` + 8 `throws_ok`. Dua pelajaran baru
+  tercatat (POLA): hitung sebagai pengguna yang bisa melihat
+  barisnya; jangan pernah memanggil RPC penyisip dua kali untuk
+  membaca hasilnya.
+- **Cacat nyata ditemukan e2e + diperbaiki (bukan cacat tes):**
+  policy SELECT 0022 memakai helper `is_ai_generation_visible`
+  yang mencari barisnya di `ai_generations` sendiri. SELECT biasa
+  dan INSERT biasa lolos (itulah kenapa pgTAP 08 52/52), tetapi
+  `INSERT ... RETURNING` (pola supabase-js
+  `.insert(...).select("id").single()` di `logGeneration`)
+  dievaluasi policy SELECT atas baris baru → 42501 → seluruh
+  statement di-rollback → **baris log AI tidak pernah tersimpan**.
+  Direproduksi via REST sebagai owner aktif: POST +
+  `Prefer: return=representation` → 403 42501, 0 baris; POST yang
+  sama + `return=minimal` → 201; kontrol `activity_logs` (policy
+  SELECT `is_ws_member` langsung) → 201. Kelas cacat yang sama
+  dengan 0019 (brands). Perbaikan: **migrasi 0023**
+  (`supabase/migrations/0023_ai_generations_select_policy_fix.sql`,
+  2 stmt, commit `4dfa67c`) — drop + buat ulang policy SELECT
+  dengan `is_ws_member(ai_generations.workspace_id, [8 peran
+  non-klien])` langsung; semantik visibilitas sama persis
+  (viewer_client tetap tidak melihat); helper
+  `is_ai_generation_visible` tetap ada (dipakai pgTAP T2f/T2g);
+  0022 tidak diubah. **0023 DITERAPKAN live 20 Nov 2026 ~10:24
+  WIB + terverifikasi** (4 policy; `qual` policy SELECT =
+  `is_ws_member(workspace_id, ARRAY[8 peran])`;
+  `is_ai_generation_visible` tidak muncul di policy mana pun).
+- **e2e AI live — run ulang HIJAU (20 Nov 2026 ~10:25–10:41 WIB,
+  `--workers=1`, build `.next/` segar): Chromium 6/6 (2,8 mnt) +
+  mobile 6/6 (2,9 mnt)** — A8.1–A8.5 + smoke per proyek; A8.6/A8.7
+  skip by design. Run pertama Chromium 2 lulus / 4 gagal (A8.1
+  locator strict-mode, A8.2/A8.5 locator exact-text, A8.4 cacat
+  0023). Perbaikan locator (test-only, tanpa perubahan aplikasi):
+  `93fe22c` (A8.1 ke role=status, A8.2/A8.5 ke role=alert, asersi
+  log ke region Log AI) + `404c2e4` (`getByRole("alert", {name})`
+  TIDAK PERNAH cocok — role=alert dilarang punya accessible name
+  menurut ARIA, Playwright menghitung namanya kosong; diganti
+  `getByText`) + `2740594` (asersi log A8.2 `exact: true` —
+  `not_configured` adalah substring `provider_not_configured`).
+  **A8.2 dan A8.4 pada run ulang membuktikan 0023 di live:**
+  baris log kini benar-benar tercatat di halaman /ai.
+- **Visual QA login /ai:** 9 PNG di `docs/visual-qa/ai-login-*.png`
+  (3 viewport × 3 potong: atas/log/pengaturan), commit `93fe22c`.
+  Screenshot log desktop membuktikan tabel log me-render baris
+  (Brief, `blocked`, `prompt_injection`) dan pengaturan menampilkan
+  "Aktif", limit 10.
+- **Gate akhir:** `tsc --noEmit` 0; lint 0; Vitest **241/241**
+  (20 file; 240 + 1 tes baru 0023); verifier OK (0022 41 stmt,
+  tes 08 52 asersi, 0023 2 stmt); build exit 0 (route `/ai`).
+  **Diffstat akhir `af940a3..2740594`: 44 file, 5.618 insertions,
+  4 deletions** — mengoreksi angka §1 (34 file, 5.432/1) yang
+  hanya mencakup build awal sampai `fd9b270`, sebelum perbaikan
+  live (v1.1/v1.2 pgTAP, 0023, locator, visual QA login).
+
+### Batas jujur yang tetap berlaku sesudah deklarasi
+
+Batas §7 tetap berlaku, dengan pembaruan: (1) happy path generate
+→ insert versi baru tetap TIDAK DAPAT diuji live tanpa provider
+(RPC terbukti di pgTAP TES 4 saja); (2) evaluasi model live tidak
+mungkin tanpa provider (22/22 mengukur harness, bukan model);
+(3) retensi 90 hari tidak berjalan otomatis — operator harus
+memanggil `cleanup_ai_generations()` (tidak ada cron); (4) token
+usage selalu null tanpa provider; (5) penolakan
+disabled/usage-limit/forbidden tidak dicatat ke log; (6) A8.6/A8.7
+hanya RLS + unit; (7) **BARU: pgTAP 08 tidak mencakup perilaku
+`INSERT ... RETURNING`** — cacat 0023 hanya tertangkap e2e
+(A8.2/A8.4); bila mau, pgTAP bisa ditambah tes RETURNING nanti
+(pekerjaan terpisah, bukan bagian fase ini); (8) flake hang UI
+Phase 7 + 3 smoke mobile pre-existing (sidebar) tetap dibawa ke
+Phase 9 sebagai item yang diketahui.
+
+**Progres buku: 10/11 = 91%.** Berikutnya: bersihkan residu e2e
+Phase 8 (25 org + 25 workspace `org-p8-*`/`ws-p8-*`), lalu
+Phase 9 (Hardening & Launch).
