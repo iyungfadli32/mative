@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_TIMEZONE,
+  formatAge,
   formatDateOnly,
   formatInTimezone,
   isValidTimezone,
@@ -36,5 +37,16 @@ describe("Waktu — UTC disimpan, Asia/Jakarta dirender (Keputusan #13)", () => 
 
   it("nowUtcIso berakhiran Z (UTC)", () => {
     expect(nowUtcIso()).toMatch(/Z$/);
+  });
+
+  it("formatAge memakai Bahasa Indonesia relatif (panel Antrean persetujuan)", () => {
+    const now = new Date("2026-11-20T10:00:00.000Z");
+    expect(formatAge("2026-11-20T09:59:30.000Z", now)).toBe("baru saja");
+    expect(formatAge("2026-11-20T09:45:00.000Z", now)).toBe("15 menit lalu");
+    expect(formatAge("2026-11-20T07:00:00.000Z", now)).toBe("3 jam lalu");
+    expect(formatAge("2026-11-18T10:00:00.000Z", now)).toBe("2 hari lalu");
+    // Di atas 30 hari tampil tanggal saja (bukan "45 hari lalu").
+    expect(formatAge("2026-10-01T10:00:00.000Z", now)).toContain("Oktober 2026");
+    expect(formatAge("bukan-tanggal", now)).toBe("tanggal tidak valid");
   });
 });

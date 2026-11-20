@@ -6,10 +6,11 @@ import { KPIStatCard } from "@/components/ui/KPIStatCard";
 import { EmptyState } from "@/components/ui/States";
 import { EMPTY_KPIS } from "@/features/dashboard/kpis";
 import { getDashboardKpis } from "@/features/planning/queries";
+import { approvalMemberNames, listPendingApprovalRequests } from "@/features/approval/queries";
 import { DashboardAnalyticsSummary } from "@/features/analytics/components/DashboardAnalyticsSummary";
 import { can } from "@/lib/permissions";
 import type { WorkspaceRole } from "@/lib/permissions";
-import { formatDateOnly, timezoneLabel } from "@/lib/time";
+import { formatAge, formatDateOnly, timezoneLabel } from "@/lib/time";
 import { envStatus, SUPABASE_NOT_CONFIGURED_ID } from "@/lib/env";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
@@ -41,6 +42,36 @@ export default async function DashboardPage({
   const supabase = await getSupabaseServerClient();
   if (supabase && active) {
     kpis = await getDashboardKpis(supabase, active.workspace.id);
+  }
+
+  // Antrean persetujuan (Phase 9): request in_review NYATA untuk workspace
+  // aktif — bukan lagi EmptyState hardcode. Sebelum perbaikan ini panel ini
+  // selalu menampilkan "Belum ada yang menunggu persetujuan" walau ada
+  // request in_review. Judul + pemohon + umur request + tautan ke
+  // /persetujuan; empty state hanya bila benar-benar tidak ada.
+  type PendingRow = { title: string; submittedBy: string; age: string };
+  let pendingApprovals: PendingRow[] = [];
+  if (supabase && active) {
+    const pendingRes = await listPendingApprovalRequests(supabase, active.workspace.id);
+    const requests = pendingRes.error || pendingRes.unavailable ? [] : pendingRes.data;
+    if (requests.length > 0) {
+      const itemIds = [...new Set(requests.map((r) => r.target_id))];
+      const [{ data: items }, names] = await Promise.all([
+        supabase
+          .from("content_items")
+          .select("id, title")
+          .in("id", itemIds.length > 0 ? itemIds : ["00000000-0000-0000-0000-000000000000"]),
+        approvalMemberNames(supabase, active.workspace.id),
+      ]);
+      const titleById = new Map(
+        ((items ?? []) as { id: string; title: string }[]).map((i) => [i.id, i.title]),
+      );
+      pendingApprovals = requests.map((r) => ({
+        title: titleById.get(r.target_id) ?? r.target_id,
+        submittedBy: names.get(r.submitted_by) ?? r.submitted_by,
+        age: formatAge(r.submitted_at),
+      }));
+    }
   }
 
   return (
@@ -140,11 +171,39 @@ export default async function DashboardPage({
         <div className="rounded-2xl border border-[var(--mt-border)] bg-[var(--mt-surface)] p-4">
           <h2 className="font-semibold">Antrean persetujuan</h2>
           <div className="mt-3">
-            <EmptyState
-              title="Belum ada yang menunggu persetujuan"
-              description="Approval Center hadir di Phase 4. Setelah ada content yang diajukan, antreannya tampil di sini."
-              icon="✔️"
-            />
+            {pendingApprovals.length === 0 ? (
+              <EmptyState
+                title="Belum ada yang menunggu persetujuan"
+                description="Konten yang diajukan untuk approval dan masih ditinjau tampil di sini."
+                icon="✔️"
+              />
+            ) : (
+              <ul className="space-y-3">
+                {pendingApprovals.map((row) => (
+                  <li key={`${row.title}-${row.submittedBy}-${row.age}`} className="text-sm">
+                    <Link
+                      href={`/persetujuan?workspace=${active?.workspace.id}`}
+                      className="font-medium text-[var(--mt-teal-700)] underline"
+                    >
+                      {row.title}
+                    </Link>
+                    <p className="mt-0.5 text-[13px] text-[var(--mt-text-muted)]">
+                      Diajukan oleh {row.submittedBy} · {row.age}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {pendingApprovals.length > 0 ? (
+              <p className="mt-3 text-center text-sm">
+                <Link
+                  href={`/persetujuan?workspace=${active?.workspace.id}`}
+                  className="font-medium text-[var(--mt-teal-700)] underline"
+                >
+                  Lihat semua di Approval Center →
+                </Link>
+              </p>
+            ) : null}
           </div>
         </div>
         <div className="rounded-2xl border border-[var(--mt-border)] bg-[var(--mt-surface)] p-4">

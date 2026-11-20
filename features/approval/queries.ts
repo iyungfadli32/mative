@@ -190,6 +190,31 @@ export async function listApprovalQueue(
   return { data: mine, error: null, unavailable: false };
 }
 
+/**
+ * Request persetujuan yang masih in_review untuk satu workspace — panel
+ * "Antrean persetujuan" dashboard (Phase 9). Diurutkan dari yang terbaru
+ * diajukan; dibatasi (default 5). KPI "Menunggu persetujuan" menghitung
+ * item dengan production_status internal_review; dalam alur normal
+ * (RPC 0014) submit membuat request in_review SEKALIGUS memindahkan
+ * item ke internal_review, jadi kedua angka ini selaras.
+ */
+export async function listPendingApprovalRequests(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  limit = 5,
+): Promise<QueryResult<ApprovalRequest[]>> {
+  return runQuery(
+    supabase
+      .from("approval_requests")
+      .select(REQUEST_COLUMNS)
+      .eq("workspace_id", workspaceId)
+      .eq("status", "in_review")
+      .order("submitted_at", { ascending: false })
+      .limit(limit),
+    [] as ApprovalRequest[],
+  );
+}
+
 export async function getApprovalRequest(
   supabase: SupabaseClient,
   requestId: string,

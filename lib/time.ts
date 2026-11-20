@@ -57,6 +57,24 @@ export function isValidTimezone(tz: string): boolean {
   }
 }
 
+/** Umur relatif Bahasa Indonesia dari sebuah timestamp ISO
+ * ("baru saja", "3 menit lalu", "2 jam lalu", "5 hari lalu").
+ * Di atas 30 hari tampil tanggal saja. */
+export function formatAge(isoUtc: string, now: Date = new Date()): string {
+  const then = new Date(isoUtc);
+  if (Number.isNaN(then.getTime())) return "tanggal tidak valid";
+  const diffMs = now.getTime() - then.getTime();
+  if (diffMs < 0) return formatDateOnly(isoUtc);
+  const minutes = Math.floor(diffMs / 60000);
+  if (minutes < 1) return "baru saja";
+  if (minutes < 60) return `${minutes} menit lalu`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} jam lalu`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days} hari lalu`;
+  return formatDateOnly(isoUtc);
+}
+
 /** Sekarang dalam UTC ISO — dipakai untuk stempel client-side saja. */
 export function nowUtcIso(): string {
   return new Date().toISOString();
