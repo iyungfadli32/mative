@@ -2,8 +2,9 @@
 
 ## 1. Ringkasan hasil
 
-Phase 7 selesai dibangun di 5 commit, 30 file, 6.382 insertions
-(1 deletion — baris "20 migrasi" di `tests/migrations.test.ts`):
+Phase 7 selesai dibangun di 7 commit (5 kode + 2 dokumentasi laporan
+ini), 33 file, 7.250 insertions, 3 deletions (termasuk baris
+"20 migrasi" di `tests/migrations.test.ts`):
 
 | Commit | Isi |
 | ------ | --- |
@@ -12,6 +13,8 @@ Phase 7 selesai dibangun di 5 commit, 30 file, 6.382 insertions
 | `cd4459e` | Kode aplikasi analytics + integrasi |
 | `f11f3c7` | Spek e2e analytics (A7.1–A7.4 + smoke) |
 | `7314633` | Perbaikan ASUMSI-7C (validasi CSV video_views/conversions) |
+| `6d6aa4a` | Laporan Phase 7 — ringkasan, defect, batas jujur, §8 live, §11 kosong |
+| `ff97c53` | Koreksi §5 — full suite 217/217 dijalankan sesudah fix 7314633 |
 
 **Keputusan paling penting (v2 §7 + ADR-0013): integrasi pertama BELUM
 dipilih dan TIDAK ADA akses ke platform apa pun — jadi Phase 7 TIDAK
@@ -23,14 +26,15 @@ ada akun yang dibuat, tidak ada platform yang diklaim "didukung".
 
 Gate lokal: typecheck 0, lint 0, Vitest **217/217** (18 file, naik dari
 187 Phase 6: +27 analytics, +1 permissions, +2 migrations),
-pglast migrasi 0021 97 statement OK, pgTAP 07 ternormalisasi 145
-statement OK, verifier statis **35/35**, build produksi exit 0
+pglast migrasi 0021 97 statement OK, pgTAP 07 ternormalisasi 151
+statement OK (v1.5), verifier statis **35/35**, build produksi exit 0
 (5 route baru: `/analitik`, `/analitik/impor`, `/analitik/laporan`,
 `/api/v1/analytics/export`, `/integrasi`).
 
 **Yang BELUM terbukti live (baca §7 dulu sebelum deklarasi):** migrasi
 0021 belum diterapkan ke live, pgTAP 07 belum dijalankan live, e2e
 analytics belum dijalankan live — ketiganya menunggu parent (§8).
+**Semuanya kini sudah terbukti live 20 Nov 2026 — lihat §11.0.**
 A7.5 (viewer_client) di-skip di e2e (butuh akun kedua); dibuktikan
 di pgTAP 07 TES 5 + permissions.test.ts + gate `can()` halaman.
 
@@ -91,7 +95,7 @@ di pgTAP 07 TES 5 + permissions.test.ts + gate `can()` halaman.
 
 ## 3. P7-02/P7-03 — Migrasi 0021 + verifikasi statis
 
-### 0021 — `supabase/migrations/0021_analytics_foundation.sql` (838 baris, 97 statement pglast OK)
+### 0021 — `supabase/migrations/0021_analytics_foundation.sql` (846 baris v1.1, 97 statement pglast OK)
 
 6 tabel baru + RLS aktif keenamnya + revoke-all (grant select saja
 untuk 5 tabel; `channel_credentials` TANPA grant apa pun):
@@ -131,9 +135,11 @@ Dua detail yang sengaja dikunci:
   file) — satu baris buruk = seluruh impor gagal, tidak ada yang
   tertulis.
 
-### pgTAP 07 — `supabase/tests/07_rls_phase7.sql` (771 baris, plan(77), 77 asersi)
+### pgTAP 07 — `supabase/tests/07_rls_phase7.sql` (854 baris v1.5, plan(77), 77 asersi)
 
-59 `is` + 15 `throws_ok` (4 argumen, pesan lengkap) + 3 `lives_ok`.
+57 `is` + 17 `throws_ok` (4 argumen, pesan lengkap) + 3 `lives_ok`
+(komposisi v1.5 — v1.0 sempat 59 `is` + 15 `throws_ok`; T6a/T6d
+diubah jadi `throws_ok` di v1.1, lihat §11.1.2).
 Fixture prefix a700/b700/e700/d700/c700/f700; user A/B memakai UUID
 yang sama dengan pgTAP 06 (placeholder `:'user_a'`/`:'user_b'` —
 tidak ada UUID nyata di file). Setup: org A7/B7, workspace WS-A7/
@@ -159,8 +165,8 @@ dengan `brand_scope=[Brand A]` + admin WS-B7.
 
 Cleanup daun → akar (pelajaran 06 v1.0): brands dihapus SETELAH
 content_items; katalog global `metric_definitions` TIDAK dihapus.
-Splitter: 14 bagian, 769 baris, lossless; file ternormalisasi
-ter-parse pglast 145 statement OK.
+Splitter: 15 bagian, 852 baris (sesudah strip `\set`), lossless;
+file ternormalisasi ter-parse pglast 151 statement OK (v1.5).
 
 ### Verifier statis — `supabase/tests/rls_verify_phase7.py` (35/35 lolos)
 
@@ -376,9 +382,11 @@ WebKit; build basi — rebuild sebelum e2e; residu p6 dibersihkan
 04:09 WIB). **Batas jujur BARU Phase 7:**
 
 1. **Migrasi 0021 BELUM live, pgTAP 07 BELUM jalan live, e2e
-   analytics BELUM jalan live.** Semua bukti fase ini statis
-   (pglast, verifier, Vitest, build) + spek e2e tertulis. Deklarasi
-   LULUS membutuhkan §8 lolos.
+   analytics BELUM jalan live — SEBELUM deklarasi.** Semua bukti
+   fase ini statis (pglast, verifier, Vitest, build) + spek e2e
+   tertulis. **SUDAH TERBUKTI LIVE 20 Nov 2026 — lihat §11.0**
+   (0021 v1.1 live ~04:44 WIB, pgTAP 07 v1.5 77/77 06:38 WIB,
+   e2e analytics hijau Chromium + mobile 07:57–08:03 WIB).
 2. **A7.5 viewer_client hanya dibuktikan RLS + unit, bukan e2e
    live.** Butuh akun kedua sebagai viewer_client + alur undangan —
    di luar spek e2e ini.
@@ -606,9 +614,249 @@ Dependensi baru: **tidak ada** (Intl bawaan + pola yang sudah ada).
     (INVALID_REFERENCE) — form tidak boleh memaksa pengguna
     mengarang referensi hanya untuk lolos validasi.
 
-## 11. Deklarasi — KOSONG (diisi parent sesudah §8 lolos)
+## 11. Deklarasi — LULUS 20 Nov 2026
 
-_Belum dinyatakan lulus. Parent mengisi bagian ini sesudah migrasi
-0021 live + pgTAP 07 77/77 live + e2e analytics lolos (A7.1–A7.4
-Chromium + mobile, A7.5 skip, 2 smoke), dengan tanggal, bukti live,
-dan batas jujur baru bila ada._
+**Phase 7 DINYATAKAN LULUS 20 Nov 2026** (pgTAP 07 Run 8 06:38 WIB;
+e2e Chromium selesai 07:57 WIB; e2e analytics mobile selesai 08:03
+WIB). Parent memverifikasi langsung, bukan hanya dari laporan
+koordinator: HEAD + commit via git, typecheck 0, lint 0, Vitest
+217/217 (dijalankan ulang parent 07:58 WIB), hitung asersi file
+pgTAP (57 `is` + 17 `throws_ok` + 3 `lives_ok` = 77).
+
+### 11.0 Bukti live
+
+- **Migrasi 0021 v1.1 live + terverifikasi** (diterapkan 20 Nov 2026
+  ~04:44 WIB; 6 tabel, RLS aktif keenamnya, 20 policy —
+  `channel_credentials` 0 by design — 7 fungsi, seed 14/14).
+- **pgTAP 07 v1.5 Run 8: 77/77 live** (06:38 WIB; tab SQL baru
+  `9566b2a9…`, snippet tersimpan "pgTAP 07 v1.5", 852 baris;
+  asersi terakhir `ok 77 - T14c …` terverifikasi verbatim lewat
+  dialog detail sel; tidak ada baris "not ok", tidak ada ringkasan
+  "failed N tests of 77"; begin…rollback — tanpa perubahan data
+  permanen).
+- **e2e analytics Chromium: 6 lolos, 1 skip** (A7.1–A7.4 lolos,
+  A7.5 skip, 2 smoke lolos — dua run hijau penuh berturut-turut:
+  Run 6 + run konfirmasi).
+- **e2e analytics mobile (iPhone 13): 6 lolos, 1 skip, 0 gagal**
+  (08:03 WIB, 2,2 mnt, percobaan pertama).
+- **Regresi Chromium: 16 lolos, 1 skip, 0 gagal** (11,7 mnt;
+  termasuk A5.1 — pernah flake di Phase 6, kini lolos langsung —
+  dan A6.1/A6.2/A6.3/A6.5).
+- **Regresi mobile: 13 lolos, 1 skip, 3 gagal** — ketiganya
+  PRE-EXISTING sidebar (lihat §11.3), bukan regresi Phase 7.
+- **HEAD akhir: `409406b`; tree bersih; port 3000 bebas; `.next/`
+  dibangun ulang dari HEAD akhir; tidak ada migrasi baru yang
+  dibuat/diterapkan selama e2e.**
+
+### 11.1 Cacat yang ditemukan live di migrasi/pgTAP (semua diperbaiki)
+
+Migrasi 0021 hanya berubah SEKALI (v1.0 → v1.1); semua perbaikan
+berikutnya ada di file pgTAP, bukan di migrasi.
+
+1. **`max(uuid)` tidak ada di Postgres (Run 1, v1.0, ~04:55 WIB).**
+   RPC 0021 abort `42883 max(uuid)` saat benar-benar dieksekusi —
+   padahal lolos pglast, verifier statis, dan §8. Pelajaran:
+   parse OK + verifikasi statis OK ≠ runtime OK; Postgres TIDAK
+   punya agregat `max`/`min` untuk uuid. Perbaikan: 0021 v1.1
+   (commit `1942b07`, subquery skalar LIMIT 1), diterapkan live
+   04:58–04:59 WIB.
+2. **T6a/T6d: jenis asersi salah (Run 2, v1.0).** Tes mengharapkan
+   0 baris dari `channel_credentials`, padahal role tanpa grant
+   melempar 42501, bukan 0 baris (pelajaran 10). Perbaikan: pgTAP
+   v1.1 (commit `aa36f7d`, T6a/T6d → `throws_ok` 42501). Migrasi
+   tidak berubah (desain no-grant sudah benar, ADR-0013).
+3. **Run 3 (v1.1): 61 ok / 16 not ok.** Diagnosis lewat run
+   diagnostik `_tap_out` (05:21–05:27 WIB, 16 baris `not ok`
+   verbatim): 11 kegagalan = bug role (pelajaran 36: `_set_user()`
+   hanya mengubah klaim JWT, BUKAN role — sesudah `reset role;`
+   tes diam-diam berjalan sebagai postgres; langsung: T6d,
+   T10a–T10f, T12b, T12c; berantai: T11a/T11b via DELETE postgres
+   T10f yang menghapus snapshot WS-A7 + CASCADE menghapus
+   `content_metrics` DAN `campaign_metrics` termasuk baris Okt);
+   3 = akibat berantai (T13c NULL, T13d, T14c have-2); 2 = bug
+   ekspektasi (T2g have 5 want 4; T8b subquery "latest" digugurkan
+   oleh UPDATE penuaannya sendiri). Perbaikan: pgTAP v1.2 (commit
+   `87282c9`): `set local role authenticated;` ditegaskan lagi
+   sebelum `_set_user` sesudah tiap `reset role;` (T6d, T7b, T7e,
+   T8b, T12a; TES 11 sengaja tetap postgres); T2g 4→5; T8b dipatok
+   ke snapshot yang dituakan; T13d 2→3. Migrasi tidak berubah.
+4. **Run 4 (v1.2): abort `21000` di T13b.** Subquery skalar
+   `campaign_metrics` tanpa filter periode mengembalikan 2 baris
+   (Nov 1500 + Okt 3000 dari impor multi-brand T4h) — agregat RPC
+   memang PER PERIODE (baris Okt sah). Bug ini tersembunyi di Run 3
+   karena T10f-sebagai-postgres sudah menghapus CASCADE baris Okt.
+   Perbaikan: pgTAP v1.3 (commit `49eb829`): kelima subquery
+   skalar `campaign_metrics` (T2e, T2f, T13b, T13c, T14b) difilter
+   `period_start`/`period_end` Nov 2026. Migrasi tidak berubah.
+5. **Run 5 (v1.3): abort `42501` di DELETE pertama cleanup.**
+   Cleanup berjalan sebagai authenticated (T12a v1.2 menegaskan
+   lagi role authenticated dan tidak ada yang mengembalikannya) —
+   authenticated memang TANPA grant atas `channel_credentials`
+   (server-only) dan hanya SELECT atas tabel analytics. Ke-77
+   asersi kemungkinan sudah tereksekusi, tapi hasilnya tidak
+   terlihat karena `finish()` tidak tercapai. Perbaikan: pgTAP v1.4
+   (commit `0cda505`): `reset role;` ditegaskan segera sebelum
+   blok cleanup (pelajaran 39). Migrasi tidak berubah.
+6. **Run 6 (kanonik v1.4) vs Run 7 (diagnostik v1.4): selisih
+   5-vs-1 yang TIDAK dapat dijelaskan dari bukti yang ada.** Run 6
+   melaporkan `finish()` "failed 5 tests of 77" tanpa identitas
+   tesnya (panel hanya menampilkan `finish()`); Run 7 (isi tes
+   IDENTIK + pembungkus `_tap_out`, 06:16–06:19 WIB) hanya
+   menunjukkan 1 kegagalan: `not ok 77 - T14c …` — `# have: 6 /
+   want: 5` (baris ke-6 adalah agregat reach periode Okt yang sah
+   dari impor multi-brand T4h; `count(*)` atas agregat per-periode
+   juga wajib difilter periode — pelajaran 38 diperluas). Tidak ada
+   mekanisme pada pembungkus yang mengubah hasil asersi;
+   kemungkinan pembacaan grid `_tap_out` terlewat 4 baris `not ok`
+   atau kondisi editor Run 6 berbeda — keduanya tidak terbukti.
+   Perbaikan: pgTAP v1.5 (commit `1678a68`): T14c difilter periode
+   Nov 2026, ekspektasi tetap 5. **Run 8 (kanonik v1.5) 77/77
+   menyusul Run 6**: satu-satunya kegagalan yang pernah ditemukan
+   diagnosis adalah T14c, kini diperbaiki dan lolos — selisih 5-vs-1
+   dicatat jujur sebagai tidak terjawab, bukan sebagai kegagalan
+   yang tersisa.
+7. **Insiden penempelan Run 8 (bukan cacat tes).** Tugas browser
+   lama error di bagian 9 dari 15 ("task and steering history
+   exceeds the compaction budget" — riwayat instruksi terlalu
+   panjang); tab SQL lama `e4062a49…` ternyata sudah tidak ada
+   (tab lokal yang tidak tersimpan sebagai snippet, ikut hilang
+   saat jendela tugas lama mati — pencarian "pgTAP" di dashboard:
+   0 hasil). Pemulihan: tugas browser BARU, tempel ulang ke-15
+   bagian dari disk (2 bagian per kiriman, supaya riwayat tugas
+   tetap pendek), dan snippet DISIMPAN sebagai "pgTAP 07 v1.5"
+   (tab `9566b2a9…`) sebagai checkpoint — tiap bagian terverifikasi
+   total + ekor editor (127/239/356/414/469/528/586/652/711/767/
+   824/852). Pelajaran dicatat di `AGENTS.md`: jangan menjalankan
+   rangkaian tempel yang sangat panjang dalam satu tugas browser;
+   simpan snippet sebagai checkpoint di tengah jalan.
+
+### 11.2 Cacat yang ditemukan live di e2e (semua diperbaiki / dicatat)
+
+1. **Cacat REAL aplikasi — kolom query analytics tidak ada di
+   0021 (commit `cbca252`).** `features/analytics/queries.ts`
+   memilih kolom yang TIDAK ADA di migrasi 0021:
+   `source_type`/`updated_by`/`updated_at` di
+   `analytics_snapshots`; `source_snapshot_id`/`updated_at` di
+   `campaign_metrics`. Bukti live (sebagai user e2e): PostgREST
+   HTTP 400 `column analytics_snapshots.source_type does not
+   exist` (42703); sama untuk
+   `campaign_metrics.source_snapshot_id`. Akibatnya `/analitik`
+   dan `/analitik/laporan` menampilkan alert "Tabel Analytics
+   belum diterapkan" padahal 0021 live dan pgTAP 77/77.
+   Perbaikan: samakan daftar kolom + tipe (`source`,
+   `snapshot_id`; tanpa `updated_*`). Verifikasi: tsc 0, lint 0,
+   Vitest 217/217. Tanpa perubahan migrasi. (Catatan: draf pertama
+   `queries.ts` pernah mengurutkan `content_metrics` berdasarkan
+   `retrieved_at` yang juga tidak ada — §6.4; nama kolom di query
+   harus dicek ke migrasi, bukan ke ingatan.)
+2. **Cacat test-only — locator ambigu strict-mode (3 commit).**
+   `2ebeeaa` (A7.4: heading "Integrasi" juga cocok dengan h2
+   "Jejak audit integrasi" → `exact: true`); `cc20cf5` (A7.3 judul
+   laporan exact; A7.4 "Instagram" sebagai heading exact; A7.2
+   "Lengkap" → "Status data: Lengkap"); `6bc33ba` (A7.1: "Belum
+   ada data analytics" muncul 2× → cek heading).
+3. **Cacat test-only — timeout per tes (commit `409406b`).**
+   `playwright.config.ts`: `timeout: 120_000` (sebelumnya default
+   30 dtk). Bukti: A7.2 memakan 35,4 dtk, A7.3 27,6 dtk, A7.4
+   32,3 dtk di run hijau — dengan 30 dtk, A7.2 Run 5 pasti mati
+   lagi. Run 5: A7.2/A7.3 mati kehabisan anggaran padahal kerja
+   server selesai normal sesudah tes mati (baris snapshot impor
+   Run 5 ter-commit 1 dtk SESUDAH timeout tes). Hanya konfigurasi
+   tes; tanpa perubahan aplikasi.
+4. **Temuan — hang UI server action, INTERMITEN (flake tercatat,
+   BUKAN penghalang gate).** 4 kejadian di 5 run analytics: Run 1
+   impor, Run 2 setup A7.1, Run 4 setup A7.2, Run 5 impor A7.2.
+   Pola konsisten: kerja database SELALU ter-commit (snapshot
+   impor Run 1 23:45:56; konten Run 2 23:53:32; konten Run 4
+   00:00:44; snapshot Run 5 00:08:14), tapi tombol tetap
+   `[disabled]` + alert kosong > 30 dtk dan pesan sukses tidak
+   muncul. Pengukuran langsung (spec debug temporer, 6 aksi
+   buat-konten): POST action kembali HTTP 200 dalam ~1 dtk,
+   sukses tampil dalam ~3,5 dtk — hang TIDAK ter-reproduksi di 6
+   aksi itu. Tersangka utama (BELUM terbukti): transisi
+   `useActionState` tertahan oleh router refresh pasca-
+   `revalidatePath` di bawah badai prefetch RSC / antrean pooler —
+   perlu bukti tangkapan saat hang. Dampak produk: tidak ada
+   kehilangan/kerusakan data; wart UX-nya tombol berputar lama
+   padahal data sudah tersimpan (risiko duplikat bila user klik
+   ulang). Tidak ada perubahan aplikasi yang dibuat untuk ini;
+   dipantau di Phase 9 (ambang performa adalah sub-keputusan
+   terbuka di sana). Spec debug sudah dihapus; tree bersih.
+   Flake ini TIDAK muncul di run analytics mobile.
+5. **Insiden lingkungan (bukan cacat aplikasi).** Restart VM/service
+   di tengah Run 5 (~00:09 UTC): server mati (`net::ERR_ABORTED`,
+   `write EPIPE`), Run 5 BATAL/tidak valid. Restart juga menghapus
+   isi `test-results/` (bukti Run 1–5 sudah terekam di catatan
+   sesi) dan melenyapkan dependensi sistem WebKit. Perbaikan:
+   `npx playwright install-deps webkit` (persetujuan Tuan
+   2026-11-20 01:22 WIB mencakup instalasi lib yang sama);
+   `apt-get update` mula-mula macet di mirror kedua
+   `mirror.cogentco.com` — mirror itu dilepas dari
+   `/etc/apt/sources.list.d/ubuntu.sources` (backup:
+   `ubuntu.sources.bak-cogentco`, hanya `azure.archive.ubuntu.com`
+   tersisa), instalasi lalu selesai exit 0. Mobile rerun kemudian
+   berjalan normal.
+
+### 11.3 Yang masih terbuka / batas jujur baru
+
+1. **3 smoke mobile PRE-EXISTING (sejak Phase 6, keputusan produk
+   masih menggantung).** planning.spec.ts:224 (tautan perencanaan),
+   planning.spec.ts:233 (pencarian), production.spec.ts:234 (tautan
+   produksi "Tugas Saya") — ketiganya gagal karena
+   `AppSidebar.tsx:95` memakai `hidden … md:flex` sehingga sidebar
+   tidak ter-render di bawah md dan tautan tidak ada di DOM pada
+   390px. Solo-rerun ketiganya gagal lagi dengan pesan identik
+   (deterministik, bukan flake). BUKAN regresi Phase 7; tidak
+   diperbaiki (butuh keputusan produk: drawer mobile atau skip di
+   mobile). Analytics mobile TIDAK terhambat (A7.1–A7.4 lolos di
+   mobile — spek ini tidak tersandung masalah sidebar).
+2. **Hang UI flake (§11.2.4)** — tercatat untuk Phase 9; bukan
+   penghalang deklarasi Phase 7.
+3. **A7.5 viewer_client di-skip di e2e by design** (butuh akun
+   viewer_client kedua + alur undangan); terbukti via pgTAP TES 5 +
+   `permissions.test.ts` + gate `can()` halaman.
+4. **§7 butir 2–8 tetap berlaku** (angka impor yang salah tampil
+   apa adanya; kepatuhan jadwal hanya menghitung job terkonfirmasi
+   terbit; latest-wins aplikasi memakai proksi `created_at` —
+   tie-break tidak terjamin bila dua impor berbagi satu transaksi
+   DB; tabel referensi impor dibatasi 100 per jenis; ekspor CSV
+   dihitung ulang saat unduh; belum ada QA visual browser nyata
+   untuk halaman analitik/laporan/impor/integrasi).
+5. **Batas Phase 6 §11 (a)–(g) tetap berlaku kecuali yang sudah
+   ditutup**: timeout e2e kini 120 dtk di config (terbukti cukup —
+   A7.2 35,4 dtk); dependensi WebKit diinstal ulang pasca-restart;
+   rebuild `.next/` dilakukan sebelum tiap run e2e.
+
+### 11.4 Residu + akun e2e
+
+- **Residu menunggu dibersihkan parent (sesudah deklarasi ini):
+  33 org `org-p7-*` + 33 workspace `ws-p7-*` + 3 org `org-dbg-*`
+  (+3 ws)** — 29 dari run e2e koordinator pertama (7 run analytics
+  × 4 + 1 solo-rerun A7.1) + 4 dari run analytics mobile. Urutan
+  (§8.1): `update brief_templates set is_default=false` dulu, baru
+  hapus workspace + org; verifikasi seed-only sesudahnya.
+- **Akun e2e di-refresh 06:42 WIB** (UID lama
+  `a00f1843-cf39-4214-8f81-b13f7ea6e86a` dihapus sesudah verifikasi
+  0 baris miliknya di organizations/campaigns/ideas/content_items;
+  UID baru `b2e98541-1162-4cc7-9835-603a217e0d1b`, Confirmed;
+  kata sandi TIDAK tercatat di file/memory/chat mana pun).
+
+### 11.5 Angka final terverifikasi
+
+- Build Phase 7 (`730a573`..`ff97c53`): **33 file, 7.250
+  insertions, 3 deletions** (termasuk 2 commit dokumentasi
+  laporan ini).
+- Migrasi 0021 v1.1: **846 baris**, 97 statement pglast OK.
+- pgTAP 07 v1.5: **854 baris** (852 sesudah strip `\set`), split
+  15 bagian lossless, pglast 151 statement OK, 57 `is` + 17
+  `throws_ok` + 3 `lives_ok` = 77, `plan(77)`.
+- Commit perbaikan live: `1942b07` (0021 v1.1), `aa36f7d` (pgTAP
+  v1.1), `87282c9` (v1.2), `49eb829` (v1.3), `0cda505` (v1.4),
+  `1678a68` (v1.5), `cbca252` (kolom analytics), `2ebeeaa` +
+  `cc20cf5` + `6bc33ba` (locator e2e), `409406b` (timeout e2e).
+- Gate lokal akhir (dijalankan ulang parent 07:58 WIB dari HEAD
+  `409406b`): typecheck 0, lint 0, Vitest **217/217** (18 file),
+  build produksi exit 0 (5 route baru).
+
+**Langkah berikut:** bersihkan residu §11.4 → luncurkan koordinator
+Phase 8 (AI Assistant) dengan disiplin gate yang sama.

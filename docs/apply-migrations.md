@@ -203,6 +203,34 @@ md). Dua cacat aplikasi diperbaiki selama e2e (`a2ed6cb` bug
 buat-job). Detail lengkap: `docs/phase-6-report.md` §11 (deklarasi).
 **Migrasi kini 0001–0020.**
 
+**Phase 7 — 0021 DITERAPKAN live 20 Nov 2026 ~04:44 WIB**
+(v1.1, 846 baris; 6 tabel RLS + 20 policy — `channel_credentials` 0
+by design — + 7 fungsi + seed 14 kunci metrik, terverifikasi).
+v1.0 sempat gagal 42883 (`max(uuid)` tidak ada di Postgres — RPC
+baru ketahuan saat dieksekusi, padahal lolos pglast + verifier);
+v1.1 memakai subquery skalar, diterapkan 04:58–04:59 WIB.
+**pgTAP 07 v1.5: 77/77 PASS live 20 Nov 2026 06:38 WIB** (v1.0
+abort 42883; v1.1 T6a/T6d jadi `throws_ok` 42501; v1.2 perbaiki
+16 kegagalan Run 3 — bug role `_set_user` + 2 ekspektasi;
+v1.3 perbaiki abort 21000 T13b — subquery campaign_metrics tanpa
+filter periode; v1.4 perbaiki abort 42501 cleanup — `reset role`
+sebelum cleanup; v1.5 perbaiki T14c — `count(*)` tanpa filter
+periode; Run 6 "failed 5" vs diag Run 7 "1 (T14c)" — selisih
+tidak terjawab, dicatat jujur; Run 8 77/77 menyusul Run 6).
+**E2E analytics live (Chromium + mobile iPhone 13,
+`--workers=1`): 6 lolos + 1 skip (A7.5 skip by design), 0 gagal** —
+Chromium dua run hijau berturut-turut, mobile percobaan pertama.
+Regresi Chromium 16 lolos + 1 skip, 0 gagal; regresi mobile
+13 lolos + 1 skip, 3 gagal pre-existing (sidebar hidden < md —
+keputusan produk masih menggantung sejak Phase 6). Satu cacat
+aplikasi diperbaiki selama e2e (`cbca252` — kolom query analytics
+tidak ada di 0021, PostgREST 400); locator test-only (3 commit) +
+timeout config 30 → 120 dtk (`409406b`); flake hang UI server
+action tercatat untuk Phase 9 (DB selalu ter-commit, tombol
+tetap disabled — tersangka belum terbukti). Detail lengkap:
+`docs/phase-7-report.md` §11 (deklarasi).
+**Migrasi kini 0001–0021.**
+
 ## Seed demo (local/preview SAJA — JANGAN di database produksi)
 
 ```bash
