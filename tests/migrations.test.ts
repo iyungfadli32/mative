@@ -22,7 +22,7 @@ function migrationFiles(): Array<{ name: string; sql: string }> {
 }
 
 describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
-  it("memiliki 23 migrasi berversi berurutan 0001–0023", () => {
+  it("memiliki 26 migrasi berversi berurutan 0001–0026", () => {
     const files = migrationFiles();
     expect(files.map((f) => f.name)).toEqual([
       "0001_profiles.sql",
@@ -48,6 +48,9 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
       "0021_analytics_foundation.sql",
       "0022_ai_foundation.sql",
       "0023_ai_generations_select_policy_fix.sql",
+      "0024_fix_ws_members_insert_self_promotion.sql",
+      "0025_enforce_client_review_gate.sql",
+      "0026_enforce_brand_scope_in_rpc.sql",
     ]);
   });
 
@@ -63,7 +66,9 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
       // mengganti satu fungsi trigger (tanpa tabel/policy baru); 0016
       // hanya menulis ulang policy + helper (tanpa tabel baru); 0018
       // hanya menimpa satu fungsi RPC + memperketat satu CHECK (tanpa
-      // tabel/policy baru).
+      // tabel/policy baru); 0025 hanya menulis ulang dua fungsi RPC
+      // (preflight + decide, tanpa tabel/policy baru); 0026 hanya
+      // menulis ulang dua fungsi RPC (tanpa tabel/policy baru).
       if (
         name === "0008_planning_transactions.sql" ||
         name === "0010_production_transactions.sql" ||
@@ -72,7 +77,9 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
         name === "0014_approval_transactions.sql" ||
         name === "0015_notification_scope_placement.sql" ||
         name === "0016_brand_scope.sql" ||
-        name === "0018_set_visual_order_fixes.sql"
+        name === "0018_set_visual_order_fixes.sql" ||
+        name === "0025_enforce_client_review_gate.sql" ||
+        name === "0026_enforce_brand_scope_in_rpc.sql"
       ) {
         expect(sql, `${name} tidak boleh membuat tabel`).not.toMatch(/create table/i);
         expect(sql, `${name} harus berisi fungsi RPC`).toMatch(/create or replace function/i);
