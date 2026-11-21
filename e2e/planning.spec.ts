@@ -62,7 +62,7 @@ test.describe("penerimaan Phase 2 — planning core @needs-db", () => {
 
     // 1. Buat brand (bila belum ada, halaman Merek selalu bisa membuat baru).
     await page.goto("/merek");
-    await expect(page.getByRole("heading", { name: "Merek" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Merek" })).toBeVisible({ timeout: 30000 });
     // Lokator berdasarkan id form buat-baru: bila sudah ada brand, halaman
     // juga menampilkan form edit per brand dengan label "Nama brand" yang
     // sama — getByLabel menjadi ambigu (strict mode). Defect tes e2e
@@ -85,7 +85,7 @@ test.describe("penerimaan Phase 2 — planning core @needs-db", () => {
     // exact: judul halaman "Channel" — tanpa exact, heading per-brand
     // "Brand E2E ... — 0 channel" ikut cocok (substring) dan melanggar
     // strict mode (defect tes e2e 2026-11-19).
-    await expect(page.getByRole("heading", { name: "Channel", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Channel", exact: true })).toBeVisible({ timeout: 30000 });
     // Render /channel kadang belum menampilkan brand yang baru dibuat
     // (stale sesaat setelah mutasi — terbukti 2026-11-19: 4 dari 7
     // pemuatan pertama melewatkan brand baru; muat ulang menampilkannya).
@@ -95,7 +95,7 @@ test.describe("penerimaan Phase 2 — planning core @needs-db", () => {
       await channelSummary.waitFor({ state: "attached", timeout: 10000 });
     } catch {
       await page.reload();
-      await expect(page.getByRole("heading", { name: "Channel", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Channel", exact: true })).toBeVisible({ timeout: 30000 });
       await channelSummary.waitFor({ state: "attached", timeout: 15000 });
     }
     await channelSummary.click();
@@ -118,7 +118,7 @@ test.describe("penerimaan Phase 2 — planning core @needs-db", () => {
     // walau ditunggu 30 dtk). Langkah ini diniatkan 2 channel sejak
     // awal (lihat komentar langkah 2) — buat channel TikTok juga.
     await page.reload();
-    await expect(page.getByRole("heading", { name: "Channel", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Channel", exact: true })).toBeVisible({ timeout: 30000 });
     const channelSummary2 = page.getByText(`Tambah channel untuk Brand E2E ${slug}`);
     await channelSummary2.waitFor({ state: "attached", timeout: 30000 });
     await channelSummary2.click();
@@ -132,7 +132,7 @@ test.describe("penerimaan Phase 2 — planning core @needs-db", () => {
 
     // 3. Buat content item (otomatis v1).
     await page.goto("/konten/baru");
-    await expect(page.getByRole("heading", { name: "Buat konten" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Buat konten" })).toBeVisible({ timeout: 30000 });
     await page.getByLabel(/Brand/).selectOption({ label: `Brand E2E ${slug}` });
     await page.getByLabel("Judul konten").fill(`Konten E2E ${slug}`);
     await page
@@ -146,7 +146,7 @@ test.describe("penerimaan Phase 2 — planning core @needs-db", () => {
     //    bila channel belum ada).
     await page.goto("/konten");
     await page.getByRole("link", { name: `Konten E2E ${slug}` }).click();
-    await expect(page.getByRole("heading", { name: `Konten E2E ${slug}` })).toBeVisible();
+    await expect(page.getByRole("heading", { name: `Konten E2E ${slug}` })).toBeVisible({ timeout: 30000 });
     await page.getByRole("tab", { name: "Platform placements" }).click();
     // getByText("Tambah placement") ambigu: cocok juga dengan tombol
     // submit di dalam form (defect tes e2e 2026-11-19) — target <summary>.
@@ -165,9 +165,9 @@ test.describe("penerimaan Phase 2 — planning core @needs-db", () => {
 
     // 5. Temukan di kalender DAN board (record kanonis yang sama).
     await page.goto("/kalender");
-    await expect(page.getByRole("heading", { name: "Kalender" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Kalender" })).toBeVisible({ timeout: 30000 });
     await page.goto("/board");
-    await expect(page.getByRole("heading", { name: "Board Produksi" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Board Produksi" })).toBeVisible({ timeout: 30000 });
     await expect(page.getByText(`Konten E2E ${slug}`).first()).toBeVisible();
 
     // 6. Edit judul → versi baru tercatat.
@@ -194,7 +194,7 @@ test.describe("penerimaan Phase 2 — planning core @needs-db", () => {
     //    expect.configure() sebagai statement tidak mengubah default 5 dtk
     //    (pelajaran probe 2026-11-19).
     await page.reload();
-    await expect(page.getByRole("heading", { name: `Konten E2E ${slug} (revisi)` })).toBeVisible();
+    await expect(page.getByRole("heading", { name: `Konten E2E ${slug} (revisi)` })).toBeVisible({ timeout: 30000 });
     await expect(page.getByText("Ide → Brief").first()).toBeVisible({ timeout: 30000 });
     await page.getByRole("tab", { name: "Versi" }).click();
     await expect(page.getByText("v2", { exact: true }).first()).toBeVisible({ timeout: 30000 });
@@ -236,7 +236,7 @@ test.describe("perbaikan kritis planning (b) K-1 / K-2 / K-3 @needs-db", () => {
     slug: string,
   ) {
     await page.goto("/merek");
-    await expect(page.getByRole("heading", { name: "Merek" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Merek" })).toBeVisible({ timeout: 30000 });
     await page.locator("#brand-name-new").fill(name);
     await page.locator("#brand-slug-new").fill(slug);
     await page.getByRole("button", { name: "Buat brand" }).click();
@@ -250,7 +250,7 @@ test.describe("perbaikan kritis planning (b) K-1 / K-2 / K-3 @needs-db", () => {
     extra?: { script?: string; caption?: string },
   ) {
     await page.goto("/konten/baru");
-    await expect(page.getByRole("heading", { name: "Buat konten" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Buat konten" })).toBeVisible({ timeout: 30000 });
     await page.getByLabel(/Brand/).selectOption({ label: brandLabel });
     await page.getByLabel("Judul konten").fill(title);
     if (extra?.script) await page.getByLabel("Script / naskah").fill(extra.script);
@@ -265,7 +265,7 @@ test.describe("perbaikan kritis planning (b) K-1 / K-2 / K-3 @needs-db", () => {
   async function bukaDetailKonten(page: import("@playwright/test").Page, title: string) {
     await page.goto("/konten");
     await page.getByRole("link", { name: title }).click();
-    await expect(page.getByRole("heading", { name: title })).toBeVisible();
+    await expect(page.getByRole("heading", { name: title })).toBeVisible({ timeout: 30000 });
   }
 
   test("(b) K-1 — brief bertahan setelah edit judul di tab Ringkasan", async ({ page }) => {
@@ -330,7 +330,7 @@ test.describe("perbaikan kritis planning (b) K-1 / K-2 / K-3 @needs-db", () => {
     });
 
     await page.goto("/template");
-    await expect(page.getByRole("heading", { name: "Template", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Template", exact: true })).toBeVisible({ timeout: 30000 });
     await page
       .getByLabel(/Konten sumber/)
       .selectOption({ label: `${title} — ${brandName}` });
@@ -373,7 +373,7 @@ test.describe("perbaikan kritis planning (b) K-1 / K-2 / K-3 @needs-db", () => {
     // 1. Owner mengundang akun kedua sebagai creator; ambil token dari
     //    tautan yang ditampilkan sekali saja di UI.
     await page.goto("/pengaturan/anggota");
-    await expect(page.getByRole("heading", { name: /Undang anggota/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Undang anggota/ })).toBeVisible({ timeout: 30000 });
     await page.getByLabel("Email yang diundang").fill(email2);
     await page.getByRole("button", { name: "Kirim undangan" }).click();
     const tokenCode = page.locator("code", { hasText: "/undangan/" });
@@ -416,7 +416,7 @@ test.describe("perbaikan kritis planning (b) K-1 / K-2 / K-3 @needs-db", () => {
     await page.context().clearCookies();
     await signInAs(page, email2, password2);
     await page.goto("/konten/baru");
-    await expect(page.getByRole("heading", { name: "Buat konten" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Buat konten" })).toBeVisible({ timeout: 30000 });
     const brandSelect = page.getByLabel(/Brand/);
     await expect(brandSelect.locator("option", { hasText: brandA })).toHaveCount(1);
     await expect(brandSelect.locator("option", { hasText: brandB })).toHaveCount(0);

@@ -119,6 +119,13 @@ test.describe("K-1 self-promotion — member tidak bisa jadi owner lewat PostgRE
       await ownerPage.getByLabel("Slug", { exact: true }).fill(`ws-k1-${slug}`);
       await ownerPage.getByRole("button", { name: "Buat workspace" }).click();
       await expect(ownerPage.getByText("Workspace dibuat.")).toBeVisible({ timeout: 30000 });
+    // Workspace kedua (dummy) agar switcher tampil: WorkspaceSwitcher
+    // hanya dirender bila pengguna punya >1 workspace (return null bila
+    // <= 1) — tanpa ini switchToWorkspace selalu null di tes pertama.
+    await ownerPage.getByLabel("Nama workspace").fill(`Workspace K1 Dummy ${slug}`);
+    await ownerPage.getByLabel("Slug", { exact: true }).fill(`ws-k1-dummy-${slug}`);
+    await ownerPage.getByRole("button", { name: "Buat workspace" }).click();
+    await expect(ownerPage.getByText("Workspace dibuat.")).toBeVisible({ timeout: 30000 });
 
       // 2. Ambil UUID workspace baru lewat switcher (untuk ?workspace=).
       await ownerPage.goto("/merek");
@@ -228,6 +235,13 @@ test.describe("K-1 self-promotion — member tidak bisa jadi owner lewat PostgRE
       await ownerPage.getByLabel("Slug", { exact: true }).fill(`ws-k1r-${slug}`);
       await ownerPage.getByRole("button", { name: "Buat workspace" }).click();
       await expect(ownerPage.getByText("Workspace dibuat.")).toBeVisible({ timeout: 30000 });
+    // Workspace kedua (dummy) agar switcher tampil: WorkspaceSwitcher
+    // hanya dirender bila pengguna punya >1 workspace (return null bila
+    // <= 1) — tanpa ini switchToWorkspace selalu null di tes pertama.
+    await ownerPage.getByLabel("Nama workspace").fill(`Workspace K1R Dummy ${slug}`);
+    await ownerPage.getByLabel("Slug", { exact: true }).fill(`ws-k1r-dummy-${slug}`);
+    await ownerPage.getByRole("button", { name: "Buat workspace" }).click();
+    await expect(ownerPage.getByText("Workspace dibuat.")).toBeVisible({ timeout: 30000 });
 
       // Pembuat workspace HARUS menjadi owner (jalur RPC 0024): di halaman
       // anggota, barisnya ber-role Pemilik dan workspace-nya terlihat.
