@@ -29,6 +29,12 @@ import { test, expect } from "@playwright/test";
  * write-back NULL → jadwal job adalah perubahan nyata dan approval batal
  * (cacat `new Date(v)` Phase 6, diperbaiki a2ed6cb).
  *
+ * Alur F-01 (migrasi 0025): gerbang client_review aktif → internal
+ * disetujui → ajukan client review → klien minta revisi → produksi
+ * changes_requested → buat job publikasi DIBLOKIR preflight
+ * (CLIENT_REJECTED, tombol dinonaktifkan). Tanpa gerbang, alur A6.1
+ * di atas tetap lolos — gerbang hanya menutup bila aktif.
+ *
  * BUTUH database live + migrasi 0020 diterapkan + akun uji
  * (E2E_TEST_EMAIL/PASSWORD). Tes ini di-SKIP otomatis bila akun uji
  * tidak diisi. Sampai migrasi diterapkan, spek ini BELUM TERBUKTI
@@ -315,6 +321,82 @@ test.describe("penerimaan Phase 6 — publishing manual @needs-db", () => {
     await expect(page.getByText("Cancelled").first()).toBeVisible();
     await page.reload();
     await expect(page.getByText("Cancelled").first()).toBeVisible({ timeout: 30000 });
+  });
+
+  test("F-01 gerbang client: tolak client review → buat job diblokir preflight", async ({
+    page,
+  }) => {
+    test.setTimeout(300000);
+    expect.configure({ timeout: 30000 });
+    await signIn(page);
+    const slug = `p6f01-${Date.now().toString(36)}`;
+
+    await setupContent(page, slug);
+
+    // 0. Nyalakan gerbang client_review di Approval Center (default mati).
+    await page.goto("/persetujuan");
+    await expect(page.getByRole("heading", { name: "Approval Center" })).toBeVisible();
+    await page.locator('select[name="clientReviewEnabled"]').selectOption("true");
+    await page.getByRole("button", { name: "Simpan pengaturan" }).click();
+    await expect(page.getByText("Pengaturan approval disimpan.")).toBeVisible({
+      timeout: 30000,
+    });
+
+    // 1. Placement SEBELUM approval (ASUMSI-4.6 — lihat header file),
+    //    lalu setujui v1 (internal).
+    await openContentDetail(page, slug);
+    await addPlacement(page);
+    await approveV1(page, slug);
+
+    // 2. Panel client review muncul (internal disetujui + gerbang aktif);
+    //    ajukan konten untuk client review.
+    await openContentDetail(page, slug);
+    await page.getByRole("tab", { name: "Approval" }).click();
+    await expect(
+      page.getByText("Review internal sudah disetujui dan gerbang client_review aktif"),
+    ).toBeVisible({ timeout: 30000 });
+    await page.getByRole("button", { name: "Ajukan untuk client review" }).click();
+    await expect(page.getByText("Konten diajukan untuk client review.")).toBeVisible({
+      timeout: 30000,
+    });
+
+    // 3. Approver yang ditugaskan (diri sendiri, R4.3) memutuskan client
+    //    review: minta revisi (komentar wajib). Tunggu dulu sampai panel
+    //    request aktif menunjukkan client review (bukan form disabled
+    //    request internal yang lama) — baru sentuh form keputusan.
+    await expect(page.getByText("Request aktif: Sedang ditinjau (client review)")).toBeVisible({
+      timeout: 30000,
+    });
+    const decisionForm = page.locator("form", { has: page.getByText("Keputusan Anda") });
+    await expect(decisionForm.getByLabel("Minta revisi", { exact: true })).toBeVisible({
+      timeout: 30000,
+    });
+    await decisionForm.getByLabel("Minta revisi", { exact: true }).click();
+    await decisionForm.getByLabel(/Komentar/).fill("Caption belum sesuai arahan klien.");
+    await decisionForm.getByRole("button", { name: "Kirim keputusan" }).click();
+    await expect(page.getByText("Keputusan tercatat: konten dikembalikan untuk revisi.")).toBeVisible({
+      timeout: 30000,
+    });
+    // Produksi harus kembali ke changes_requested (0025 — BUKAN editing,
+    // itu transisi ilegal dari approved) dan BUKAN tetap approved.
+    await expect(page.getByText("Status produksi: changes_requested.")).toBeVisible({
+      timeout: 30000,
+    });
+
+    // 4. Coba buat job publikasi: preflight HARUS gagal CLIENT_REJECTED
+    //    dan tombol pembuatan dinonaktifkan — tidak ada job yang tercipta.
+    await page.getByRole("tab", { name: "Platform placements" }).click();
+    await page.getByRole("link", { name: "Jadwalkan publikasi" }).click();
+    await expect(page.getByRole("heading", { name: "Buat job publikasi" })).toBeVisible();
+    await expect(
+      page.getByText(
+        "Preflight gagal: Review klien untuk versi terbaru (v1) minta revisi — konten belum bisa dijadwalkan sampai klien menyetujui versi terbaru.",
+        { exact: true },
+      ),
+    ).toBeVisible({
+      timeout: 30000,
+    });
+    await expect(page.getByRole("button", { name: "Buat job publikasi" })).toBeDisabled();
   });
 });
 
