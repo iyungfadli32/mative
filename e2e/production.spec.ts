@@ -1,4 +1,6 @@
 import { test, expect } from "@playwright/test";
+import { deflateSync } from "node:zlib";
+import { randomBytes } from "node:crypto";
 
 /**
  * Spek penerimaan Phase 3 — prompts/04 (P3-12).
@@ -37,6 +39,59 @@ const ONE_BY_ONE_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
   "base64",
 );
+
+// PNG besar yang BENAR-BENAR valid (bukan padding): signature + IHDR +
+// IDAT berisi scanline acak terkompresi + IEND, dengan CRC32 benar.
+// Dipakai tes regresi (c) K-1: file >1 MB yang dulu ditolak batas body
+// Server Action Next.js, padahal UI menjanjikan 10 MB. 850x850 RGB acak
+// ≈ 2,1 MB — di atas 1 MB, di bawah 10 MB. Aplikasi hanya memvalidasi
+// magic bytes + IHDR + ukuran, jadi kompresi acak (tidak terkompresi
+// baik) justru yang diinginkan: ukuran berkasnya besar.
+const CRC_TABLE: number[] = (() => {
+  const table: number[] = [];
+  for (let n = 0; n < 256; n += 1) {
+    let c = n;
+    for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    table.push(c);
+  }
+  return table;
+})();
+
+function crc32(buf: Buffer): number {
+  let crc = 0xffffffff;
+  for (const byte of buf) crc = CRC_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function pngChunk(type: string, data: Buffer): Buffer {
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(data.length);
+  const typeBuf = Buffer.from(type, "ascii");
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(Buffer.concat([typeBuf, data])));
+  return Buffer.concat([length, typeBuf, data, crc]);
+}
+
+function largePng(width: number, height: number): Buffer {
+  const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8; // bit depth
+  ihdr[9] = 2; // color type RGB
+  const raw = Buffer.alloc(height * (1 + width * 3));
+  for (let y = 0; y < height; y += 1) {
+    raw[y * (1 + width * 3)] = 0; // filter: none
+    randomBytes(width * 3).copy(raw, y * (1 + width * 3) + 1);
+  }
+  const idat = deflateSync(raw);
+  return Buffer.concat([
+    signature,
+    pngChunk("IHDR", ihdr),
+    pngChunk("IDAT", idat),
+    pngChunk("IEND", Buffer.alloc(0)),
+  ]);
+}
 
 test.describe("penerimaan Phase 3 — production operations @needs-db", () => {
   test.skip(!hasTestAccount, "Butuh akun uji (E2E_TEST_EMAIL/PASSWORD) + migrasi 0009–0012 live.");
@@ -214,6 +269,51 @@ test.describe("penerimaan Phase 3 — production operations @needs-db", () => {
     await expect(page.getByText(`aset-p3-${slug}.png`).first()).toBeVisible({ timeout: 30000 });
     await page.goto("/template-brief");
     await expect(page.getByText("Template Brief Standar")).toBeVisible({ timeout: 30000 });
+  });
+
+  test("unggah aset ~2 MB lewat signed URL berhasil (regresi (c) K-1)", async ({ page }) => {
+    // Alur signed URL: prepare → PUT langsung ke Storage → confirm.
+    // File TIDAK PERNAH lewat Server Action, jadi batas body Next.js
+    // 1 MB tidak berlaku; janji "maks 10 MB" di UI kini benar. Tes
+    // file kecil (PNG 1x1) tetap ada di tes utama di atas.
+    test.setTimeout(240000);
+    expect.configure({ timeout: 30000 });
+    await signIn(page);
+    const slug = `p3-2mb-${Date.now().toString(36)}`;
+
+    // Setup mandiri: org + workspace baru (pola yang sama seperti tes
+    // utama — akun uji baru belum punya workspace).
+    await page.goto("/pengaturan/organisasi");
+    await page.getByLabel("Nama organisasi").fill(`Organisasi P3 2MB ${slug}`);
+    await page.getByLabel(/Slug \(huruf kecil/).fill(`org-p3-2mb-${slug}`);
+    await page.getByRole("button", { name: "Buat organisasi" }).click();
+    await expect(page.getByText("Organisasi dibuat.")).toBeVisible({ timeout: 30000 });
+    await page.getByLabel("Nama workspace").fill(`Workspace P3 2MB ${slug}`);
+    await page.getByLabel("Slug", { exact: true }).fill(`ws-p3-2mb-${slug}`);
+    await page.getByRole("button", { name: "Buat workspace" }).click();
+    await expect(page.getByText("Workspace dibuat.")).toBeVisible({ timeout: 30000 });
+
+    // Sanity: berkas uji memang di atas 1 MB (batas lama) dan di bawah
+    // 10 MB (batas janji). Bila generator berubah, tes ini gagal di
+    // sini — bukan di aplikasi — supaya alasannya jelas.
+    const bigPng = largePng(850, 850);
+    expect(bigPng.length).toBeGreaterThan(1024 * 1024);
+    expect(bigPng.length).toBeLessThanOrEqual(10 * 1024 * 1024);
+
+    await page.goto("/pustaka");
+    await expect(page.getByRole("heading", { name: "Pustaka Aset" })).toBeVisible();
+    await page.getByLabel(/Pilih file \(PNG, JPEG, WebP, MP4, WebM, PDF/).setInputFiles({
+      name: `aset-2mb-${slug}.png`,
+      mimeType: "image/png",
+      buffer: bigPng,
+    });
+    await page.getByRole("button", { name: "Unggah aset" }).click();
+    await expect(page.getByText("Aset diunggah.")).toBeVisible({ timeout: 30000 });
+    await expect(page.getByText(`aset-2mb-${slug}.png`).first()).toBeVisible({ timeout: 30000 });
+
+    // Reload: aset ~2 MB persist sebagai 'ready' (bukan 'uploading').
+    await page.reload();
+    await expect(page.getByText(`aset-2mb-${slug}.png`).first()).toBeVisible({ timeout: 30000 });
   });
 });
 

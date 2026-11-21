@@ -16,11 +16,14 @@ import {
   validTaskTargets,
 } from "@/features/production/transitions";
 import {
+  assetConfirmUploadSchema,
+  assetPrepareUploadSchema,
   briefSnapshotSchema,
   briefTemplateSchemaJson,
   commentSchema,
   taskSchema,
 } from "@/lib/validation/schemas";
+import { ALLOWED_ASSET_MIME_TYPES, MAX_ASSET_BYTES } from "@/features/production/constants";
 
 function pngBuffer(width: number, height: number): Buffer {
   const buf = Buffer.alloc(33);
@@ -229,6 +232,78 @@ describe("skema Zod Phase 3", () => {
         targetType: "brand",
         targetId: "b2222222-2222-4222-8222-222222222222",
         body: "halo",
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("skema Zod upload signed URL (perbaikan (c) K-1)", () => {
+  const validPrepare = {
+    workspaceId: "a1111111-1111-4111-8111-111111111111",
+    fileName: "foto.png",
+    byteSize: 2 * 1024 * 1024,
+    mimeType: "image/png",
+  };
+
+  it("batas janji 10 MB: MAX_ASSET_BYTES = 10 MiB dan 6 MIME diizinkan", () => {
+    expect(MAX_ASSET_BYTES).toBe(10 * 1024 * 1024);
+    expect(ALLOWED_ASSET_MIME_TYPES).toEqual([
+      "image/png",
+      "image/jpeg",
+      "image/webp",
+      "video/mp4",
+      "video/webm",
+      "application/pdf",
+    ]);
+  });
+
+  it("assetPrepareUploadSchema menerima metadata upload 2 MB yang valid", () => {
+    const parsed = assetPrepareUploadSchema.safeParse(validPrepare);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.byteSize).toBe(2 * 1024 * 1024);
+      expect(parsed.data.mimeType).toBe("image/png");
+    }
+  });
+
+  it("assetPrepareUploadSchema menolak ukuran di atas 10 MB", () => {
+    expect(
+      assetPrepareUploadSchema.safeParse({
+        ...validPrepare,
+        byteSize: MAX_ASSET_BYTES + 1,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("assetPrepareUploadSchema menolak MIME di luar allowlist + nama kosong + workspace bukan UUID", () => {
+    expect(
+      assetPrepareUploadSchema.safeParse({ ...validPrepare, mimeType: "image/gif" }).success,
+    ).toBe(false);
+    expect(
+      assetPrepareUploadSchema.safeParse({ ...validPrepare, mimeType: "text/plain" }).success,
+    ).toBe(false);
+    expect(
+      assetPrepareUploadSchema.safeParse({ ...validPrepare, fileName: "   " }).success,
+    ).toBe(false);
+    expect(
+      assetPrepareUploadSchema.safeParse({ ...validPrepare, workspaceId: "bukan-uuid" }).success,
+    ).toBe(false);
+    expect(
+      assetPrepareUploadSchema.safeParse({ ...validPrepare, byteSize: 0 }).success,
+    ).toBe(false);
+  });
+
+  it("assetConfirmUploadSchema menerima pasangan asset + workspace yang valid", () => {
+    expect(
+      assetConfirmUploadSchema.safeParse({
+        assetId: "b2222222-2222-4222-8222-222222222222",
+        workspaceId: "a1111111-1111-4111-8111-111111111111",
+      }).success,
+    ).toBe(true);
+    expect(
+      assetConfirmUploadSchema.safeParse({
+        assetId: "bukan-uuid",
+        workspaceId: "a1111111-1111-4111-8111-111111111111",
       }).success,
     ).toBe(false);
   });

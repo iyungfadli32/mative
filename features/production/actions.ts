@@ -7,8 +7,12 @@
  *    versi, ganti template default) lewat RPC 0010 — SATU transaksi Postgres.
  *  - Brief/script disimpan lewat RPC 0008 (update_content_item_with_version)
  *    — SETIAP simpan membuat versi baru (P3-05/P3-10).
- *  - Upload aset: baris dibuat 'uploading' dulu, lalu file ke Storage
- *    privat; berhasil → 'ready' + asset_versions v1; gagal → 'failed'
+ *  - Upload aset: file TIDAK PERNAH lewat Server Action (batas body
+ *    Next.js 1 MB — temuan (c) K-1). Alur signed URL: prepare (baris
+ *    'uploading' + signed upload URL via service-role) → browser PUT
+ *    langsung ke Storage → confirm (unduh via service-role, validasi
+ *    ulang magic bytes + ukuran, lalu 'ready' + asset_versions v1;
+ *    gagal → 'failed' + objek dihapus). Maks 10 MB tetap berlaku
  *    (ADR-0009 §4). MIME dicek dari ISI file, bukan ekstensi.
  *  - TIDAK ADA approval, publishing, integrasi provider, analytics, AI,
  *    billing di sini. TIDAK ADA klaim "terhubung".
@@ -17,14 +21,16 @@
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { getSupabaseAdminClient, getSupabaseServerClient } from "@/lib/supabase/server";
 import { SUPABASE_NOT_CONFIGURED_ID } from "@/lib/env";
 import { can, isLimited } from "@/lib/permissions";
 import type { WorkspaceRole } from "@/lib/permissions";
 import {
   assetAttachSchema,
+  assetConfirmUploadSchema,
   assetDeleteSchema,
   assetDetachSchema,
+  assetPrepareUploadSchema,
   briefTemplateSchema,
   briefTemplateUpdateSchema,
   briefTemplateSchemaJson,
@@ -57,6 +63,19 @@ export type ProductionActionResult = {
   templateId?: string;
   versionNumber?: number;
   contentItemId?: string;
+};
+
+/**
+ * Hasil prepare upload: signed URL TIDAK PERNAH dibuat di client —
+ * dibuat di server (service-role) dan hanya berlaku untuk SATU path
+ * objek ini; tokennya sekali pakai (dihapus Storage sesudah PUT).
+ */
+export type PrepareAssetUploadResult = {
+  ok: boolean;
+  message: string;
+  assetId?: string;
+  objectKey?: string;
+  signedUrl?: string;
 };
 
 const ok = (message: string, extra?: Partial<ProductionActionResult>): ProductionActionResult => ({
@@ -603,65 +622,178 @@ export async function updateScriptAction(
 // P3-07 / P3-08 — Assets
 // ============================================================================
 
-export async function uploadAssetAction(
-  _prev: ProductionActionResult,
-  formData: FormData,
-): Promise<ProductionActionResult> {
-  const workspaceId = String(formData.get("workspaceId") ?? "");
-  const file = formData.get("file");
-  if (!workspaceId) return fail("Data tidak valid.");
-  if (!(file instanceof File) || file.size === 0) return fail("Pilih file dulu.");
+/**
+ * P3-07 — Siapkan unggahan aset (langkah 1 dari 3, perbaikan (c) K-1).
+ * File TIDAK lewat sini: action ini hanya memvalidasi metadata yang
+ * dideklarasikan klien (nama/ukuran/MIME), membuat baris aset
+ * 'uploading', lalu mengembalikan signed upload URL (service-role)
+ * agar browser PUT langsung ke Storage. Validasi yang menentukan
+ * (magic bytes + ukuran sebenarnya) terjadi di confirmAssetUploadAction,
+ * dari ISI file yang sudah sampai di Storage.
+ *
+ * Aset TIDAK di-scope per brand (keputusan desain — lihat audit (a) S-6):
+ * yang ditegakkan di sini adalah keanggotaan workspace + peran upload,
+ * sama seperti jalur upload lama.
+ */
+export async function prepareAssetUploadAction(input: {
+  workspaceId: string;
+  fileName: string;
+  byteSize: number;
+  mimeType: string;
+}): Promise<PrepareAssetUploadResult> {
+  const parsed = assetPrepareUploadSchema.safeParse(input);
+  if (!parsed.success)
+    return { ok: false, message: parsed.error.issues[0]?.message ?? "Data tidak valid." };
   const { supabase, user } = await requireUser();
   if (!supabase || !user)
-    return fail(supabase ? "Anda harus masuk dulu." : SUPABASE_NOT_CONFIGURED_ID);
-  const role = await requireRole(workspaceId, user.id);
-  if (!role || !can(role, "upload_assets")) return fail("Peran Anda tidak boleh mengunggah aset.");
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const validated = validateAssetFile(buffer);
-  if (!validated.ok) return fail(validated.message);
+    return {
+      ok: false,
+      message: supabase ? "Anda harus masuk dulu." : SUPABASE_NOT_CONFIGURED_ID,
+    };
+  const role = await requireRole(parsed.data.workspaceId, user.id);
+  if (!role || !can(role, "upload_assets"))
+    return { ok: false, message: "Peran Anda tidak boleh mengunggah aset." };
+  const admin = getSupabaseAdminClient();
+  if (!admin) {
+    // Tanpa service-role key, signed upload URL tidak bisa dibuat —
+    // JANGAN diam-diam kembali ke jalur File lewat Server Action
+    // (batas 1 MB). Pesan ini jujur: konfigurasi server yang kurang.
+    return {
+      ok: false,
+      message:
+        "Unggah aset belum bisa dipakai: kunci service-role belum dikonfigurasi di server.",
+    };
+  }
   const assetId = randomUUID();
-  const objectKey = `${workspaceId}/${assetId}/${sanitizeFileName(file.name)}`;
-  // Baris dibuat 'uploading' dulu (ADR-0009 §4) — gagal upload → 'failed'.
+  const objectKey = `${parsed.data.workspaceId}/${assetId}/${sanitizeFileName(parsed.data.fileName)}`;
+  // Baris dibuat 'uploading' dulu (ADR-0009 §4). MIME/ukuran di sini
+  // masih DEKLARASI klien (untuk memenuhi NOT NULL + CHECK 0009);
+  // nilai yang dipercaya ditulis ulang oleh confirm dari isi file.
   const { error: rowError } = await supabase.from("assets").insert({
     id: assetId,
-    workspace_id: workspaceId,
+    workspace_id: parsed.data.workspaceId,
     storage_bucket: ASSET_BUCKET,
     object_key: objectKey,
-    original_filename: file.name.slice(0, 200),
-    mime_type: validated.detected.mimeType,
-    byte_size: buffer.length,
-    width: validated.detected.width,
-    height: validated.detected.height,
+    original_filename: parsed.data.fileName.slice(0, 200),
+    mime_type: parsed.data.mimeType,
+    byte_size: parsed.data.byteSize,
+    width: null,
+    height: null,
     duration_ms: null,
-    checksum: validated.detected.sha256,
+    checksum: null,
     uploaded_by: user.id,
     processing_status: "uploading",
   });
-  if (rowError) return fail(dbErrorMessage(rowError, "Gagal mencatat aset"));
-  const { error: uploadError } = await supabase.storage
+  if (rowError) return { ok: false, message: dbErrorMessage(rowError, "Gagal mencatat aset") };
+  const { data: signed, error: signError } = await admin.storage
     .from(ASSET_BUCKET)
-    .upload(objectKey, buffer, { contentType: validated.detected.mimeType, upsert: false });
-  if (uploadError) {
+    .createSignedUploadUrl(objectKey);
+  if (signError || !signed?.signedUrl) {
+    // Baris sudah tercatat tapi tidak ada URL — tandai gagal supaya
+    // tidak menggantung sebagai 'uploading' selamanya.
     await supabase
       .from("assets")
       .update({ processing_status: "failed", updated_at: new Date().toISOString() })
       .eq("id", assetId);
-    return fail(`Gagal mengunggah file ke penyimpanan: ${uploadError.message}`);
+    return {
+      ok: false,
+      message: `Gagal menyiapkan unggahan: ${signError?.message ?? "tidak ada URL"}`,
+    };
   }
-  const { error: readyError } = await supabase
+  return { ok: true, message: "Siap mengunggah.", assetId, objectKey, signedUrl: signed.signedUrl };
+}
+
+/**
+ * P3-07 — Konfirmasi unggahan aset (langkah 3 dari 3, perbaikan (c) K-1).
+ * Dipanggil sesudah browser PUT file ke signed upload URL. Mengunduh
+ * objek dari Storage (service-role), memvalidasi ULANG dari isinya
+ * (magic bytes + ukuran ≤ 10 MB via validateAssetFile), lalu menandai
+ * 'ready' + insert asset_versions v1. Bila validasi gagal: tandai
+ * 'failed' + hapus objek Storage (jangan tinggalkan file yatim).
+ *
+ * Idempotent: confirm yang diulang untuk aset yang sudah 'ready'
+ * mengembalikan sukses tanpa menulis versi ganda (insert v1 memakai
+ * ON CONFLICT abaikan duplikat dari percobaan sebelumnya).
+ */
+export async function confirmAssetUploadAction(input: {
+  assetId: string;
+  workspaceId: string;
+}): Promise<ProductionActionResult> {
+  const parsed = assetConfirmUploadSchema.safeParse(input);
+  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Data tidak valid.");
+  const { supabase, user } = await requireUser();
+  if (!supabase || !user)
+    return fail(supabase ? "Anda harus masuk dulu." : SUPABASE_NOT_CONFIGURED_ID);
+  const role = await requireRole(parsed.data.workspaceId, user.id);
+  if (!role || !can(role, "upload_assets"))
+    return fail("Peran Anda tidak boleh mengunggah aset.");
+  const { data: asset } = await supabase
     .from("assets")
-    .update({ processing_status: "ready", updated_at: new Date().toISOString() })
-    .eq("id", assetId);
-  if (readyError) return fail(dbErrorMessage(readyError, "Gagal menandai aset siap"));
+    .select("id, workspace_id, object_key, uploaded_by, processing_status")
+    .eq("id", parsed.data.assetId)
+    .eq("workspace_id", parsed.data.workspaceId)
+    .single();
+  if (!asset) return fail("Aset tidak ditemukan.");
+  if (asset.processing_status === "ready")
+    return ok("Aset diunggah.", { assetId: parsed.data.assetId });
+  if (asset.processing_status !== "uploading")
+    return fail("Unggahan ini sudah ditandai gagal — unggah ulang filenya.");
+  if (asset.uploaded_by !== user.id)
+    return fail("Hanya pengunggah aset ini yang boleh mengonfirmasi unggahannya.");
+  const admin = getSupabaseAdminClient();
+  if (!admin) {
+    return fail(
+      "Konfirmasi unggahan belum bisa dipakai: kunci service-role belum dikonfigurasi di server.",
+    );
+  }
+  const objectKey = asset.object_key as string;
+  const failUpload = async (message: string): Promise<ProductionActionResult> => {
+    // Tandai gagal + hapus objek yang sempat terunggah (best-effort).
+    await supabase
+      .from("assets")
+      .update({ processing_status: "failed", updated_at: new Date().toISOString() })
+      .eq("id", parsed.data.assetId);
+    await admin.storage.from(ASSET_BUCKET).remove([objectKey]);
+    return fail(message);
+  };
+  const { data: blob, error: downloadError } = await admin.storage
+    .from(ASSET_BUCKET)
+    .download(objectKey);
+  if (downloadError || !blob) {
+    return failUpload(
+      "File belum sampai ke penyimpanan — periksa koneksi lalu unggah ulang filenya.",
+    );
+  }
+  const buffer = Buffer.from(await blob.arrayBuffer());
+  const validated = validateAssetFile(buffer);
+  if (!validated.ok) return failUpload(validated.message);
+  // v1 dulu, baru 'ready': bila insert versi gagal, baris tetap
+  // 'uploading' dan confirm bisa diulang dengan aman (duplikat v1
+  // dari percobaan sebelumnya diabaikan, bukan error).
   const { error: versionError } = await supabase.from("asset_versions").insert({
-    asset_id: assetId,
+    asset_id: parsed.data.assetId,
     version_number: 1,
     storage_object_key: objectKey,
     uploaded_by: user.id,
   });
-  if (versionError) return fail(dbErrorMessage(versionError, "Gagal mencatat versi aset"));
+  if (versionError && versionError.code !== "23505") {
+    return fail(dbErrorMessage(versionError, "Gagal mencatat versi aset"));
+  }
+  const { error: readyError } = await supabase
+    .from("assets")
+    .update({
+      mime_type: validated.detected.mimeType,
+      byte_size: buffer.length,
+      width: validated.detected.width,
+      height: validated.detected.height,
+      checksum: validated.detected.sha256,
+      processing_status: "ready",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", parsed.data.assetId);
+  if (readyError) return fail(dbErrorMessage(readyError, "Gagal menandai aset siap"));
   revalidateProduction();
-  return ok("Aset diunggah.", { assetId });
+  return ok("Aset diunggah.", { assetId: parsed.data.assetId });
 }
 
 export async function attachAssetAction(
