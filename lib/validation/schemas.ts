@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { WORKSPACE_ROLES } from "@/lib/permissions";
+import { ALLOWED_ASSET_MIME_TYPES, MAX_ASSET_BYTES } from "@/features/production/constants";
 
 /**
  * Skema validasi bersama (Zod) — lib/validation/schemas.ts
@@ -618,6 +619,31 @@ export const assetDetachSchema = z.object({
 });
 
 export const assetDeleteSchema = z.object({
+  assetId: z.string().uuid("asset_id tidak valid."),
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+});
+
+/**
+ * Unggah aset jalur signed URL (perbaikan (c) K-1): file TIDAK PERNAH
+ * lewat Server Action (batas body Next.js 1 MB) — browser PUT langsung
+ * ke Storage. `prepare` hanya memvalidasi metadata yang dideklarasikan
+ * klien (nama/ukuran/MIME); validasi yang menentukan tetap di `confirm`,
+ * dari ISI file yang sudah sampai di Storage (magic bytes + ukuran).
+ */
+export const assetPrepareUploadSchema = z.object({
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  fileName: z.string().trim().min(1, "Nama file wajib diisi.").max(200),
+  byteSize: z.coerce
+    .number()
+    .int("Ukuran file tidak valid.")
+    .positive("Ukuran file tidak valid.")
+    .max(MAX_ASSET_BYTES, "File melebihi batas 10 MB."),
+  mimeType: z.enum(ALLOWED_ASSET_MIME_TYPES, {
+    error: "Jenis file tidak diizinkan.",
+  }),
+});
+
+export const assetConfirmUploadSchema = z.object({
   assetId: z.string().uuid("asset_id tidak valid."),
   workspaceId: z.string().uuid("workspace_id tidak valid."),
 });
