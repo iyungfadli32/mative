@@ -239,7 +239,7 @@ export async function listContentTemplates(
     const { data, error } = await supabase
       .from("content_templates")
       .select(
-        "id, workspace_id, name, source_content_item_id, title, brand_id, pillar_id, script, caption, created_by, created_at, brands(name), content_template_placements(social_channel_id, format)",
+        "id, workspace_id, name, source_content_item_id, title, brand_id, pillar_id, script, caption, created_by, created_at, brands(name), content_template_placements(social_channel_id, platform_format)",
       )
       .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: false });
@@ -258,7 +258,7 @@ export async function listContentTemplates(
         created_by: string | null;
         created_at: string;
         brands: { name: string } | null;
-        content_template_placements: Array<{ social_channel_id: string; format: string | null }>;
+        content_template_placements: Array<{ social_channel_id: string; platform_format: string | null }>;
       };
       return {
         id: raw.id,
@@ -275,7 +275,7 @@ export async function listContentTemplates(
         created_at: raw.created_at,
         placement_channels: raw.content_template_placements.map((p) => ({
           channel_id: p.social_channel_id,
-          format: p.format,
+          format: p.platform_format,
         })),
       };
     });

@@ -599,7 +599,7 @@ export async function saveContentAsTemplateAction(
       placementChannels.map((p) => ({
         template_id: template.id,
         social_channel_id: p.channelId,
-        format: p.format || null,
+        platform_format: p.format || null,
       })),
     );
     if (linkError) return fail(dbErrorMessage(linkError, "Gagal menyimpan channel template"));
@@ -628,7 +628,7 @@ export async function createContentFromTemplateAction(
   const { data: template, error: templateError } = await supabase
     .from("content_templates")
     .select(
-      "id, workspace_id, brand_id, pillar_id, script, caption, content_template_placements(social_channel_id, format)",
+      "id, workspace_id, brand_id, pillar_id, script, caption, content_template_placements(social_channel_id, platform_format)",
     )
     .eq("id", parsed.data.templateId)
     .single();
@@ -667,14 +667,14 @@ export async function createContentFromTemplateAction(
   }
   const channels = template.content_template_placements as Array<{
     social_channel_id: string;
-    format: string | null;
+    platform_format: string | null;
   }>;
   if (channels.length > 0) {
     const { error: placementError } = await supabase.from("content_placements").insert(
       channels.map((c) => ({
         content_item_id: result.content_item_id,
         social_channel_id: c.social_channel_id,
-        platform_format: c.format ?? null,
+        platform_format: c.platform_format ?? null,
         scheduled_at: null,
         timezone: "Asia/Jakarta",
       })),
