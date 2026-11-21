@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { createHash, randomBytes } from "node:crypto";
 
 /**
  * Spek penerimaan perbaikan K-1 (audit 2026-11-21, Area (a)):
@@ -83,6 +84,59 @@ async function getAccessToken(
   return body.access_token as string;
 }
 
+/** Ambil sub (UID) owner dari payload JWT (base64url). */
+function decodeJwtSub(jwt: string): string {
+  const payload = jwt.split(".")[1] ?? "";
+  const json = Buffer.from(payload.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString(
+    "utf8",
+  );
+  const decoded = JSON.parse(json) as { sub?: string };
+  expect(decoded.sub).toBeTruthy();
+  return decoded.sub as string;
+}
+
+/**
+ * Buat undangan workspace lewat PostgREST (bukan lewat UI).
+ * Aplikasi hanya menyimpan sha256(token) sebagai token_hash — token
+ * mentah tidak pernah disimpan di DB — dan UI tidak lagi menampilkan
+ * token sejak email service-role aktif (undangan dikirim lewat email).
+ * Langkah undangan lewat UI sudah terbukti manual; di tes ini token
+ * dibuat di sini supaya akun kedua bisa menerima lewat /undangan/<token>.
+ */
+async function createInvitationViaApi(
+  request: import("@playwright/test").APIRequestContext,
+  args: {
+    workspaceId: string;
+    memberEmail: string;
+    ownerEmail: string;
+    ownerPassword: string;
+  },
+): Promise<string> {
+  const ownerToken = await getAccessToken(request, args.ownerEmail, args.ownerPassword);
+  const token = randomBytes(32).toString("hex");
+  const tokenHash = createHash("sha256").update(token).digest("hex");
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const res = await request.post(`${supabaseUrl}/rest/v1/workspace_invitations`, {
+    headers: {
+      apikey: supabasePublicKey,
+      Authorization: `Bearer ${ownerToken}`,
+      "Content-Type": "application/json",
+      Prefer: "return=minimal",
+    },
+    data: {
+      workspace_id: args.workspaceId,
+      email: args.memberEmail,
+      role: "creator",
+      token_hash: tokenHash,
+      expires_at: expiresAt,
+      invited_by: decodeJwtSub(ownerToken),
+      status: "pending",
+    },
+  });
+  expect(res.status(), await res.text()).toBe(201);
+  return token;
+}
+
 test.describe("K-1 self-promotion — member tidak bisa jadi owner lewat PostgREST @needs-db", () => {
   test.skip(
     !hasOwnerAccount || !hasMember2Account || !hasSupabaseRest,
@@ -119,13 +173,13 @@ test.describe("K-1 self-promotion — member tidak bisa jadi owner lewat PostgRE
       await ownerPage.getByLabel("Slug", { exact: true }).fill(`ws-k1-${slug}`);
       await ownerPage.getByRole("button", { name: "Buat workspace" }).click();
       await expect(ownerPage.getByText("Workspace dibuat.")).toBeVisible({ timeout: 30000 });
-    // Workspace kedua (dummy) agar switcher tampil: WorkspaceSwitcher
-    // hanya dirender bila pengguna punya >1 workspace (return null bila
-    // <= 1) — tanpa ini switchToWorkspace selalu null di tes pertama.
-    await ownerPage.getByLabel("Nama workspace").fill(`Workspace K1 Dummy ${slug}`);
-    await ownerPage.getByLabel("Slug", { exact: true }).fill(`ws-k1-dummy-${slug}`);
-    await ownerPage.getByRole("button", { name: "Buat workspace" }).click();
-    await expect(ownerPage.getByText("Workspace dibuat.")).toBeVisible({ timeout: 30000 });
+      // Workspace kedua (dummy) agar switcher tampil: WorkspaceSwitcher
+      // hanya dirender bila pengguna punya >1 workspace (return null bila
+      // <= 1) — tanpa ini switchToWorkspace selalu null di tes pertama.
+      await ownerPage.getByLabel("Nama workspace").fill(`Workspace K1 Dummy ${slug}`);
+      await ownerPage.getByLabel("Slug", { exact: true }).fill(`ws-k1-dummy-${slug}`);
+      await ownerPage.getByRole("button", { name: "Buat workspace" }).click();
+      await expect(ownerPage.getByText("Workspace dibuat.")).toBeVisible({ timeout: 30000 });
 
       // 2. Ambil UUID workspace baru lewat switcher (untuk ?workspace=).
       await ownerPage.goto("/merek");
@@ -134,20 +188,17 @@ test.describe("K-1 self-promotion — member tidak bisa jadi owner lewat PostgRE
       expect(wsId).toBeTruthy();
 
       // 3. Owner: undang akun kedua (role default Creator — BUKAN owner/admin).
-      await ownerPage.goto(`/pengaturan/anggota?workspace=${wsId}`);
-      await expect(
-        ownerPage.getByRole("heading", { name: `Undang anggota — Workspace K1 ${slug}` }),
-      ).toBeVisible();
-      await ownerPage.getByLabel("Email yang diundang").fill(member2Email);
-      await ownerPage.getByRole("button", { name: "Kirim undangan" }).click();
-      await expect(ownerPage.getByText("Tautan undangan")).toBeVisible({ timeout: 30000 });
-      const codeText = await ownerPage
-        .locator("form", { hasText: "Kirim undangan" })
-        .locator("code")
-        .textContent();
-      const token = (codeText ?? "").replace("/undangan/", "").trim();
+      // Undangan dibuat lewat API, bukan lewat UI: UI tidak lagi menampilkan
+      // token sejak email service-role aktif, dan token mentah tidak pernah
+      // disimpan di DB (hanya sha256-nya sebagai token_hash). Langkah undangan
+      // lewat UI sudah terbukti manual (email terkirim + baris pending).
+      const token = await createInvitationViaApi(request, {
+        workspaceId: wsId as string,
+        memberEmail: member2Email,
+        ownerEmail,
+        ownerPassword,
+      });
       expect(token).toMatch(/^[0-9a-f]{64}$/);
-
       // 4. Akun kedua: masuk + terima undangan lewat tautan itu.
       await signIn(memberPage, member2Email, member2Password);
       await memberPage.goto(`/undangan/${token}`);
@@ -235,13 +286,13 @@ test.describe("K-1 self-promotion — member tidak bisa jadi owner lewat PostgRE
       await ownerPage.getByLabel("Slug", { exact: true }).fill(`ws-k1r-${slug}`);
       await ownerPage.getByRole("button", { name: "Buat workspace" }).click();
       await expect(ownerPage.getByText("Workspace dibuat.")).toBeVisible({ timeout: 30000 });
-    // Workspace kedua (dummy) agar switcher tampil: WorkspaceSwitcher
-    // hanya dirender bila pengguna punya >1 workspace (return null bila
-    // <= 1) — tanpa ini switchToWorkspace selalu null di tes pertama.
-    await ownerPage.getByLabel("Nama workspace").fill(`Workspace K1R Dummy ${slug}`);
-    await ownerPage.getByLabel("Slug", { exact: true }).fill(`ws-k1r-dummy-${slug}`);
-    await ownerPage.getByRole("button", { name: "Buat workspace" }).click();
-    await expect(ownerPage.getByText("Workspace dibuat.")).toBeVisible({ timeout: 30000 });
+      // Workspace kedua (dummy) agar switcher tampil: WorkspaceSwitcher
+      // hanya dirender bila pengguna punya >1 workspace (return null bila
+      // <= 1) — tanpa ini switchToWorkspace selalu null di tes pertama.
+      await ownerPage.getByLabel("Nama workspace").fill(`Workspace K1R Dummy ${slug}`);
+      await ownerPage.getByLabel("Slug", { exact: true }).fill(`ws-k1r-dummy-${slug}`);
+      await ownerPage.getByRole("button", { name: "Buat workspace" }).click();
+      await expect(ownerPage.getByText("Workspace dibuat.")).toBeVisible({ timeout: 30000 });
 
       // Pembuat workspace HARUS menjadi owner (jalur RPC 0024): di halaman
       // anggota, barisnya ber-role Pemilik dan workspace-nya terlihat.

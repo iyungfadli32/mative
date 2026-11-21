@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { createHash, randomBytes } from "node:crypto";
 
 /**
  * Spek penerimaan Phase 2 — prompts/03 (P2-15).
@@ -27,6 +28,93 @@ async function signIn(page: import("@playwright/test").Page) {
   await expect(page.getByRole("heading", { name: "Command Center" })).toBeVisible({
     timeout: 15000,
   });
+}
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+const supabasePublicKey =
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+  "";
+
+/** Ambil access token owner lewat GoTrue (grant_type=password). */
+async function getAccessToken(
+  request: import("@playwright/test").APIRequestContext,
+  email: string,
+  password: string,
+): Promise<string> {
+  const authRes = await request.post(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+    headers: { apikey: supabasePublicKey, "Content-Type": "application/json" },
+    data: { email, password },
+  });
+  expect(authRes.ok()).toBeTruthy();
+  const body = (await authRes.json()) as { access_token?: string };
+  expect(body.access_token).toBeTruthy();
+  return body.access_token as string;
+}
+
+/** Ambil sub (UID) owner dari payload JWT (base64url). */
+function decodeJwtSub(jwt: string): string {
+  const payload = jwt.split(".")[1] ?? "";
+  const json = Buffer.from(payload.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString(
+    "utf8",
+  );
+  const decoded = JSON.parse(json) as { sub?: string };
+  expect(decoded.sub).toBeTruthy();
+  return decoded.sub as string;
+}
+
+/**
+ * Buat undangan workspace lewat PostgREST (bukan lewat UI).
+ * Aplikasi hanya menyimpan sha256(token) sebagai token_hash — token
+ * mentah tidak pernah disimpan di DB — dan UI tidak lagi menampilkan
+ * token sejak email service-role aktif (undangan dikirim lewat email).
+ * Langkah undangan lewat UI sudah terbukti manual; di tes ini token
+ * dibuat di sini supaya akun kedua bisa menerima lewat /undangan/<token>.
+ */
+async function createInvitationViaApi(
+  request: import("@playwright/test").APIRequestContext,
+  args: {
+    workspaceSlug: string;
+    memberEmail: string;
+    ownerEmail: string;
+    ownerPassword: string;
+  },
+): Promise<string> {
+  const ownerToken = await getAccessToken(request, args.ownerEmail, args.ownerPassword);
+  const wsRes = await request.get(
+    `${supabaseUrl}/rest/v1/workspaces?slug=eq.${args.workspaceSlug}&select=id`,
+    {
+      headers: {
+        apikey: supabasePublicKey,
+        Authorization: `Bearer ${ownerToken}`,
+      },
+    },
+  );
+  expect(wsRes.ok(), await wsRes.text()).toBeTruthy();
+  const rows = (await wsRes.json()) as Array<{ id: string }>;
+  expect(rows).toHaveLength(1);
+  const token = randomBytes(32).toString("hex");
+  const tokenHash = createHash("sha256").update(token).digest("hex");
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const res = await request.post(`${supabaseUrl}/rest/v1/workspace_invitations`, {
+    headers: {
+      apikey: supabasePublicKey,
+      Authorization: `Bearer ${ownerToken}`,
+      "Content-Type": "application/json",
+      Prefer: "return=minimal",
+    },
+    data: {
+      workspace_id: rows[0].id,
+      email: args.memberEmail,
+      role: "creator",
+      token_hash: tokenHash,
+      expires_at: expiresAt,
+      invited_by: decodeJwtSub(ownerToken),
+      status: "pending",
+    },
+  });
+  expect(res.status(), await res.text()).toBe(201);
+  return token;
 }
 
 test.describe("penerimaan Phase 2 — planning core @needs-db", () => {
@@ -85,7 +173,9 @@ test.describe("penerimaan Phase 2 — planning core @needs-db", () => {
     // exact: judul halaman "Channel" — tanpa exact, heading per-brand
     // "Brand E2E ... — 0 channel" ikut cocok (substring) dan melanggar
     // strict mode (defect tes e2e 2026-11-19).
-    await expect(page.getByRole("heading", { name: "Channel", exact: true })).toBeVisible({ timeout: 30000 });
+    await expect(page.getByRole("heading", { name: "Channel", exact: true })).toBeVisible({
+      timeout: 30000,
+    });
     // Render /channel kadang belum menampilkan brand yang baru dibuat
     // (stale sesaat setelah mutasi — terbukti 2026-11-19: 4 dari 7
     // pemuatan pertama melewatkan brand baru; muat ulang menampilkannya).
@@ -95,7 +185,9 @@ test.describe("penerimaan Phase 2 — planning core @needs-db", () => {
       await channelSummary.waitFor({ state: "attached", timeout: 10000 });
     } catch {
       await page.reload();
-      await expect(page.getByRole("heading", { name: "Channel", exact: true })).toBeVisible({ timeout: 30000 });
+      await expect(page.getByRole("heading", { name: "Channel", exact: true })).toBeVisible({
+        timeout: 30000,
+      });
       await channelSummary.waitFor({ state: "attached", timeout: 15000 });
     }
     await channelSummary.click();
@@ -118,7 +210,9 @@ test.describe("penerimaan Phase 2 — planning core @needs-db", () => {
     // walau ditunggu 30 dtk). Langkah ini diniatkan 2 channel sejak
     // awal (lihat komentar langkah 2) — buat channel TikTok juga.
     await page.reload();
-    await expect(page.getByRole("heading", { name: "Channel", exact: true })).toBeVisible({ timeout: 30000 });
+    await expect(page.getByRole("heading", { name: "Channel", exact: true })).toBeVisible({
+      timeout: 30000,
+    });
     const channelSummary2 = page.getByText(`Tambah channel untuk Brand E2E ${slug}`);
     await channelSummary2.waitFor({ state: "attached", timeout: 30000 });
     await channelSummary2.click();
@@ -132,7 +226,9 @@ test.describe("penerimaan Phase 2 — planning core @needs-db", () => {
 
     // 3. Buat content item (otomatis v1).
     await page.goto("/konten/baru");
-    await expect(page.getByRole("heading", { name: "Buat konten" })).toBeVisible({ timeout: 30000 });
+    await expect(page.getByRole("heading", { name: "Buat konten" })).toBeVisible({
+      timeout: 30000,
+    });
     await page.getByLabel(/Brand/).selectOption({ label: `Brand E2E ${slug}` });
     await page.getByLabel("Judul konten").fill(`Konten E2E ${slug}`);
     await page
@@ -146,7 +242,9 @@ test.describe("penerimaan Phase 2 — planning core @needs-db", () => {
     //    bila channel belum ada).
     await page.goto("/konten");
     await page.getByRole("link", { name: `Konten E2E ${slug}` }).click();
-    await expect(page.getByRole("heading", { name: `Konten E2E ${slug}` })).toBeVisible({ timeout: 30000 });
+    await expect(page.getByRole("heading", { name: `Konten E2E ${slug}` })).toBeVisible({
+      timeout: 30000,
+    });
     await page.getByRole("tab", { name: "Platform placements" }).click();
     // getByText("Tambah placement") ambigu: cocok juga dengan tombol
     // submit di dalam form (defect tes e2e 2026-11-19) — target <summary>.
@@ -167,7 +265,9 @@ test.describe("penerimaan Phase 2 — planning core @needs-db", () => {
     await page.goto("/kalender");
     await expect(page.getByRole("heading", { name: "Kalender" })).toBeVisible({ timeout: 30000 });
     await page.goto("/board");
-    await expect(page.getByRole("heading", { name: "Board Produksi" })).toBeVisible({ timeout: 30000 });
+    await expect(page.getByRole("heading", { name: "Board Produksi" })).toBeVisible({
+      timeout: 30000,
+    });
     await expect(page.getByText(`Konten E2E ${slug}`).first()).toBeVisible();
 
     // 6. Edit judul → versi baru tercatat.
@@ -194,7 +294,9 @@ test.describe("penerimaan Phase 2 — planning core @needs-db", () => {
     //    expect.configure() sebagai statement tidak mengubah default 5 dtk
     //    (pelajaran probe 2026-11-19).
     await page.reload();
-    await expect(page.getByRole("heading", { name: `Konten E2E ${slug} (revisi)` })).toBeVisible({ timeout: 30000 });
+    await expect(page.getByRole("heading", { name: `Konten E2E ${slug} (revisi)` })).toBeVisible({
+      timeout: 30000,
+    });
     await expect(page.getByText("Ide → Brief").first()).toBeVisible({ timeout: 30000 });
     await page.getByRole("tab", { name: "Versi" }).click();
     await expect(page.getByText("v2", { exact: true }).first()).toBeVisible({ timeout: 30000 });
@@ -204,9 +306,7 @@ test.describe("penerimaan Phase 2 — planning core @needs-db", () => {
 test.describe("perbaikan kritis planning (b) K-1 / K-2 / K-3 @needs-db", () => {
   test.skip(!hasTestAccount, "Butuh akun uji (E2E_TEST_EMAIL/PASSWORD) + migrasi live.");
   // Tes (c) butuh akun uji KEDUA yang sudah terdaftar (bukan akun utama).
-  const hasSecondAccount = Boolean(
-    process.env.E2E_TEST_EMAIL_2 && process.env.E2E_TEST_PASSWORD_2,
-  );
+  const hasSecondAccount = Boolean(process.env.E2E_TEST_EMAIL_2 && process.env.E2E_TEST_PASSWORD_2);
 
   async function signInAs(page: import("@playwright/test").Page, email: string, password: string) {
     await page.goto("/masuk");
@@ -230,11 +330,7 @@ test.describe("perbaikan kritis planning (b) K-1 / K-2 / K-3 @needs-db", () => {
     await expect(page.getByText("Workspace dibuat.")).toBeVisible({ timeout: 30000 });
   }
 
-  async function buatBrand(
-    page: import("@playwright/test").Page,
-    name: string,
-    slug: string,
-  ) {
+  async function buatBrand(page: import("@playwright/test").Page, name: string, slug: string) {
     await page.goto("/merek");
     await expect(page.getByRole("heading", { name: "Merek" })).toBeVisible({ timeout: 30000 });
     await page.locator("#brand-name-new").fill(name);
@@ -250,7 +346,9 @@ test.describe("perbaikan kritis planning (b) K-1 / K-2 / K-3 @needs-db", () => {
     extra?: { script?: string; caption?: string },
   ) {
     await page.goto("/konten/baru");
-    await expect(page.getByRole("heading", { name: "Buat konten" })).toBeVisible({ timeout: 30000 });
+    await expect(page.getByRole("heading", { name: "Buat konten" })).toBeVisible({
+      timeout: 30000,
+    });
     await page.getByLabel(/Brand/).selectOption({ label: brandLabel });
     await page.getByLabel("Judul konten").fill(title);
     if (extra?.script) await page.getByLabel("Script / naskah").fill(extra.script);
@@ -288,17 +386,15 @@ test.describe("perbaikan kritis planning (b) K-1 / K-2 / K-3 @needs-db", () => {
       .getByLabel("Ringkasan perubahan (wajib — tercatat di versi baru)")
       .fill("Isi brief awal");
     await page.getByRole("button", { name: "Simpan brief (versi baru)" }).click();
-    await expect(page.getByText("Brief disimpan sebagai versi v2.", { exact: true })).toBeVisible(
-      { timeout: 30000 },
-    );
+    await expect(page.getByText("Brief disimpan sebagai versi v2.", { exact: true })).toBeVisible({
+      timeout: 30000,
+    });
 
     // 2. Ubah judul di tab Ringkasan / Overview (versi v3) — dulu di sini
     //    brief terhapus karena updateContentAction mengirim {}.
     await page.getByRole("tab", { name: "Ringkasan" }).click();
     await page.getByLabel("Judul konten").fill(`${title} (revisi)`);
-    await page
-      .getByLabel("Ringkasan perubahan (wajib — tercatat di versi)")
-      .fill("Perbaiki judul");
+    await page.getByLabel("Ringkasan perubahan (wajib — tercatat di versi)").fill("Perbaiki judul");
     await page.getByRole("button", { name: "Simpan sebagai versi baru" }).click();
     await expect(page.getByText(/Perubahan disimpan sebagai versi v3/)).toBeVisible({
       timeout: 30000,
@@ -330,10 +426,10 @@ test.describe("perbaikan kritis planning (b) K-1 / K-2 / K-3 @needs-db", () => {
     });
 
     await page.goto("/template");
-    await expect(page.getByRole("heading", { name: "Template", exact: true })).toBeVisible({ timeout: 30000 });
-    await page
-      .getByLabel(/Konten sumber/)
-      .selectOption({ label: `${title} — ${brandName}` });
+    await expect(page.getByRole("heading", { name: "Template", exact: true })).toBeVisible({
+      timeout: 30000,
+    });
+    await page.getByLabel(/Konten sumber/).selectOption({ label: `${title} — ${brandName}` });
     await page.getByLabel("Nama template").fill(templateName);
     await page.getByRole("button", { name: "Simpan konten sebagai template" }).click();
     await expect(page.getByText("Template konten disimpan.", { exact: true })).toBeVisible({
@@ -351,6 +447,7 @@ test.describe("perbaikan kritis planning (b) K-1 / K-2 / K-3 @needs-db", () => {
 
   test("(b) K-3 — anggota scope Brand A tidak bisa membuat konten untuk Brand B", async ({
     page,
+    request,
   }) => {
     test.skip(
       !hasSecondAccount,
@@ -370,21 +467,18 @@ test.describe("perbaikan kritis planning (b) K-1 / K-2 / K-3 @needs-db", () => {
     await buatBrand(page, brandA, `brand-a-${slug}`);
     await buatBrand(page, brandB, `brand-b-${slug}`);
 
-    // 1. Owner mengundang akun kedua sebagai creator; ambil token dari
-    //    tautan yang ditampilkan sekali saja di UI.
-    await page.goto("/pengaturan/anggota");
-    await expect(page.getByRole("heading", { name: /Undang anggota/ })).toBeVisible({ timeout: 30000 });
-    await page.getByLabel("Email yang diundang").fill(email2);
-    await page.getByRole("button", { name: "Kirim undangan" }).click();
-    const tokenCode = page.locator("code", { hasText: "/undangan/" });
-    try {
-      await expect(tokenCode).toBeVisible({ timeout: 30000 });
-    } catch {
-      test.skip(true, "Tautan undangan tidak ditampilkan (email undangan dikirim server).");
-    }
-    const tokenText = (await tokenCode.textContent()) ?? "";
-    const token = tokenText.replace("/undangan/", "").trim();
-    test.skip(!token, "Token undangan tidak terbaca dari UI.");
+    // 1. Owner mengundang akun kedua sebagai creator, lewat API.
+    // UI tidak lagi menampilkan token sejak email service-role aktif,
+    // dan token mentah tidak pernah disimpan di DB (hanya sha256-nya
+    // sebagai token_hash). Langkah undangan lewat UI sudah terbukti
+    // manual (email terkirim + baris pending).
+    const token = await createInvitationViaApi(request, {
+      workspaceSlug: `ws-${slug}`,
+      memberEmail: email2,
+      ownerEmail: email1,
+      ownerPassword: password1,
+    });
+    expect(token).toMatch(/^[0-9a-f]{64}$/);
 
     // 2. Akun kedua masuk dan menerima undangan.
     await page.context().clearCookies();
@@ -416,7 +510,9 @@ test.describe("perbaikan kritis planning (b) K-1 / K-2 / K-3 @needs-db", () => {
     await page.context().clearCookies();
     await signInAs(page, email2, password2);
     await page.goto("/konten/baru");
-    await expect(page.getByRole("heading", { name: "Buat konten" })).toBeVisible({ timeout: 30000 });
+    await expect(page.getByRole("heading", { name: "Buat konten" })).toBeVisible({
+      timeout: 30000,
+    });
     const brandSelect = page.getByLabel(/Brand/);
     await expect(brandSelect.locator("option", { hasText: brandA })).toHaveCount(1);
     await expect(brandSelect.locator("option", { hasText: brandB })).toHaveCount(0);
