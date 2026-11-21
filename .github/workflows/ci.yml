@@ -52,6 +52,19 @@ jobs:
         run: npm run build
 
       - name: Smoke test (Playwright, halaman publik)
+        # Smoke test menegaskan /api/health supabaseConfigured=true, jadi
+        # langkah ini BUTUH dua variabel PUBLIK di bawah (tanpa keduanya,
+        # health mengembalikan false dan CI selalu merah).
+        # URL ditulis literal (publik, aman). Kunci publishable TIDAK ditulis
+        # literal di sini karena secret-scan repo menolak pola sb_publishable_
+        # di file yang di-commit — nilainya diambil dari GitHub Actions
+        # Variable repo (Settings -> Secrets and variables -> Actions ->
+        # Variables): NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, diisi dari
+        # Supabase Dashboard -> Settings -> API -> Publishable key.
+        # Service-role key TIDAK BOLEH masuk CI dalam bentuk apa pun.
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://kwyqtlxglhlvtghfrnhr.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
         run: |
           npx playwright install --with-deps chromium
           npx playwright test e2e/smoke.spec.ts --project=chromium
