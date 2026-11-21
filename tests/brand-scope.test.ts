@@ -25,6 +25,43 @@ describe("brandInScope — null = semua brand, [] = tidak ada brand", () => {
   });
 });
 
+describe("K-3 — keputusan scope saat buat konten & konversi ide (audit (b) K-3)", () => {
+  // createContentAction / convertIdeaAction mendelegasikan keputusan
+  // "boleh pakai brand ini?" ke brandInScope — predikat yang sama yang
+  // dipakai createCampaignAction. Uji di sini memastikan keputusan itu
+  // benar untuk tiap bentuk scope; penegakan di dalam RPC (migrasi 0026)
+  // memakai helper SQL brand_in_scope (0016) yang semantiknya sama dan
+  // diuji di pgTAP (supabase/tests/05_rls_phase5.sql).
+  const brandA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const brandB = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  it("anggota scope [Brand A] boleh membuat konten untuk Brand A", () => {
+    expect(brandInScope([brandA], brandA)).toBe(true);
+  });
+  it("anggota scope [Brand A] TIDAK boleh membuat konten untuk Brand B", () => {
+    expect(brandInScope([brandA], brandB)).toBe(false);
+  });
+  it("anggota tanpa batas (scope null) boleh untuk brand mana pun", () => {
+    expect(brandInScope(null, brandA)).toBe(true);
+    expect(brandInScope(null, brandB)).toBe(true);
+  });
+  it("anggota scope kosong [] tidak boleh membuat konten untuk brand apa pun", () => {
+    expect(brandInScope([], brandA)).toBe(false);
+    expect(brandInScope([], brandB)).toBe(false);
+  });
+  it("konversi ide: cek scope berlaku pada brand EFEKTIF (p_brand_id mengalahkan brand ide)", () => {
+    // Ide ber-brand A dikonversi dengan p_brand_id = Brand B → yang
+    // diperiksa adalah Brand B, bukan Brand A.
+    expect(brandInScope([brandA], brandB)).toBe(false);
+    expect(brandInScope([brandA, brandB], brandB)).toBe(true);
+  });
+  it("konversi ide tanpa brand (efektif null) tidak ditolak di lapis scope — RPC menolak bersih", () => {
+    // brandId null selalu lolos brandInScope (tidak ada brand untuk
+    // diperiksa); penolakan "Ide ini belum punya brand" datang dari RPC.
+    expect(brandInScope([brandA], null)).toBe(true);
+    expect(brandInScope([], null)).toBe(true);
+  });
+});
+
 describe("parseTargetMetricsLenient — baca toleran baris lama", () => {
   it("bentuk 3 field valid dibaca apa adanya", () => {
     expect(

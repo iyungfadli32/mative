@@ -588,7 +588,7 @@ export async function convertIdeaAction(
     return fail("Peran Anda tidak boleh mengonversi ide.");
   const { data: idea } = await supabase
     .from("ideas")
-    .select("status, converted_content_item_id")
+    .select("status, converted_content_item_id, brand_id")
     .eq("id", ideaId)
     .single();
   if (
@@ -596,6 +596,17 @@ export async function convertIdeaAction(
     !canConvertIdea(idea as { status: string | null; converted_content_item_id: string | null })
   ) {
     return fail("Ide ini sudah dikonversi dan tidak bisa dikonversi ulang.");
+  }
+  // (b) K-3: brand efektif = p_brand_id (bila diisi) atau brand ide.
+  // Cek scope terhadap brand efektif itu — sama seperti createCampaignAction.
+  // Bila belum ada brand efektif, biarkan RPC menolak dengan pesan bersih.
+  const effectiveBrandId =
+    brandIdRaw || (idea?.brand_id as string | null | undefined) || null;
+  if (effectiveBrandId) {
+    const scope = await getCallerBrandScope(workspaceId, user.id);
+    if (!brandInScope(scope, effectiveBrandId)) {
+      return fail("Brand konten hasil konversi di luar scope Anda.");
+    }
   }
   const { data, error } = await supabase.rpc("convert_idea_to_content", {
     p_idea_id: ideaId,
@@ -646,6 +657,12 @@ export async function createContentAction(
   const role = await requireRole(parsed.data.workspaceId, user.id);
   if (!role || !can(role, "create_edit_content"))
     return fail("Peran Anda tidak boleh membuat konten.");
+  // (b) K-3: brand scope (pola createCampaignAction) — anggota dengan
+  // brand_scope terbatas hanya boleh membuat konten untuk brand di scope-nya.
+  const scope = await getCallerBrandScope(parsed.data.workspaceId, user.id);
+  if (!brandInScope(scope, parsed.data.brandId)) {
+    return fail("Brand yang dipilih di luar scope Anda.");
+  }
   const { data, error } = await supabase.rpc("create_content_item_with_version", {
     p_workspace_id: parsed.data.workspaceId,
     p_brand_id: parsed.data.brandId,
@@ -714,6 +731,17 @@ export async function updateContentAction(
   if (!item) return fail("Content item tidak ditemukan.");
   if (!canEditSpecificContent(role, item.owner_user_id === user.id))
     return fail("Anda hanya boleh mengedit konten yang ditugaskan kepada Anda.");
+  // (b) K-1: brief_snapshot TIDAK dikirim form Overview (ContentForm tidak
+  // punya field brief) — baca dari versi terbaru dan teruskan, seperti
+  // updateBriefAction/updateScriptAction (loadItemForVersionUpdate).
+  // Mengirim {} di sini akan MENGHAPUS brief yang sudah diisi di tab Brief.
+  const { data: latestVersion } = await supabase
+    .from("content_versions")
+    .select("brief_snapshot")
+    .eq("content_item_id", parsed.data.contentItemId)
+    .order("version_number", { ascending: false })
+    .limit(1)
+    .single();
   const { data, error } = await supabase.rpc("update_content_item_with_version", {
     p_content_item_id: parsed.data.contentItemId,
     p_title: parsed.data.title,
@@ -729,7 +757,7 @@ export async function updateContentAction(
     p_caption: parsed.data.caption || null,
     p_cta: parsed.data.cta || null,
     p_creative_notes: parsed.data.creativeNotes || null,
-    p_brief_snapshot: {},
+    p_brief_snapshot: latestVersion?.brief_snapshot ?? {},
     p_change_summary: parsed.data.changeSummary,
   });
   if (error) return fail(dbErrorMessage(error, "Gagal menyimpan perubahan"));

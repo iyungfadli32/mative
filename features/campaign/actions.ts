@@ -531,19 +531,38 @@ export async function saveContentAsTemplateAction(
   let caption = parsed.data.caption ?? "";
   let placementChannels = parsed.data.placementChannels;
   if (parsed.data.sourceContentItemId) {
+    // (b) K-2: content_items TIDAK punya kolom script/caption (DDL 0007) —
+    // keduanya hanya ada di content_versions. Baca identitas dari
+    // content_items, lalu isi naskah dari baris content_versions TERBARU.
     const { data: item, error: itemError } = await supabase
       .from("content_items")
-      .select("id, title, brand_id, pillar_id, script, caption, workspace_id")
+      .select("id, title, brand_id, pillar_id, workspace_id")
       .eq("id", parsed.data.sourceContentItemId)
       .single();
-    if (itemError || !item || item.workspace_id !== parsed.data.workspaceId) {
+    if (itemError) {
+      return fail(dbErrorMessage(itemError, "Gagal membaca konten sumber"));
+    }
+    if (!item || item.workspace_id !== parsed.data.workspaceId) {
       return fail("Konten sumber tidak ditemukan di workspace ini (atau di luar scope Anda).");
+    }
+    const { data: latestVersion, error: versionError } = await supabase
+      .from("content_versions")
+      .select("script, caption, cta, creative_notes")
+      .eq("content_item_id", item.id)
+      .order("version_number", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (versionError) {
+      return fail(dbErrorMessage(versionError, "Gagal membaca versi terbaru konten sumber"));
     }
     title = item.title;
     brandId = item.brand_id;
     pillarId = item.pillar_id;
-    script = item.script ?? "";
-    caption = item.caption ?? "";
+    // content_templates (0017) hanya menyimpan script/caption — cta dan
+    // creative_notes versi terbaru tidak ada kolom tujuannya, jadi tidak
+    // disalin ke template.
+    script = latestVersion?.script ?? "";
+    caption = latestVersion?.caption ?? "";
     const { data: placements } = await supabase
       .from("content_placements")
       .select("social_channel_id, platform_format")

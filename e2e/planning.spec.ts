@@ -201,6 +201,228 @@ test.describe("penerimaan Phase 2 — planning core @needs-db", () => {
   });
 });
 
+test.describe("perbaikan kritis planning (b) K-1 / K-2 / K-3 @needs-db", () => {
+  test.skip(!hasTestAccount, "Butuh akun uji (E2E_TEST_EMAIL/PASSWORD) + migrasi live.");
+  // Tes (c) butuh akun uji KEDUA yang sudah terdaftar (bukan akun utama).
+  const hasSecondAccount = Boolean(
+    process.env.E2E_TEST_EMAIL_2 && process.env.E2E_TEST_PASSWORD_2,
+  );
+
+  async function signInAs(page: import("@playwright/test").Page, email: string, password: string) {
+    await page.goto("/masuk");
+    await page.getByLabel("Email").fill(email);
+    await page.getByLabel("Kata sandi").fill(password);
+    await page.getByRole("button", { name: "Masuk" }).click();
+    await expect(page.getByRole("heading", { name: "Command Center" })).toBeVisible({
+      timeout: 15000,
+    });
+  }
+
+  async function buatOrganisasiWorkspace(page: import("@playwright/test").Page, slug: string) {
+    await page.goto("/pengaturan/organisasi");
+    await page.getByLabel("Nama organisasi").fill(`Organisasi E2E ${slug}`);
+    await page.getByLabel(/Slug \(huruf kecil/).fill(`org-${slug}`);
+    await page.getByRole("button", { name: "Buat organisasi" }).click();
+    await expect(page.getByText("Organisasi dibuat.")).toBeVisible({ timeout: 30000 });
+    await page.getByLabel("Nama workspace").fill(`Workspace E2E ${slug}`);
+    await page.getByLabel("Slug", { exact: true }).fill(`ws-${slug}`);
+    await page.getByRole("button", { name: "Buat workspace" }).click();
+    await expect(page.getByText("Workspace dibuat.")).toBeVisible({ timeout: 30000 });
+  }
+
+  async function buatBrand(
+    page: import("@playwright/test").Page,
+    name: string,
+    slug: string,
+  ) {
+    await page.goto("/merek");
+    await expect(page.getByRole("heading", { name: "Merek" })).toBeVisible();
+    await page.locator("#brand-name-new").fill(name);
+    await page.locator("#brand-slug-new").fill(slug);
+    await page.getByRole("button", { name: "Buat brand" }).click();
+    await expect(page.getByText("Brand dibuat.", { exact: true })).toBeVisible({ timeout: 30000 });
+  }
+
+  async function buatKonten(
+    page: import("@playwright/test").Page,
+    brandLabel: string,
+    title: string,
+    extra?: { script?: string; caption?: string },
+  ) {
+    await page.goto("/konten/baru");
+    await expect(page.getByRole("heading", { name: "Buat konten" })).toBeVisible();
+    await page.getByLabel(/Brand/).selectOption({ label: brandLabel });
+    await page.getByLabel("Judul konten").fill(title);
+    if (extra?.script) await page.getByLabel("Script / naskah").fill(extra.script);
+    if (extra?.caption) await page.getByLabel("Caption").fill(extra.caption);
+    await page
+      .getByLabel("Ringkasan perubahan (wajib — tercatat di versi)")
+      .fill("Versi awal (v1)");
+    await page.getByRole("button", { name: "Buat konten (v1)" }).click();
+    await expect(page.getByText("Konten dibuat beserta versi v1.")).toBeVisible({ timeout: 30000 });
+  }
+
+  async function bukaDetailKonten(page: import("@playwright/test").Page, title: string) {
+    await page.goto("/konten");
+    await page.getByRole("link", { name: title }).click();
+    await expect(page.getByRole("heading", { name: title })).toBeVisible();
+  }
+
+  test("(b) K-1 — brief bertahan setelah edit judul di tab Ringkasan", async ({ page }) => {
+    test.setTimeout(180000);
+    expect.configure({ timeout: 30000 });
+    await signIn(page);
+    const slug = `k1-${Date.now().toString(36)}`;
+    const brandName = `Brand E2E ${slug}`;
+    const title = `Konten Brief E2E ${slug}`;
+    const objective = `Tujuan brief E2E ${slug}`;
+    await buatOrganisasiWorkspace(page, slug);
+    await buatBrand(page, brandName, `brand-${slug}`);
+    await buatKonten(page, brandName, title);
+    await bukaDetailKonten(page, title);
+
+    // 1. Isi brief di tab Brief (versi v2).
+    await page.getByRole("tab", { name: "Brief" }).click();
+    await page.getByLabel("Tujuan konten (wajib)").fill(objective);
+    await page
+      .getByLabel("Ringkasan perubahan (wajib — tercatat di versi baru)")
+      .fill("Isi brief awal");
+    await page.getByRole("button", { name: "Simpan brief (versi baru)" }).click();
+    await expect(page.getByText("Brief disimpan sebagai versi v2.", { exact: true })).toBeVisible(
+      { timeout: 30000 },
+    );
+
+    // 2. Ubah judul di tab Ringkasan / Overview (versi v3) — dulu di sini
+    //    brief terhapus karena updateContentAction mengirim {}.
+    await page.getByRole("tab", { name: "Ringkasan" }).click();
+    await page.getByLabel("Judul konten").fill(`${title} (revisi)`);
+    await page
+      .getByLabel("Ringkasan perubahan (wajib — tercatat di versi)")
+      .fill("Perbaiki judul");
+    await page.getByRole("button", { name: "Simpan sebagai versi baru" }).click();
+    await expect(page.getByText(/Perubahan disimpan sebagai versi v3/)).toBeVisible({
+      timeout: 30000,
+    });
+
+    // 3. Kembali ke tab Brief: tujuan brief HARUS masih ada (bukan kosong).
+    await page.getByRole("tab", { name: "Brief" }).click();
+    await expect(page.getByLabel("Tujuan konten (wajib)")).toHaveValue(objective, {
+      timeout: 30000,
+    });
+  });
+
+  test("(b) K-2 — simpan konten sebagai template berhasil", async ({ page }) => {
+    test.setTimeout(180000);
+    expect.configure({ timeout: 30000 });
+    await signIn(page);
+    const slug = `k2-${Date.now().toString(36)}`;
+    const brandName = `Brand E2E ${slug}`;
+    const title = `Konten Template E2E ${slug}`;
+    const templateName = `Template E2E ${slug}`;
+    await buatOrganisasiWorkspace(page, slug);
+    await buatBrand(page, brandName, `brand-${slug}`);
+    // Isi script + caption agar terbukti ikut tersalin dari versi terbaru
+    // (sebelum perbaikan, query ini selalu gagal: kolom tidak ada di
+    // content_items).
+    await buatKonten(page, brandName, title, {
+      script: `Naskah E2E ${slug}`,
+      caption: `Caption E2E ${slug}`,
+    });
+
+    await page.goto("/template");
+    await expect(page.getByRole("heading", { name: "Template" })).toBeVisible();
+    await page
+      .getByLabel(/Konten sumber/)
+      .selectOption({ label: `${title} — ${brandName}` });
+    await page.getByLabel("Nama template").fill(templateName);
+    await page.getByRole("button", { name: "Simpan konten sebagai template" }).click();
+    await expect(page.getByText("Template konten disimpan.", { exact: true })).toBeVisible({
+      timeout: 30000,
+    });
+    // Template baru tampil di daftar (judul + brand membuktikan isi konten
+    // sumber tersalin).
+    await expect(page.getByText(templateName, { exact: true })).toBeVisible({ timeout: 30000 });
+    await expect(
+      page.getByText(`Judul: ${title} · Brand: ${brandName} · 0 channel`, { exact: true }),
+    ).toBeVisible({
+      timeout: 30000,
+    });
+  });
+
+  test("(b) K-3 — anggota scope Brand A tidak bisa membuat konten untuk Brand B", async ({
+    page,
+  }) => {
+    test.skip(
+      !hasSecondAccount,
+      "Butuh akun uji kedua yang sudah terdaftar (E2E_TEST_EMAIL_2/PASSWORD_2).",
+    );
+    test.setTimeout(240000);
+    expect.configure({ timeout: 30000 });
+    const email1 = process.env.E2E_TEST_EMAIL as string;
+    const password1 = process.env.E2E_TEST_PASSWORD as string;
+    const email2 = process.env.E2E_TEST_EMAIL_2 as string;
+    const password2 = process.env.E2E_TEST_PASSWORD_2 as string;
+    await signIn(page);
+    const slug = `k3-${Date.now().toString(36)}`;
+    const brandA = `Brand A E2E ${slug}`;
+    const brandB = `Brand B E2E ${slug}`;
+    await buatOrganisasiWorkspace(page, slug);
+    await buatBrand(page, brandA, `brand-a-${slug}`);
+    await buatBrand(page, brandB, `brand-b-${slug}`);
+
+    // 1. Owner mengundang akun kedua sebagai creator; ambil token dari
+    //    tautan yang ditampilkan sekali saja di UI.
+    await page.goto("/pengaturan/anggota");
+    await expect(page.getByRole("heading", { name: /Undang anggota/ })).toBeVisible();
+    await page.getByLabel("Email yang diundang").fill(email2);
+    await page.getByRole("button", { name: "Kirim undangan" }).click();
+    const tokenCode = page.locator("code", { hasText: "/undangan/" });
+    try {
+      await expect(tokenCode).toBeVisible({ timeout: 30000 });
+    } catch {
+      test.skip(true, "Tautan undangan tidak ditampilkan (email undangan dikirim server).");
+    }
+    const tokenText = (await tokenCode.textContent()) ?? "";
+    const token = tokenText.replace("/undangan/", "").trim();
+    test.skip(!token, "Token undangan tidak terbaca dari UI.");
+
+    // 2. Akun kedua masuk dan menerima undangan.
+    await page.context().clearCookies();
+    await signInAs(page, email2, password2);
+    await page.goto(`/undangan/${token}`);
+    await page.getByRole("button", { name: "Terima undangan" }).click();
+    await expect(page.getByRole("link", { name: "Ke Command Center →" })).toBeVisible({
+      timeout: 30000,
+    });
+
+    // 3. Owner membatasi scope akun kedua ke Brand A saja.
+    await page.context().clearCookies();
+    await signInAs(page, email1, password1);
+    await page.goto("/pengaturan/anggota");
+    const memberRow = page.locator("tr", { hasText: email2 });
+    await expect(memberRow).toBeVisible({ timeout: 30000 });
+    await memberRow.locator("summary", { hasText: "Semua brand" }).click();
+    await memberRow.getByLabel("Hanya brand terpilih").check();
+    await memberRow.getByLabel(brandA).check();
+    await memberRow.getByRole("button", { name: "Simpan scope" }).click();
+    await expect(
+      page.getByText("Brand scope diubah: anggota ini hanya bisa melihat 1 brand."),
+    ).toBeVisible({ timeout: 30000 });
+
+    // 4. Akun kedua membuka form buat konten: Brand A ada, Brand B TIDAK
+    //    ada di pilihan (daftar brand sudah ter-scope lewat RLS 0016).
+    //    Jalur pemanggilan action langsung ditutup lapis server action +
+    //    RPC (migrasi 0026) — dibuktikan di pgTAP, bukan di sini.
+    await page.context().clearCookies();
+    await signInAs(page, email2, password2);
+    await page.goto("/konten/baru");
+    await expect(page.getByRole("heading", { name: "Buat konten" })).toBeVisible();
+    const brandSelect = page.getByLabel(/Brand/);
+    await expect(brandSelect.locator("option", { hasText: brandA })).toHaveCount(1);
+    await expect(brandSelect.locator("option", { hasText: brandB })).toHaveCount(0);
+  });
+});
+
 test.describe("smoke — halaman perencanaan (tanpa login)", () => {
   test("semua halaman Phase 2 menampilkan judul + ajakan masuk", async ({ page }) => {
     const pages: Array<[string, string]> = [
