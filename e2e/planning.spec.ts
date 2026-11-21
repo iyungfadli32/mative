@@ -330,7 +330,7 @@ test.describe("perbaikan kritis planning (b) K-1 / K-2 / K-3 @needs-db", () => {
     });
 
     await page.goto("/template");
-    await expect(page.getByRole("heading", { name: "Template" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Template", exact: true })).toBeVisible();
     await page
       .getByLabel(/Konten sumber/)
       .selectOption({ label: `${title} — ${brandName}` });

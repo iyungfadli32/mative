@@ -52,6 +52,9 @@ async function switchToWorkspace(
   workspaceName: string,
 ): Promise<string | null> {
   const switcher = page.getByLabel("Pindah workspace");
+  // Switcher dimuat asinkron sesudah heading halaman muncul — tunggu
+  // dulu sampai terpasang sebelum memutuskan ia tidak ada.
+  await switcher.waitFor({ state: "attached", timeout: 10000 }).catch(() => undefined);
   if ((await switcher.count()) === 0) return null;
   await switcher.selectOption({ label: `${workspaceName} (owner)` });
   await expect(page.getByText(`Workspace: ${workspaceName}`)).toBeVisible({
