@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { getSupabaseServerClient, getSupabaseAdminClient } from "@/lib/supabase/server";
 import {
   organizationSchema,
@@ -97,38 +97,27 @@ export async function createWorkspaceAction(
   if (!supabase || !user) {
     return { ok: false, message: supabase ? "Anda harus masuk dulu." : SUPABASE_NOT_CONFIGURED_ID };
   }
-  // RLS: hanya member organisasi yang bisa membuat workspace di dalamnya;
-  // pembuat otomatis menjadi owner workspace (lihat migrasi 0003).
-  // ID dibuat di server (bukan .select("id")): meminta representation
-  // setelah INSERT workspace gagal 42501 karena kebijakan SELECT
-  // workspaces mensyaratkan keanggotaan workspace — yang baru dibuat
-  // tepat setelah baris workspace ini (defect e2e 2026-11-19).
-  const workspaceId = randomUUID();
-  const { error } = await supabase.from("workspaces").insert({
-    id: workspaceId,
-    organization_id: parsed.data.organizationId,
-    name: parsed.data.name,
-    slug: parsed.data.slug,
-    timezone: parsed.data.timezone,
-    default_locale: parsed.data.defaultLocale,
+  // Pembuatan workspace + keanggotaan owner dilakukan ATOMIK di dalam RPC
+  // create_workspace_with_owner (SECURITY DEFINER, migrasi 0024): insert
+  // langsung ke workspace_members dari client TIDAK LAGI diizinkan policy
+  // RLS (perbaikan K-1 — cabang self-insert di policy dihapus; jalur itu
+  // memungkinkan anggota org biasa mengangkat diri jadi owner workspace
+  // mana pun). RPC memeriksa pemanggil member organisasi, lalu menyisipkan
+  // baris workspace + baris owner dalam satu transaksi — jadi tidak ada
+  // lagi jendela workspace tanpa owner, dan tidak ada lagi insert
+  // workspace_members terpisah yang bisa gagal sesudah workspace tercipta.
+  // ID TIDAK dibuat di server action lagi: RPC mengembalikan workspace_id.
+  const { data, error } = await supabase.rpc("create_workspace_with_owner", {
+    p_organization_id: parsed.data.organizationId,
+    p_name: parsed.data.name,
+    p_slug: parsed.data.slug,
+    p_timezone: parsed.data.timezone,
+    p_default_locale: parsed.data.defaultLocale,
   });
   if (error) return { ok: false, message: `Gagal membuat workspace: ${error.message}` };
-  // Keanggotaan owner dibuat terpisah (lihat kebijakan RLS 0003
-  // "ws_members_insert_owner_admin_or_self" butir (a)): tanpa baris ini
-  // workspace tidak pernah terlihat oleh pembuatnya sendiri dan halaman
-  // anggota menampilkan "Belum ada workspace" (defect e2e 2026-11-19).
-  const { error: memberError } = await supabase.from("workspace_members").insert({
-    workspace_id: workspaceId,
-    user_id: user.id,
-    workspace_role: "owner",
-    membership_status: "active",
-    joined_at: new Date().toISOString(),
-  });
-  if (memberError) {
-    return {
-      ok: false,
-      message: `Workspace dibuat, tetapi keanggotaan owner gagal: ${memberError.message}`,
-    };
+  const result = data as { ok: boolean; message: string } | null;
+  if (!result?.ok) {
+    return { ok: false, message: result?.message ?? "Gagal membuat workspace." };
   }
   revalidatePath("/pengaturan/organisasi");
   return { ok: true, message: "Workspace dibuat." };
