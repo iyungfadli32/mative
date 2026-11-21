@@ -180,6 +180,8 @@ test.describe("K-1 self-promotion — member tidak bisa jadi owner lewat PostgRE
       await ownerPage.getByLabel("Slug", { exact: true }).fill(`ws-k1-dummy-${slug}`);
       await ownerPage.getByRole("button", { name: "Buat workspace" }).click();
       await expect(ownerPage.getByText("Workspace dibuat.")).toBeVisible({ timeout: 30000 });
+    // Muat ulang agar shell memuat daftar workspace yang segar (switcher hanya tampil bila >= 2 workspace).
+    await ownerPage.goto("/pengaturan/organisasi");
 
       // 2. Ambil UUID workspace baru lewat switcher (untuk ?workspace=).
       await ownerPage.goto("/merek");
@@ -258,7 +260,7 @@ test.describe("K-1 self-promotion — member tidak bisa jadi owner lewat PostgRE
       await ownerPage.goto(`/pengaturan/anggota?workspace=${wsId}`);
       await expect(ownerPage.getByText(member2Uid)).toBeVisible({ timeout: 30000 });
       await expect(ownerPage.getByRole("cell", { name: "Pemilik" })).toHaveCount(1);
-      await expect(ownerPage.getByRole("cell", { name: "Creator" })).toBeVisible();
+      await expect(ownerPage.locator("tr", { hasText: member2Email }).getByRole("cell", { name: "Creator" })).toBeVisible();
     } finally {
       await ownerCtx.close();
       await memberCtx.close();
@@ -293,6 +295,8 @@ test.describe("K-1 self-promotion — member tidak bisa jadi owner lewat PostgRE
       await ownerPage.getByLabel("Slug", { exact: true }).fill(`ws-k1r-dummy-${slug}`);
       await ownerPage.getByRole("button", { name: "Buat workspace" }).click();
       await expect(ownerPage.getByText("Workspace dibuat.")).toBeVisible({ timeout: 30000 });
+    // Muat ulang agar shell memuat daftar workspace yang segar (switcher hanya tampil bila >= 2 workspace).
+    await ownerPage.goto("/pengaturan/organisasi");
 
       // Pembuat workspace HARUS menjadi owner (jalur RPC 0024): di halaman
       // anggota, barisnya ber-role Pemilik dan workspace-nya terlihat.

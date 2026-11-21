@@ -117,6 +117,28 @@ async function createInvitationViaApi(
   return token;
 }
 
+async function getWorkspaceIdBySlug(args: {
+  request: import("@playwright/test").APIRequestContext;
+  ownerToken: string;
+  workspaceSlug: string;
+}): Promise<string> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
+  const supabasePublicKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY as string;
+  const wsRes = await args.request.get(
+    `${supabaseUrl}/rest/v1/workspaces?slug=eq.${args.workspaceSlug}&select=id`,
+    {
+      headers: {
+        apikey: supabasePublicKey,
+        Authorization: `Bearer ${args.ownerToken}`,
+      },
+    },
+  );
+  expect(wsRes.ok(), await wsRes.text()).toBeTruthy();
+  const rows = (await wsRes.json()) as Array<{ id: string }>;
+  expect(rows).toHaveLength(1);
+  return rows[0].id;
+}
+
 test.describe("penerimaan Phase 2 — planning core @needs-db", () => {
   test.skip(!hasTestAccount, "Butuh akun uji (E2E_TEST_EMAIL/PASSWORD) + migrasi 0007/0008 live.");
 
@@ -492,7 +514,13 @@ test.describe("perbaikan kritis planning (b) K-1 / K-2 / K-3 @needs-db", () => {
     // 3. Owner membatasi scope akun kedua ke Brand A saja.
     await page.context().clearCookies();
     await signInAs(page, email1, password1);
-    await page.goto("/pengaturan/anggota");
+  const ownerToken = await getAccessToken(request, email1, password1);
+  const wsId = await getWorkspaceIdBySlug({
+    request,
+    ownerToken,
+    workspaceSlug: `ws-${slug}`,
+  });
+  await page.goto(`/pengaturan/anggota?workspace=${wsId}`);
     const memberRow = page.locator("tr", { hasText: email2 });
     await expect(memberRow).toBeVisible({ timeout: 30000 });
     await memberRow.locator("summary", { hasText: "Semua brand" }).click();
