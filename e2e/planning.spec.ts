@@ -549,6 +549,17 @@ test.describe("perbaikan kritis planning (b) K-1 / K-2 / K-3 @needs-db", () => {
     await expect(page.getByRole("heading", { name: "Buat konten" })).toBeVisible({
       timeout: 30000,
     });
+  // Param ?workspace= saja tidak cukup menjamin konteks workspace anggota:
+  // di run mobile terakhir halaman jatuh ke workspace lama anggota
+  // (workspaces[0]) sehingga daftar brand menampilkan Brand A workspace
+  // lama. Paksa konteks lewat pemilih workspace -- cara yang sama dipakai
+  // pengguna -- lalu tunggu sampai pemilih menunjuk workspace mobile
+  // sebelum memeriksa daftar brand.
+  const switcher = page.getByLabel("Pindah workspace");
+  if (await switcher.isVisible().catch(() => false)) {
+    await switcher.selectOption(wsId);
+    await expect(switcher).toHaveValue(wsId, { timeout: 30000 });
+  }
     const brandSelect = page.getByLabel(/Brand/);
     await expect(brandSelect.locator("option", { hasText: brandA })).toHaveCount(1);
     await expect(brandSelect.locator("option", { hasText: brandB })).toHaveCount(0);
