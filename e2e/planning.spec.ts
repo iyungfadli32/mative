@@ -545,7 +545,7 @@ test.describe("perbaikan kritis planning (b) K-1 / K-2 / K-3 @needs-db", () => {
     //    RPC (migrasi 0026) — dibuktikan di pgTAP, bukan di sini.
     await page.context().clearCookies();
     await signInAs(page, email2, password2);
-    await page.goto("/konten/baru");
+    await page.goto("/konten/baru?workspace=${wsId}");
     await expect(page.getByRole("heading", { name: "Buat konten" })).toBeVisible({
       timeout: 30000,
     });
