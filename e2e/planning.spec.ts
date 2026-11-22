@@ -521,7 +521,8 @@ test.describe("perbaikan kritis planning (b) K-1 / K-2 / K-3 @needs-db", () => {
     workspaceSlug: `ws-${slug}`,
   });
   await page.goto(`/pengaturan/anggota?workspace=${wsId}`);
-    const memberRow = page.locator("tr", { hasText: email2 });
+  const membersTable = page.getByRole("table", { name: "Daftar anggota workspace" });
+  const memberRow = membersTable.locator("tr", { hasText: email2 });
     await expect(memberRow).toBeVisible({ timeout: 30000 });
     await memberRow.locator("summary", { hasText: "Semua brand" }).click();
     await memberRow.getByLabel("Hanya brand terpilih").check();
