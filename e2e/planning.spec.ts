@@ -352,8 +352,13 @@ test.describe("perbaikan kritis planning (b) K-1 / K-2 / K-3 @needs-db", () => {
     await expect(page.getByText("Workspace dibuat.")).toBeVisible({ timeout: 30000 });
   }
 
-  async function buatBrand(page: import("@playwright/test").Page, name: string, slug: string) {
-    await page.goto("/merek");
+  async function buatBrand(
+    page: import("@playwright/test").Page,
+    name: string,
+    slug: string,
+    workspaceId?: string,
+  ) {
+    await page.goto(workspaceId ? `/merek?workspace=${workspaceId}` : "/merek");
     await expect(page.getByRole("heading", { name: "Merek" })).toBeVisible({ timeout: 30000 });
     await page.locator("#brand-name-new").fill(name);
     await page.locator("#brand-slug-new").fill(slug);
@@ -481,14 +486,20 @@ test.describe("perbaikan kritis planning (b) K-1 / K-2 / K-3 @needs-db", () => {
     const password1 = process.env.E2E_TEST_PASSWORD as string;
     const email2 = process.env.E2E_TEST_EMAIL_2 as string;
     const password2 = process.env.E2E_TEST_PASSWORD_2 as string;
-  const member2Uid = process.env.E2E_MEMBER2_UID as string;
+    const member2Uid = process.env.E2E_MEMBER2_UID as string;
     await signIn(page);
     const slug = `k3-${Date.now().toString(36)}`;
     const brandA = `Brand A E2E ${slug}`;
     const brandB = `Brand B E2E ${slug}`;
     await buatOrganisasiWorkspace(page, slug);
-    await buatBrand(page, brandA, `brand-a-${slug}`);
-    await buatBrand(page, brandB, `brand-b-${slug}`);
+    const ownerToken = await getAccessToken(request, email1, password1);
+    const wsId = await getWorkspaceIdBySlug({
+      request,
+      ownerToken,
+      workspaceSlug: `ws-${slug}`,
+    });
+    await buatBrand(page, brandA, `brand-a-${slug}`, wsId);
+    await buatBrand(page, brandB, `brand-b-${slug}`, wsId);
 
     // 1. Owner mengundang akun kedua sebagai creator, lewat API.
     // UI tidak lagi menampilkan token sejak email service-role aktif,
@@ -515,16 +526,10 @@ test.describe("perbaikan kritis planning (b) K-1 / K-2 / K-3 @needs-db", () => {
     // 3. Owner membatasi scope akun kedua ke Brand A saja.
     await page.context().clearCookies();
     await signInAs(page, email1, password1);
-  const ownerToken = await getAccessToken(request, email1, password1);
-  const wsId = await getWorkspaceIdBySlug({
-    request,
-    ownerToken,
-    workspaceSlug: `ws-${slug}`,
-  });
-  await page.goto(`/pengaturan/anggota?workspace=${wsId}`);
-  const membersTable = page.getByRole("table", { name: "Daftar anggota workspace" });
-  // Kolom email tabel anggota menampilkan ID pengguna, bukan alamat email, sehingga baris dicari berdasarkan UID.
-  const memberRow = membersTable.locator("tr", { hasText: member2Uid });
+    await page.goto(`/pengaturan/anggota?workspace=${wsId}`);
+    const membersTable = page.getByRole("table", { name: "Daftar anggota workspace" });
+    // Kolom email tabel anggota menampilkan ID pengguna, bukan alamat email, sehingga baris dicari berdasarkan UID.
+    const memberRow = membersTable.locator("tr", { hasText: member2Uid });
     await expect(memberRow).toBeVisible({ timeout: 30000 });
     await memberRow.locator("summary", { hasText: "Semua brand" }).click();
     await memberRow.getByLabel("Hanya brand terpilih").check();
