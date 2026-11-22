@@ -481,6 +481,7 @@ test.describe("perbaikan kritis planning (b) K-1 / K-2 / K-3 @needs-db", () => {
     const password1 = process.env.E2E_TEST_PASSWORD as string;
     const email2 = process.env.E2E_TEST_EMAIL_2 as string;
     const password2 = process.env.E2E_TEST_PASSWORD_2 as string;
+  const member2Uid = process.env.E2E_MEMBER2_UID as string;
     await signIn(page);
     const slug = `k3-${Date.now().toString(36)}`;
     const brandA = `Brand A E2E ${slug}`;
@@ -522,7 +523,8 @@ test.describe("perbaikan kritis planning (b) K-1 / K-2 / K-3 @needs-db", () => {
   });
   await page.goto(`/pengaturan/anggota?workspace=${wsId}`);
   const membersTable = page.getByRole("table", { name: "Daftar anggota workspace" });
-  const memberRow = membersTable.locator("tr", { hasText: email2 });
+  // Kolom email tabel anggota menampilkan ID pengguna, bukan alamat email, sehingga baris dicari berdasarkan UID.
+  const memberRow = membersTable.locator("tr", { hasText: member2Uid });
     await expect(memberRow).toBeVisible({ timeout: 30000 });
     await memberRow.locator("summary", { hasText: "Semua brand" }).click();
     await memberRow.getByLabel("Hanya brand terpilih").check();
