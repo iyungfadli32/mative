@@ -15,6 +15,10 @@
 import type { z } from "zod";
 import type { AiErrorCategory } from "./constants";
 import { AI_NOT_CONFIGURED_ID } from "./constants";
+import type { AiMetricPayload } from "./types";
+
+// Provider "none" = adapter netral tanpa provider (AI NONAKTIF).
+export const NULL_PROVIDER_ID = "none" as const;
 
 export type AiAdapterSuccess<T> = {
   ok: true;
@@ -42,6 +46,10 @@ export type AiGenerateInput = {
   userInstruction: string;
   /** Konten yang diambil dari DB/komentar/dokumen = data TIDAK TEPERCAYA. */
   untrustedContent?: string;
+  // Metrik grounding (T2): payload lengkap dari DB - diteruskan apa adanya
+  // agar provider (bila ada nanti) mengutip angka yang benar, dan agar
+  // verifyGroundingNumbers bisa memeriksa output sebelum "completed".
+  metrics?: AiMetricPayload;
 };
 
 export type AiSummarizeInput = {
@@ -71,7 +79,7 @@ export interface AiAdapter {
 
 /** Adapter "tidak ada provider": semua metode gagal jujur, tanpa model. */
 export class NullAdapter implements AiAdapter {
-  readonly providerId = "none";
+  readonly providerId = NULL_PROVIDER_ID;
   readonly model: string | null = null;
 
   private notConfigured(): AiAdapterFailure {

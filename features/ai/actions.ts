@@ -24,7 +24,7 @@ import {
   insertAiDraftVersionSchema,
 } from "@/lib/validation/schemas";
 import { getCallerBrandScope, getCallerRole } from "@/features/planning/context";
-import { getAiAdapter } from "./adapter";
+import { getAiAdapter, NULL_PROVIDER_ID } from "./adapter";
 import {
   AI_ACCESS_DENIED_ID,
   AI_DISABLED_ID,
@@ -33,15 +33,15 @@ import {
   AI_TABLES_UNAVAILABLE_ID,
   AI_USAGE_LIMIT_ID,
 } from "./constants";
-import { buildMetricPayload } from "./grounding";
-import { scanUntrustedContent } from "./safety";
+import { buildMetricPayload, extractMetricClaims, verifyGroundingNumbers } from "./grounding";
+import { buildAdapterScanText, scanUntrustedContent } from "./safety";
 import { AI_SETTINGS_KEY, getAiSettings } from "./settings";
 import { AI_OUTPUT_SCHEMAS } from "./schemas";
 import {
   getCampaignMetricsForGrounding,
   listAiContextComments,
 } from "./queries";
-import type { AiActionResult, InsertAiDraftVersionRpcResult } from "./types";
+import type { AiActionResult, AiMetricPayload, InsertAiDraftVersionRpcResult } from "./types";
 
 const ok = (message: string, extra?: Partial<AiActionResult>): AiActionResult => ({
   ok: true,
@@ -165,36 +165,22 @@ export async function runAiAction(
       usage: { used, limit: settings.dailyLimit },
     });
   }
-  // Safety (8.6): teks yang diberikan user = data TIDAK TEPERCAYA.
-  const scan = scanUntrustedContent(
-    [input.sourceText, input.objective, input.audience, input.pillar, input.channel].join("\n"),
-  );
+  // Safety (8.6): pindai TIDAK dilakukan di sini. Seluruh input adapter
+  // (instruksi + konteks DB + konten tidak tepercaya) dipindai dalam SATU
+  // panggilan setelah konteks ter-resolusi, sebelum adapter dipanggil (T3).
   const inputReference =
     input.contextType === "manual"
       ? `manual:${input.feature}`
       : `${input.contextType}:${input.contextId ?? "none"}`;
-  if (scan.blocked) {
-    const generationId = await logGeneration(supabase, {
-      workspaceId: input.workspaceId,
-      userId: user.id,
-      feature: input.feature,
-      inputReference,
-      status: "blocked",
-      errorCategory: "prompt_injection",
-    });
-    revalidatePath("/ai");
-    return fail(AI_INJECTION_BLOCKED_ID, {
-      code: "prompt_injection",
-      generationId,
-      usage: { used, limit: settings.dailyLimit },
-    });
-  }
   // Resolusi context (tenant + brand scope; RLS penegak terakhir).
+  let metricPayload: AiMetricPayload | null = null;
+  let contentBrief = "";
+  let commentBodies: string[] = [];
   let sourceContext = "";
   if (input.contextType === "content_item" && input.contextId) {
     const { data, error } = await supabase
       .from("content_items")
-      .select("id, title, brand_id")
+      .select("id, title, brand_id, internal_description, objective_text")
       .eq("id", input.contextId)
       .eq("workspace_id", input.workspaceId)
       .single();
@@ -204,6 +190,18 @@ export async function runAiAction(
       return fail("Konten ini di luar scope brand Anda.", { code: "FORBIDDEN" });
     }
     sourceContext = `Konten: ${(data as { title: string | null }).title ?? "(tanpa judul)"}`;
+    // Snapshot brief konten (T2): deskripsi internal + objektif konten
+    // diteruskan sebagai konten TIDAK TEPERCAYA (bukan instruksi).
+    contentBrief = [
+      (data as { internal_description?: string | null }).internal_description ?? "",
+      (data as { objective_text?: string | null }).objective_text ?? "",
+    ]
+      .filter((part) => part !== "")
+      .join("\n");
+    const itemComments = await listAiContextComments(supabase, "content_item", input.contextId);
+    if (itemComments.ok) {
+      commentBodies = itemComments.data.map((comment) => comment.body);
+    }
   } else if (input.contextType === "campaign" && input.contextId) {
     const { data, error } = await supabase
       .from("campaigns")
@@ -233,6 +231,11 @@ export async function runAiAction(
         payload.metrics.length === 0
           ? `${sourceContext} — data tidak tersedia (periode ${input.periodStart} s.d. ${input.periodEnd})`
           : `${sourceContext} — ${payload.metrics.length} metrik (periode ${input.periodStart} s.d. ${input.periodEnd})`;
+    metricPayload = payload;
+    }
+    const campaignComments = await listAiContextComments(supabase, "campaign", input.contextId);
+    if (campaignComments.ok) {
+      commentBodies = campaignComments.data.map((comment) => comment.body);
     }
   } else if (input.contextType === "comment_thread" && input.contextId) {
     const commentsRes = await listAiContextComments(supabase, "content_item", input.contextId);
@@ -241,31 +244,78 @@ export async function runAiAction(
       commentsRes.data.length === 0
         ? "Thread komentar: belum ada komentar"
         : `Thread komentar: ${commentsRes.data.length} komentar`;
+    commentBodies = commentsRes.data.map((comment) => comment.body);
   } else {
     sourceContext = "Teks yang diberikan user";
   }
-  // Adapter netral: hari ini selalu NullAdapter → not_configured.
-  const adapter = getAiAdapter();
-  const result = await adapter.generateStructuredDraft(
-    {
+  // Rakitan input adapter (T2/T3): metrik grounding lengkap + isi komentar
+  // + snapshot brief diteruskan sebagai konten TIDAK TEPERCAYA - bukan
+  // sebagai instruksi. Seluruh input ini dipindai dalam SATU panggilan
+  // (buildAdapterScanText) sebelum adapter dipanggil.
+  const untrustedParts: string[] = [];
+  if (input.sourceText !== "") untrustedParts.push(`Teks sumber: ${input.sourceText}`);
+  if (contentBrief !== "") untrustedParts.push(`Brief konten: ${contentBrief}`);
+  if (commentBodies.length > 0) untrustedParts.push(`Komentar konteks:\n${commentBodies.join("\n")}`);
+  const adapterInput = {
+    workspaceId: input.workspaceId,
+    feature: input.feature,
+    locale: input.locale,
+    contextSummary: sourceContext,
+    userInstruction: [
+      input.objective ? `Tujuan: ${input.objective}` : "",
+      input.audience ? `Audiens: ${input.audience}` : "",
+      input.pillar ? `Pilar: ${input.pillar}` : "",
+      input.channel ? `Channel: ${input.channel}` : "",
+      input.targetChannel ? `Target channel: ${input.targetChannel}` : "",
+      input.targetFormat ? `Target format: ${input.targetFormat}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    untrustedContent: untrustedParts.length > 0 ? untrustedParts.join("\n") : undefined,
+    metrics: metricPayload ?? undefined,
+  };
+  // Safety (8.6): SATU pindai atas SELURUH input adapter - instruksi user
+  // (termasuk targetChannel/targetFormat) + ringkasan konteks DB (judul
+  // konten/nama campaign/komentar) + konten tidak tepercaya.
+  const scan = scanUntrustedContent(buildAdapterScanText(adapterInput));
+  if (scan.blocked) {
+    const generationId = await logGeneration(supabase, {
       workspaceId: input.workspaceId,
+      userId: user.id,
       feature: input.feature,
-      locale: input.locale,
-      contextSummary: sourceContext,
-      userInstruction: [
-        input.objective ? `Tujuan: ${input.objective}` : "",
-        input.audience ? `Audiens: ${input.audience}` : "",
-        input.pillar ? `Pilar: ${input.pillar}` : "",
-        input.channel ? `Channel: ${input.channel}` : "",
-        input.targetChannel ? `Target channel: ${input.targetChannel}` : "",
-        input.targetFormat ? `Target format: ${input.targetFormat}` : "",
-      ]
-        .filter(Boolean)
-        .join("\n"),
-      untrustedContent: input.sourceText === "" ? undefined : input.sourceText,
-    },
-    AI_OUTPUT_SCHEMAS[input.feature],
-  );
+      inputReference,
+      status: "blocked",
+      errorCategory: "prompt_injection",
+    });
+    revalidatePath("/ai");
+    return fail(AI_INJECTION_BLOCKED_ID, {
+      code: "prompt_injection",
+      generationId,
+      usage: { used, limit: settings.dailyLimit },
+    });
+  }
+  // Gerbang provider (T1): tanpa provider, gagal jujur di sini - sebelum
+  // adapter dipanggil. Pesan + kategori sama dengan kegagalan adapter
+  // "not_configured" agar alur gagal yang sudah terbukti live tidak berubah.
+  const adapter = getAiAdapter();
+  if (adapter.providerId === NULL_PROVIDER_ID) {
+    const generationId = await logGeneration(supabase, {
+      workspaceId: input.workspaceId,
+      userId: user.id,
+      feature: input.feature,
+      inputReference,
+      status: "not_configured",
+      errorCategory: "provider_not_configured",
+    });
+    revalidatePath("/ai");
+    return fail(AI_NOT_CONFIGURED_ID, {
+      code: "provider_not_configured",
+      generationId,
+      sourceContext,
+      usage: { used, limit: settings.dailyLimit },
+    });
+  }
+  const result = await adapter.generateStructuredDraft(adapterInput, AI_OUTPUT_SCHEMAS[input.feature]);
   if (!result.ok) {
     const generationId = await logGeneration(supabase, {
       workspaceId: input.workspaceId,
@@ -303,6 +353,34 @@ export async function runAiAction(
       usage: { used, limit: settings.dailyLimit },
     });
   }
+  // Verifikasi grounding (T2): angka metrik yang dikutip output HARUS cocok
+  // dengan payload metrik - diperiksa SEBELUM status "completed" dicatat.
+  // Hanya bila ada metrik grounding dan output mengutip angka metrik
+  // (campaign_summary); tanpa metrik tidak ada yang bisa diverifikasi.
+  if (metricPayload !== null && metricPayload.metrics.length > 0) {
+    const claims = extractMetricClaims(validated.data);
+    if (claims.length > 0) {
+      const groundingCheck = verifyGroundingNumbers(metricPayload, claims);
+      if (!groundingCheck.ok) {
+        const generationId = await logGeneration(supabase, {
+          workspaceId: input.workspaceId,
+          userId: user.id,
+          feature: input.feature,
+          inputReference,
+          status: "failed",
+          errorCategory: "grounding_mismatch",
+        });
+        revalidatePath("/ai");
+        return fail("Hasil AI tidak lolos verifikasi grounding — angka yang dikutip tidak cocok dengan data metrik.", {
+          code: "grounding_mismatch",
+          generationId,
+          sourceContext,
+          usage: { used, limit: settings.dailyLimit },
+        });
+      }
+    }
+  }
+
   const generationId = await logGeneration(supabase, {
     workspaceId: input.workspaceId,
     userId: user.id,

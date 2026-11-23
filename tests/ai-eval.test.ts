@@ -10,12 +10,12 @@ import { describe, expect, it } from "vitest";
 import { runAiEval } from "@/features/ai/eval";
 
 describe("AI Assistant — harness evaluasi (deterministik, tanpa model)", () => {
-  it("semua 22 cek lolos: 14 validitas + 2 grounding + 6 injeksi", () => {
+  it("semua 36 cek lolos: 14 validitas + 2 grounding + 20 injeksi", () => {
     const report = runAiEval();
     // 7 fitur x (valid lolos + invalid ditolak) = 14; grounding 2;
-    // injeksi 6 sampel.
-    expect(report.checks).toHaveLength(22);
-    expect(report.passed).toBe(22);
+    // injeksi 20 sampel.
+    expect(report.checks).toHaveLength(36);
+    expect(report.passed).toBe(36);
     expect(report.failed).toBe(0);
     expect(report.allPassed).toBe(true);
     for (const c of report.checks) {

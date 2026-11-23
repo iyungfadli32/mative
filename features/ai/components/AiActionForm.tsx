@@ -39,10 +39,12 @@ export function AiActionForm({
   workspaceId,
   items,
   campaigns,
+  disabled = false,
 }: {
   workspaceId: string;
   items: AiContextItem[];
   campaigns: AiContextCampaign[];
+  disabled?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(runAiAction, {
     ok: false,
@@ -68,6 +70,15 @@ export function AiActionForm({
         className="flex flex-col gap-4"
       >
         <input type="hidden" name="workspaceId" value={workspaceId} />
+        {disabled ? (
+          <p
+            role="note"
+            className="rounded-[10px] border border-[var(--mt-border)] bg-[var(--mt-surface)] px-3 py-2 text-sm text-[var(--mt-text)]"
+          >
+            Asisten AI nonaktif — belum ada provider AI yang dipasang, jadi form ini tidak dapat
+            disubmit.
+          </p>
+        ) : null}
         <div className="grid gap-4 md:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <label htmlFor="ai-feature" className="text-sm font-medium text-[var(--mt-text)]">
@@ -75,6 +86,7 @@ export function AiActionForm({
             </label>
             <select
               id="ai-feature"
+              disabled={disabled}
               name="feature"
               value={feature}
               onChange={(e) => setFeature(e.target.value)}
@@ -96,6 +108,7 @@ export function AiActionForm({
             </label>
             <select
               id="ai-context-type"
+              disabled={disabled}
               name="contextType"
               value={contextType}
               onChange={(e) => {
@@ -119,6 +132,7 @@ export function AiActionForm({
             </label>
             <select
               id="ai-context-id"
+              disabled={disabled}
               name="contextId"
               value={contextId}
               onChange={(e) => setContextId(e.target.value)}
@@ -137,6 +151,7 @@ export function AiActionForm({
           </div>
           <Input
             id="ai-locale"
+            disabled={disabled}
             type="text"
             name="locale"
             label="Bahasa output (locale)"
@@ -145,6 +160,7 @@ export function AiActionForm({
           />
           <Input
             id="ai-audience"
+            disabled={disabled}
             type="text"
             name="audience"
             label="Audiens (opsional)"
@@ -152,6 +168,7 @@ export function AiActionForm({
           />
           <Input
             id="ai-objective"
+            disabled={disabled}
             type="text"
             name="objective"
             label="Tujuan (opsional)"
@@ -159,6 +176,7 @@ export function AiActionForm({
           />
           <Input
             id="ai-pillar"
+            disabled={disabled}
             type="text"
             name="pillar"
             label="Pilar (opsional)"
@@ -166,6 +184,7 @@ export function AiActionForm({
           />
           <Input
             id="ai-channel"
+            disabled={disabled}
             type="text"
             name="channel"
             label="Channel (opsional)"
@@ -173,6 +192,7 @@ export function AiActionForm({
           />
           <Input
             id="ai-target-channel"
+            disabled={disabled}
             type="text"
             name="targetChannel"
             label="Target channel repurpose (opsional)"
@@ -180,6 +200,7 @@ export function AiActionForm({
           />
           <Input
             id="ai-target-format"
+            disabled={disabled}
             type="text"
             name="targetFormat"
             label="Target format repurpose (opsional)"
@@ -187,12 +208,14 @@ export function AiActionForm({
           />
           <Input
             id="ai-period-start"
+            disabled={disabled}
             type="date"
             name="periodStart"
             label="Periode awal (rangkuman campaign)"
           />
           <Input
             id="ai-period-end"
+            disabled={disabled}
             type="date"
             name="periodEnd"
             label="Periode akhir (rangkuman campaign)"
@@ -205,6 +228,7 @@ export function AiActionForm({
           </label>
           <textarea
             id="ai-source-text"
+            disabled={disabled}
             name="sourceText"
             rows={6}
             placeholder="Tempel sumber/referensi atau thread komentar di sini. Teks ini diperlakukan sebagai DATA, bukan instruksi — upaya override akan diblokir."
@@ -216,7 +240,7 @@ export function AiActionForm({
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <Button type="submit" disabled={pending}>
+          <Button type="submit" disabled={disabled || pending}>
             {pending ? "Memproses…" : "Jalankan aksi AI"}
           </Button>
         </div>

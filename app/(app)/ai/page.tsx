@@ -12,6 +12,7 @@ import {
 } from "@/features/ai/queries";
 import { AiSetupState } from "@/features/ai/components/AiSetupState";
 import { AiActionForm } from "@/features/ai/components/AiActionForm";
+import { getAiAdapter, NULL_PROVIDER_ID } from "@/features/ai/adapter";
 import { AiGenerationsLog } from "@/features/ai/components/AiGenerationsLog";
 import { AiSettingsForm } from "@/features/ai/components/AiSettingsForm";
 
@@ -83,6 +84,7 @@ async function AiContent({
     listAiContextCampaigns(supabase, workspaceId),
   ]);
   const canManageSettings = role === "owner" || role === "admin";
+  const aiAvailable = getAiAdapter().providerId !== NULL_PROVIDER_ID;
   return (
     <div className="flex flex-col gap-6">
       <AiSetupState
@@ -93,6 +95,7 @@ async function AiContent({
         workspaceId={workspaceId}
         items={itemsRes.ok ? itemsRes.data : []}
         campaigns={campaignsRes.ok ? campaignsRes.data : []}
+        disabled={!aiAvailable}
       />
       <AiGenerationsLog generations={generationsRes.data} />
       {canManageSettings ? (

@@ -20,6 +20,7 @@ export type NavItem = {
   /** false = modul belum dibangun di fase ini (tombol disabled + alasan). */
   available: boolean;
   unavailableReason?: string;
+  unavailableBadge?: string;
 };
 
 export const NAV_SECTIONS: Array<{ title: string; items: NavItem[] }> = [
@@ -76,7 +77,7 @@ export const NAV_SECTIONS: Array<{ title: string; items: NavItem[] }> = [
   },
   {
     title: "AI",
-    items: [{ href: "/ai", label: "Asisten AI", icon: "🤖", available: true }],
+    items: [{ href: "/ai", label: "Asisten AI (nonaktif)", icon: "🤖", available: false, unavailableReason: "Asisten AI nonaktif — belum ada provider AI yang dipasang.", unavailableBadge: "nonaktif" }],
   },
   {
     title: "Administrasi",
@@ -199,7 +200,7 @@ export function AppSidebar({
                       >
                         {content}
                         {!collapsed && (
-                          <span className="ml-auto text-[10px] text-white/50">segera</span>
+                          <span className="ml-auto text-[10px] text-white/50">{item.unavailableBadge ?? "segera"}</span>
                         )}
                       </span>
                     )}

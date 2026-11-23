@@ -74,6 +74,27 @@ export function verifyGroundingNumbers(
 }
 
 /** Label metrik untuk tampilan ("reach: 1500 (periode 2026-11-01 s.d. 2026-11-30)"). */
+// Ambil klaim angka metrik dari output adapter terstruktur (T2) untuk
+// diverifikasi dengan verifyGroundingNumbers sebelum status "completed".
+// Hanya output yang membawa array `metrics` (campaign_summary) yang
+// menghasilkan klaim; output lain tidak punya angka metrik untuk dicek.
+export function extractMetricClaims(output: unknown): CitedNumber[] {
+  if (output === null || typeof output !== "object") return [];
+  const metrics = (output as { metrics?: unknown }).metrics;
+  if (!Array.isArray(metrics)) return [];
+  const claims: CitedNumber[] = [];
+  for (const item of metrics) {
+    if (item !== null && typeof item === "object") {
+      const metricKey = (item as { metricKey?: unknown }).metricKey;
+      const value = (item as { value?: unknown }).value;
+      if (typeof metricKey === "string" && typeof value === "number" && Number.isFinite(value)) {
+        claims.push({ metricKey, value });
+      }
+    }
+  }
+  return claims;
+}
+
 export function formatGroundedMetric(m: AiGroundedMetric): string {
   return `${m.metricKey}: ${m.value} ${m.unit} (periode ${m.periodStart} s.d. ${m.periodEnd}, sumber ${m.source})`;
 }
