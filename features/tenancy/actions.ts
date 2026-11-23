@@ -177,6 +177,10 @@ export async function inviteMemberAction(
   if (!callerRole || !canInvite(callerRole as never)) {
     return { ok: false, message: "Hanya owner/admin yang boleh mengundang anggota." };
   }
+    // T-3: hanya owner workspace yang boleh mengundang owner baru.
+    if (parsed.data.role === "owner" && callerRole !== "owner") {
+      return { ok: false, message: "Hanya owner workspace yang boleh mengundang owner baru." };
+    }
   // viewer_client TIDAK BOLEH diundang sebagai anggota workspace biasa?
   // Boleh — viewer_client adalah role baseline; aksesnya tetap dibatasi
   // ke resource yang dibagikan eksplisit (portal). Tidak ada pengecualian di sini.
