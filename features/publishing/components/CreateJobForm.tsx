@@ -8,6 +8,7 @@
 "use client";
 
 import { useActionState } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { createPublishingJobAction } from "../actions";
@@ -70,6 +71,15 @@ export function CreateJobForm({
         {blocked ? (
           <p className="text-sm text-[var(--mt-text-muted)]">
             Perbaiki dulu pemeriksaan yang memblokir di atas sebelum membuat job.
+          {preflight?.code === "DUPLICATE_JOB" ? (
+            <>
+              {" "}
+              Sudah ada job aktif untuk placement ini di jadwal yang sama. Lihat{" "}
+              <Link href="/publishing">antrean publishing</Link> untuk membatalkan atau
+              menjadwalkan ulang job tersebut; job yang sudah gagal tidak menghalangi
+              pembuatan job baru.
+            </>
+          ) : null}
           </p>
         ) : null}
         <ResultMessage state={state} />

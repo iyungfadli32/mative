@@ -86,12 +86,13 @@ describe("Transisi production — Dok 05 §4 + ADR-0007 §2 (tanpa client_review
 });
 
 describe("Transisi distribusi — terpisah dari produksi (R2-02)", () => {
-  it("jalur distribusi maju diizinkan", () => {
+  it("jalur distribusi maju diizinkan (tanpa target manual published/uploaded)", () => {
     expect(isValidDistributionTransition("draft", "ready")).toBe(true);
     expect(isValidDistributionTransition("ready", "scheduled_locally")).toBe(true);
     expect(isValidDistributionTransition("scheduled_locally", "sending")).toBe(true);
-    expect(isValidDistributionTransition("sending", "uploaded_or_draft_created")).toBe(true);
-    expect(isValidDistributionTransition("uploaded_or_draft_created", "published")).toBe(true);
+    // (e) T-3 — published dan uploaded_or_draft_created hanya boleh ditulis lewat alur publishing (RPC confirm), bukan transisi manual.
+    expect(isValidDistributionTransition("sending", "uploaded_or_draft_created")).toBe(false);
+    expect(isValidDistributionTransition("uploaded_or_draft_created", "published")).toBe(false);
   });
 
   it("gagal / perlu tindakan manual bisa kembali ke ready", () => {

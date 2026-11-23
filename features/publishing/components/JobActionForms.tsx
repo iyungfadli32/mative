@@ -55,6 +55,13 @@ export function ConfirmJobForm({ workspaceId, job }: { workspaceId: string; job:
         Konfirmasi ini satu-satunya jalan ke status Published — tidak ada status Published
         otomatis di Phase 6.
       </p>
+      {job.status === "failed" ? (
+        <p className="text-sm text-[var(--mt-text-muted)]">
+          Job ini sudah gagal. Konfirmasi hanya bila Anda memang sudah menerbitkan konten
+          ini secara manual di platform — konfirmasi tetap mencatat bukti terbit dan
+          mengubah placement menjadi Published.
+        </p>
+      ) : null}
       <form action={formAction} className="flex flex-col gap-3">
         <input type="hidden" name="workspaceId" value={workspaceId} />
         <input type="hidden" name="jobId" value={job.id} />
@@ -132,7 +139,7 @@ export function CancelJobForm({ workspaceId, job }: { workspaceId: string; job: 
   );
 }
 
-/** Jadwalkan ulang: batalkan job lama + buat job baru (satu aksi form). */
+/** Jadwalkan ulang (atomik, satu RPC): jadwal baru diperiksa dulu; bila lolos, job lama dibatalkan + job baru dibuat dalam satu transaksi. */
 export function RescheduleJobForm({
   workspaceId,
   job,
@@ -149,8 +156,9 @@ export function RescheduleJobForm({
     <section className="flex flex-col gap-3 rounded-[10px] border border-[var(--mt-border)] p-4">
       <h3 className="text-sm font-semibold">Jadwalkan ulang</h3>
       <p className="text-sm text-[var(--mt-text-muted)]">
-        Job lama dibatalkan dengan alasan &quot;Dijadwalkan ulang.&quot; lalu job baru dibuat
-        dengan jadwal ini.
+        Penjadwalan ulang bersifat atomik: jadwal baru diperiksa dulu (preflight); bila
+        lolos, job lama dibatalkan dan job baru dibuat dalam satu transaksi. Bila jadwal
+        baru tidak valid, job lama tetap utuh.
       </p>
       <form action={formAction} className="flex flex-col gap-3">
         <input type="hidden" name="workspaceId" value={workspaceId} />

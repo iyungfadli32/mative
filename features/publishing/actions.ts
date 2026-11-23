@@ -296,28 +296,23 @@ export async function reschedulePublishingJobCore(
       code: "INVALID_STATE_TRANSITION",
     });
   }
-  const cancelResult = await cancelPublishingJobCore(supabase, userId, {
-    workspaceId: input.workspaceId,
-    jobId: input.jobId,
-    reason: "Dijadwalkan ulang.",
+  // (e) T-5 — satu RPC atomik: preflight jadwal baru dulu, lalu batalkan job
+  // lama + buat job baru dalam satu transaksi. Bila jadwal baru tidak valid,
+  // job lama tetap utuh (tidak ada lagi jalur batal-dulu-buat-belakangan).
+  const { data, error } = await supabase.rpc("reschedule_publishing_job", {
+    p_job_id: input.jobId,
+    p_scheduled_at: input.scheduledAtUtc,
+    p_timezone: input.timezone,
   });
-  if (!cancelResult.ok) return cancelResult;
-  const createResult = await createPublishingJobCore(supabase, userId, {
-    workspaceId: input.workspaceId,
-    placementId: job.placementId,
-    scheduledAtUtc: input.scheduledAtUtc,
-    timezone: input.timezone,
-  });
-  if (!createResult.ok) {
-    return fail(
-      `Job lama dibatalkan, tetapi buat job baru gagal: ${createResult.message} Buat job baru dari placement.`,
-      { code: createResult.code },
-    );
+  if (error) return fail(dbErrorMessage(error, "Gagal menjadwalkan ulang job."));
+  const result = asRpcResult(data);
+  if (!result?.ok) {
+    return fail(result?.message ?? "Gagal menjadwalkan ulang job.", { code: result?.code });
   }
-  return ok("Job dijadwalkan ulang — job lama dibatalkan, job baru dibuat.", {
-    jobId: createResult.jobId,
-    status: createResult.status,
-    code: createResult.code,
+  return ok(result.message ?? "Job dijadwalkan ulang.", {
+    jobId: result.job_id,
+    status: result.status,
+    code: result.code,
   });
 }
 

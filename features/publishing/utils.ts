@@ -159,12 +159,17 @@ export function canCancelJob(status: PublishingJobStatus, leaseUntil: string | n
 }
 
 export function canConfirmJob(status: PublishingJobStatus, leaseUntil: string | null): boolean {
-  if (status === "published" || status === "cancelled" || status === "failed") return false;
+  // (e) T-2(a) — konfirmasi manual diizinkan dari job failed: bila pengguna memang
+  // sudah terbit manual, konfirmasi adalah satu-satunya jalan ke Published.
+  if (status === "published" || status === "cancelled") return false;
   if (status === "sending") {
     return leaseUntil === null || new Date(leaseUntil).getTime() <= Date.now();
   }
   return (
-    status === "ready" || status === "scheduled_locally" || status === "needs_manual_action"
+    status === "ready" ||
+    status === "scheduled_locally" ||
+    status === "needs_manual_action" ||
+    status === "failed"
   );
 }
 

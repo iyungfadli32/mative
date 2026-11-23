@@ -1064,6 +1064,21 @@ export async function deletePlacementAction(formData: FormData): Promise<void> {
   const role = await requireRole(workspaceId, user.id);
   if (!role || !can(role, "create_edit_content")) return;
   // RLS: placement hanya bisa dihapus oleh editor konten induknya.
+  // (e) T-4 — pra-pemeriksaan: jangan hapus placement yang sudah terbit atau
+  // masih punya job publishing aktif (trigger database juga menolaknya, agar
+  // jejak audit tidak hilang).
+  const { data: publishedProof } = await supabase
+    .from("published_posts")
+    .select("id")
+    .eq("placement_id", placementId)
+    .limit(1);
+  const { data: activeJobs } = await supabase
+    .from("publishing_jobs")
+    .select("id")
+    .eq("placement_id", placementId)
+    .in("status", ["ready", "scheduled_locally", "sending", "needs_manual_action"])
+    .limit(1);
+  if ((publishedProof?.length ?? 0) > 0 || (activeJobs?.length ?? 0) > 0) return;
   await supabase.from("content_placements").delete().eq("id", placementId);
   revalidatePlanning();
 }

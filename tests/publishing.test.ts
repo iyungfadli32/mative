@@ -129,11 +129,14 @@ describe("guard transisi job", () => {
     expect(canCancelJob("sending", past)).toBe(true);
   });
 
-  it("confirm ditolak dari published/cancelled/failed", () => {
+  it("confirm ditolak dari published/cancelled, diizinkan dari failed (T-2a)", () => {
     expect(canConfirmJob("ready", null)).toBe(true);
     expect(canConfirmJob("needs_manual_action", null)).toBe(true);
+    // (e) T-2(a) — konfirmasi manual diizinkan dari job failed: bila pengguna memang
+    // sudah terbit manual, konfirmasi adalah satu-satunya jalan ke Published.
+    expect(canConfirmJob("failed", null)).toBe(true);
     expect(canConfirmJob("published", null)).toBe(false);
-    expect(canConfirmJob("failed", null)).toBe(false);
+    expect(canConfirmJob("cancelled", null)).toBe(false);
   });
 });
 

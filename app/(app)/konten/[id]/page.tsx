@@ -683,6 +683,11 @@ async function PlacementsTab({
                       </div>
                     </details>
                     <form action={deletePlacementAction}>
+                      <p className="text-sm text-[var(--mt-text-muted)]">
+                        Menghapus placement juga menghapus job publishing dan riwayatnya.
+                        Placement yang sudah terbit atau masih punya job aktif tidak bisa
+                        dilepas — batalkan dulu job-nya.
+                      </p>
                       <input type="hidden" name="placementId" value={p.id} />
                       <input type="hidden" name="workspaceId" value={workspaceId} />
                       <Button type="submit" size="sm" variant="ghost">
