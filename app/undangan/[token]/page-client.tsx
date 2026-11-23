@@ -24,9 +24,9 @@ export default function TerimaUndanganPage({ token }: { token: string }) {
         </p>
       ) : null}
       {state.ok ? (
-        <Link href="/dashboard" className="mt-4">
-          <Button>Ke Command Center →</Button>
-        </Link>
+        <Button href="/dashboard" className="mt-4">
+          Ke Command Center →
+        </Button>
       ) : (
         <form action={formAction} className="mt-6">
           <Button type="submit" loading={pending}>

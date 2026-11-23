@@ -14,13 +14,7 @@ import type {
   PublishingJobRow,
 } from "./types";
 
-export type QueryOutcome<T> = { ok: true; data: T } | { ok: false; unavailable: true };
-
-function wrap<T>(fn: () => Promise<T>): Promise<QueryOutcome<T>> {
-  return fn()
-    .then((data) => ({ ok: true as const, data }))
-    .catch(() => ({ ok: false as const, unavailable: true as const }));
-}
+import { wrapQueryOutcome as wrap, type QueryOutcome } from "@/lib/query";
 
 const JOB_COLUMNS =
   "id, workspace_id, placement_id, placement_version_id, scheduled_at, timezone, status, idempotency_key, provider_job_id, next_attempt_at, attempt_count, lease_owner, lease_until, created_by, created_at, updated_at";

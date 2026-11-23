@@ -6,7 +6,6 @@ import { Topbar } from "@/components/layout/Topbar";
 import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
-import Link from "next/link";
 import { withWorkspace, useActiveWorkspaceId } from "@/features/planning/workspace-url";
 
 /**
@@ -78,42 +77,42 @@ export function AppShell({
             tautan dialog diklik segera setelah terbuka; prefetch yang masih
             berjalan membuat router menunggu tanpa umpan balik. */}
         <div className="flex flex-col gap-2">
-          <Link
+          <Button
             href={withWorkspace("/konten/baru", activeWorkspaceId)}
             prefetch={false}
+            variant="secondary"
+            className="w-full justify-start"
             onClick={() => setQuickCreateOpen(false)}
           >
-            <Button variant="secondary" className="w-full justify-start">
-              📝 Buat konten
-            </Button>
-          </Link>
-          <Link
+            📝 Buat konten
+          </Button>
+          <Button
             href={withWorkspace("/ide", activeWorkspaceId)}
             prefetch={false}
+            variant="secondary"
+            className="w-full justify-start"
             onClick={() => setQuickCreateOpen(false)}
           >
-            <Button variant="secondary" className="w-full justify-start">
-              💡 Tangkap ide
-            </Button>
-          </Link>
-          <Link
+            💡 Tangkap ide
+          </Button>
+          <Button
             href={withWorkspace("/pustaka", activeWorkspaceId)}
             prefetch={false}
+            variant="secondary"
+            className="w-full justify-start"
             onClick={() => setQuickCreateOpen(false)}
           >
-            <Button variant="secondary" className="w-full justify-start">
-              🖼️ Unggah aset
-            </Button>
-          </Link>
-          <Link
+            🖼️ Unggah aset
+          </Button>
+          <Button
             href={withWorkspace("/pengaturan/organisasi", activeWorkspaceId)}
             prefetch={false}
+            variant="secondary"
+            className="w-full justify-start"
             onClick={() => setQuickCreateOpen(false)}
           >
-            <Button variant="secondary" className="w-full justify-start">
-              🏢 Buat organisasi / workspace
-            </Button>
-          </Link>
+            🏢 Buat organisasi / workspace
+          </Button>
         </div>
       </Dialog>
     </div>

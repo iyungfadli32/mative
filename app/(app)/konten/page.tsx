@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/ui/States";
 import { ProductionStatusBadge, PriorityBadge } from "@/components/ui/Badges";
 import { ChannelIcon } from "@/components/ui/ChannelIcon";
 import { Button } from "@/components/ui/Button";
+import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner";
 import {
   listAudiences,
   listBrands,
@@ -74,9 +75,11 @@ async function KontenContent({
     brands.data.map((b) => b.id),
   );
   const unavailable = brands.unavailable || campaigns.unavailable || items.unavailable;
+  const queryError = brands.error ?? campaigns.error ?? items.error ?? null;
   const canCreate = canCreateEditContent(role);
   return (
     <div className="flex flex-col gap-4">
+      {queryError ? <QueryErrorBanner /> : null}
       {unavailable ? (
         <div
           role="alert"
@@ -87,9 +90,7 @@ async function KontenContent({
       ) : null}
       <div className="flex flex-wrap gap-2">
         {canCreate ? (
-          <Link href={`/konten/baru?workspace=${workspaceId}`}>
-            <Button>＋ Buat konten</Button>
-          </Link>
+          <Button href={`/konten/baru?workspace=${workspaceId}`}>＋ Buat konten</Button>
         ) : (
           <p className="text-sm text-[var(--mt-text-muted)]">
             Peran Anda tidak boleh membuat konten.

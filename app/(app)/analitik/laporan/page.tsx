@@ -17,6 +17,7 @@ import {
   listSnapshots,
 } from "@/features/analytics/queries";
 import { AnalyticsReports } from "@/features/analytics/components/AnalyticsReports";
+import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner";
 
 /**
  * 5 laporan analytics — app/(app)/analitik/laporan/page.tsx (P7-05).
@@ -82,6 +83,12 @@ async function LaporanContent({
       listBrandsForWorkspace(supabase, workspaceId),
       listCampaignNames(supabase, workspaceId),
     ]);
+  const queryError =
+    [summaryRes, campaignRes, contentRes, snapshotsRes, volumeRes, brandsRes, namesRes]
+      .map((result) => (!result.ok ? result.error : null))
+      .find((error) => error) ?? null;
+  if (queryError) return <QueryErrorBanner />;
+
   if (
     !summaryRes.ok ||
     !campaignRes.ok ||

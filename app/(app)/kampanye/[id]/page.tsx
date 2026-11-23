@@ -8,6 +8,7 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { PlanningShell } from "@/features/planning/components/PlanningShell";
 import { EmptyState } from "@/components/ui/States";
 import { StatusBadge } from "@/components/ui/Badges";
+import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner";
 import {
   listAudiences,
   listBrands,
@@ -92,6 +93,7 @@ async function CampaignDetailContent({
     !deliverablesOutcome.ok ||
     contentItems.unavailable;
   if (!campaignOutcome.ok) {
+    if (campaignOutcome.error) return <QueryErrorBanner />;
     return (
       <div role="alert" className="rounded-2xl border border-[var(--mt-amber-500)] p-4 text-sm">
         ⚠️ {CAMPAIGN_TABLES_UNAVAILABLE_ID}

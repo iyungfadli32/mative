@@ -91,9 +91,7 @@ export async function PlanningShell({
             ide, dan aset bisa dibuat.
           </p>
           <p className="mt-4">
-            <Link href="/pengaturan/organisasi">
-              <Button>＋ Buat organisasi &amp; workspace</Button>
-            </Link>
+            <Button href="/pengaturan/organisasi">＋ Buat organisasi &amp; workspace</Button>
           </p>
         </div>
       ) : (

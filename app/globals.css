@@ -14,6 +14,16 @@
   --mt-indigo-600: #6659e8;
   --mt-amber-500: #f2a12b;
   --mt-rose-500: #e8798d;
+  --mt-rose-100: #ffe4e6;
+  --mt-rose-700: #9f1239;
+  --mt-amber-100: #fef3c7;
+  --mt-amber-800: #92400e;
+  --mt-indigo-100: #e0e7ff;
+  --mt-indigo-800: #3730a3;
+  --mt-blue-100: #dbeafe;
+  --mt-blue-800: #1e40af;
+  --mt-teal-800: #0f5b52;
+
   --mt-surface: #ffffff;
   --mt-canvas: #f4f7f9;
   --mt-border: #e4eaef;
@@ -26,17 +36,32 @@
   --mt-accent-secondary: var(--mt-indigo-600);
   --mt-attention: var(--mt-amber-500);
   --mt-danger: var(--mt-rose-500);
+  --mt-danger-text: var(--mt-rose-700);
 }
 
 @theme inline {
   --color-mt-navy-950: var(--mt-navy-950);
   --color-mt-navy-900: var(--mt-navy-900);
   --color-mt-teal-700: var(--mt-teal-700);
+  --color-mt-teal-800: var(--mt-teal-800);
+
   --color-mt-teal-600: var(--mt-teal-600);
   --color-mt-mint-100: var(--mt-mint-100);
   --color-mt-indigo-600: var(--mt-indigo-600);
+  --color-mt-indigo-100: var(--mt-indigo-100);
+  --color-mt-indigo-800: var(--mt-indigo-800);
+  --color-mt-blue-100: var(--mt-blue-100);
+  --color-mt-blue-800: var(--mt-blue-800);
+
   --color-mt-amber-500: var(--mt-amber-500);
+  --color-mt-amber-100: var(--mt-amber-100);
+  --color-mt-amber-800: var(--mt-amber-800);
+
   --color-mt-rose-500: var(--mt-rose-500);
+  --color-mt-rose-100: var(--mt-rose-100);
+  --color-mt-rose-700: var(--mt-rose-700);
+  --color-mt-danger-text: var(--mt-danger-text);
+
   --color-mt-surface: var(--mt-surface);
   --color-mt-canvas: var(--mt-canvas);
   --color-mt-border: var(--mt-border);

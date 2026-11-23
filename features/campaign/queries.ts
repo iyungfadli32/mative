@@ -1,6 +1,6 @@
 /**
  * Query Campaign & Visual Planning — features/campaign/queries.ts (P5-03).
- * Pola approval/queries.ts: `runQuery` di sini menggulung kegagalan ke
+ * Pola approval/queries.ts: `runQuery` di sini membedakan tabel hilang dari galat lain; hanya tabel hilang yang menjadi
  * `unavailable` (Phase 9: tampilkan galat query, bukan daftar kosong).
  * BUKAN `null`.
  */
@@ -15,13 +15,7 @@ import type {
   VisualOrderRow,
 } from "./types";
 
-export type QueryOutcome<T> = { ok: true; data: T } | { ok: false; unavailable: true };
-
-function wrap<T>(fn: () => Promise<T>): Promise<QueryOutcome<T>> {
-  return fn()
-    .then((data) => ({ ok: true as const, data }))
-    .catch(() => ({ ok: false as const, unavailable: true as const }));
-}
+import { wrapQueryOutcome as wrap, type QueryOutcome } from "@/lib/query";
 
 export async function getCampaign(
   supabase: SupabaseClient,
@@ -258,7 +252,10 @@ export async function listContentTemplates(
         created_by: string | null;
         created_at: string;
         brands: { name: string } | null;
-        content_template_placements: Array<{ social_channel_id: string; platform_format: string | null }>;
+        content_template_placements: Array<{
+          social_channel_id: string;
+          platform_format: string | null;
+        }>;
       };
       return {
         id: raw.id,

@@ -8,23 +8,12 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { AI_TABLES_UNAVAILABLE_ID } from "./constants";
-import type {
-  AiContextCampaign,
-  AiContextComment,
-  AiContextItem,
-  AiGenerationRow,
-} from "./types";
+import type { AiContextCampaign, AiContextComment, AiContextItem, AiGenerationRow } from "./types";
 import type { CampaignMetricRow } from "./grounding";
 
 export { AI_TABLES_UNAVAILABLE_ID };
 
-export type QueryOutcome<T> = { ok: true; data: T } | { ok: false; unavailable: true };
-
-function wrap<T>(fn: () => Promise<T>): Promise<QueryOutcome<T>> {
-  return fn()
-    .then((data) => ({ ok: true as const, data }))
-    .catch(() => ({ ok: false as const, unavailable: true as const }));
-}
+import { wrapQueryOutcome as wrap, type QueryOutcome } from "@/lib/query";
 
 const GENERATION_COLUMNS =
   // Kolom WAJIB sama dengan migrasi 0022: ai_generations punya
@@ -77,12 +66,14 @@ export async function listAiContextItems(
       .order("created_at", { ascending: false })
       .limit(100);
     if (error) throw error;
-    return ((data ?? []) as unknown as Array<{
-      id: string;
-      title: string | null;
-      brand_id: string;
-      brands: { name: string | null } | null;
-    }>).map((it) => ({
+    return (
+      (data ?? []) as unknown as Array<{
+        id: string;
+        title: string | null;
+        brand_id: string;
+        brands: { name: string | null } | null;
+      }>
+    ).map((it) => ({
       id: it.id,
       title: it.title ?? "(tanpa judul)",
       brandId: it.brand_id,
@@ -123,12 +114,14 @@ export async function listAiContextComments(
       .order("created_at", { ascending: true })
       .limit(100);
     if (error) throw error;
-    return ((data ?? []) as Array<{
-      id: string;
-      body: string;
-      author_user_id: string | null;
-      created_at: string;
-    }>).map((c) => ({
+    return (
+      (data ?? []) as Array<{
+        id: string;
+        body: string;
+        author_user_id: string | null;
+        created_at: string;
+      }>
+    ).map((c) => ({
       id: c.id,
       body: c.body,
       authorUserId: c.author_user_id,

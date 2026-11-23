@@ -60,7 +60,7 @@ export function PlacementForm({
         </>
       ) : null}
       <label className="flex flex-col gap-1.5 text-sm font-medium">
-        Channel <span className="text-[var(--mt-rose-500)]">*</span>
+        Channel <span className="text-[var(--mt-rose-700)]">*</span>
         <select
           name="socialChannelId"
           defaultValue={initial?.social_channel_id ?? ""}

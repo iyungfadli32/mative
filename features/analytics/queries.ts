@@ -1,6 +1,6 @@
 /**
  * Query Analytics Foundation — features/analytics/queries.ts (P7-03).
- * Pola publishing/queries.ts: `runQuery` menggulung kegagalan ke
+ * Pola publishing/queries.ts: `runQuery` membedakan tabel hilang dari galat lain; hanya tabel hilang yang menjadi
  * `unavailable` (Phase 9: tampilkan galat query, bukan daftar kosong).
  * BUKAN `null`. RLS adalah penegak baca (member + brand scope +
  * viewer_client TIDAK melihat) — query di sini tidak pernah mem-bypass
@@ -31,13 +31,7 @@ import type {
 
 export { ANALYTICS_TABLES_UNAVAILABLE_ID };
 
-export type QueryOutcome<T> = { ok: true; data: T } | { ok: false; unavailable: true };
-
-function wrap<T>(fn: () => Promise<T>): Promise<QueryOutcome<T>> {
-  return fn()
-    .then((data) => ({ ok: true as const, data }))
-    .catch(() => ({ ok: false as const, unavailable: true as const }));
-}
+import { wrapQueryOutcome as wrap, type QueryOutcome } from "@/lib/query";
 
 const SNAPSHOT_COLUMNS =
   // Kolom WAJIB sama dengan migrasi 0021: analytics_snapshots punya
@@ -244,7 +238,11 @@ export async function listImportSubjects(
     for (const p of (placementsRes.data ?? []) as unknown as Array<{
       id: string;
       platform_format: string | null;
-      content_items: { brand_id: string; title: string | null; brands: { name: string | null } | null };
+      content_items: {
+        brand_id: string;
+        title: string | null;
+        brands: { name: string | null } | null;
+      };
     }>) {
       out.push({
         subjectType: "placement",
@@ -311,8 +309,8 @@ export async function getDashboardSummary(
     if (adherencePlacementIds !== null && adherencePlacementIds.length > 0) {
       jobsQuery = jobsQuery.in("placement_id", adherencePlacementIds);
     }
-    const [allSnapshotsRes, metricsRes, brandsRes, placementsCountRes, jobsRes] =
-      await Promise.all([
+    const [allSnapshotsRes, metricsRes, brandsRes, placementsCountRes, jobsRes] = await Promise.all(
+      [
         listAllSnapshots(supabase, workspaceId),
         listContentMetrics(supabase, workspaceId, range),
         listBrandsForWorkspace(supabase, workspaceId),
@@ -321,7 +319,8 @@ export async function getDashboardSummary(
           .select("id, content_items!inner(workspace_id)", { count: "exact", head: true })
           .eq("content_items.workspace_id", workspaceId),
         jobsQuery,
-      ]);
+      ],
+    );
     if (!allSnapshotsRes.ok) throw new Error("snapshots unavailable");
     if (!metricsRes.ok) throw new Error("metrics unavailable");
     if (!brandsRes.ok) throw new Error("brands unavailable");
@@ -402,9 +401,7 @@ export async function getDashboardSummary(
     const publishingAdherence = computePublishingAdherence(jobs, posts);
 
     const placementsWithMetrics = new Set(
-      containedRows
-        .filter((m) => m.subject_type === "placement")
-        .map((m) => m.subject_id),
+      containedRows.filter((m) => m.subject_type === "placement").map((m) => m.subject_id),
     ).size;
     const totalPlacements = placementsCountRes.count ?? 0;
     const lastSnapshot = allSnapshots[0] ?? null;
@@ -556,14 +553,25 @@ export async function getContentPerformance(
       bySubject.set(k, cur);
     }
     const subjects = [...bySubject.values()].sort((a, b) => b.reach - a.reach).slice(0, 50);
-    const placementIds = subjects.filter((s) => s.subjectType === "placement").map((s) => s.subjectId);
-    const itemIds = subjects.filter((s) => s.subjectType === "content_item").map((s) => s.subjectId);
-    const postIds = subjects.filter((s) => s.subjectType === "published_post").map((s) => s.subjectId);
-    const labels = new Map<string, { label: string; channelPlatform: string | null; channelAccount: string | null }>();
+    const placementIds = subjects
+      .filter((s) => s.subjectType === "placement")
+      .map((s) => s.subjectId);
+    const itemIds = subjects
+      .filter((s) => s.subjectType === "content_item")
+      .map((s) => s.subjectId);
+    const postIds = subjects
+      .filter((s) => s.subjectType === "published_post")
+      .map((s) => s.subjectId);
+    const labels = new Map<
+      string,
+      { label: string; channelPlatform: string | null; channelAccount: string | null }
+    >();
     if (placementIds.length > 0) {
       const { data, error } = await supabase
         .from("content_placements")
-        .select("id, platform_format, content_items(title), social_channels(platform, account_name)")
+        .select(
+          "id, platform_format, content_items(title), social_channels(platform, account_name)",
+        )
         .in("id", placementIds);
       if (error) throw error;
       for (const p of (data ?? []) as unknown as Array<{
@@ -586,13 +594,19 @@ export async function getContentPerformance(
         .in("id", itemIds);
       if (error) throw error;
       for (const it of (data ?? []) as Array<{ id: string; title: string | null }>) {
-        labels.set(it.id, { label: it.title ?? "(tanpa judul)", channelPlatform: null, channelAccount: null });
+        labels.set(it.id, {
+          label: it.title ?? "(tanpa judul)",
+          channelPlatform: null,
+          channelAccount: null,
+        });
       }
     }
     if (postIds.length > 0) {
       const { data, error } = await supabase
         .from("published_posts")
-        .select("id, canonical_url, content_placements(content_items(title), social_channels(platform, account_name))")
+        .select(
+          "id, canonical_url, content_placements(content_items(title), social_channels(platform, account_name))",
+        )
         .in("id", postIds);
       if (error) throw error;
       for (const pp of (data ?? []) as unknown as Array<{

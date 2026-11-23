@@ -45,7 +45,7 @@ async function MerekContent({ workspaceId, role }: { workspaceId: string; role: 
         </div>
       ) : null}
       {brands.error && !brands.unavailable ? (
-        <p role="alert" className="text-sm text-[var(--mt-rose-500)]">
+        <p role="alert" className="text-sm text-[var(--mt-rose-700)]">
           Gagal memuat brand: {brands.error}
         </p>
       ) : null}

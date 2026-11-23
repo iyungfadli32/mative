@@ -15,6 +15,7 @@ import { formatAge, formatDateOnly, timezoneLabel } from "@/lib/time";
 import { envStatus, SUPABASE_NOT_CONFIGURED_ID } from "@/lib/env";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
+import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner";
 
 /**
  * Dashboard / Command Center shell — P1-13 (Dok 02 §3).
@@ -44,6 +45,7 @@ export default async function DashboardPage({
     workspaceParam && !workspaces.some((w) => w.workspace.id === workspaceParam),
   );
   let kpis = EMPTY_KPIS;
+  let queryError: string | null = null;
   const supabase = await getSupabaseServerClient();
   if (supabase && active) {
     kpis = await getDashboardKpis(supabase, active.workspace.id);
@@ -59,6 +61,7 @@ export default async function DashboardPage({
   if (supabase && active) {
     const pendingRes = await listPendingApprovalRequests(supabase, active.workspace.id);
     const requests = pendingRes.error || pendingRes.unavailable ? [] : pendingRes.data;
+    queryError = pendingRes.error ?? queryError;
     if (requests.length > 0) {
       const itemIds = [...new Set(requests.map((r) => r.target_id))];
       const [{ data: items }, names] = await Promise.all([
@@ -100,29 +103,41 @@ export default async function DashboardPage({
         <div className="flex flex-wrap gap-2">
           {workspaces.length === 0 ? (
             <>
-              <Link href={withWorkspace("/pengaturan/organisasi", active?.workspace.id)}>
-                <Button>＋ Buat organisasi &amp; workspace</Button>
-              </Link>
-              <Link href={withWorkspace("/konten/baru", active?.workspace.id)}>
-                <Button variant="secondary">＋ Buat konten</Button>
-              </Link>
+              <Button href={withWorkspace("/pengaturan/organisasi", active?.workspace.id)}>
+                ＋ Buat organisasi &amp; workspace
+              </Button>
+              <Button
+                href={withWorkspace("/konten/baru", active?.workspace.id)}
+                variant="secondary"
+              >
+                ＋ Buat konten
+              </Button>
             </>
           ) : (
             <>
-              <Link href={withWorkspace("/konten/baru", active?.workspace.id)}>
-                <Button variant="secondary">＋ Buat konten</Button>
-              </Link>
-              <Link href={withWorkspace("/pengaturan/organisasi", active?.workspace.id)}>
-                <Button variant="secondary">＋ Buat workspace</Button>
-              </Link>
+              <Button
+                href={withWorkspace("/konten/baru", active?.workspace.id)}
+                variant="secondary"
+              >
+                ＋ Buat konten
+              </Button>
+              <Button
+                href={withWorkspace("/pengaturan/organisasi", active?.workspace.id)}
+                variant="secondary"
+              >
+                ＋ Buat workspace
+              </Button>
             </>
           )}
-          <Link href={withWorkspace("/kalender", active?.workspace.id)}>
-            <Button variant="secondary">📅 Kalender</Button>
-          </Link>
-          <Link href={withWorkspace("/pengaturan/anggota", active?.workspace.id)}>
-            <Button variant="secondary">Undang anggota</Button>
-          </Link>
+          <Button href={withWorkspace("/kalender", active?.workspace.id)} variant="secondary">
+            📅 Kalender
+          </Button>
+          <Button
+            href={withWorkspace("/pengaturan/anggota", active?.workspace.id)}
+            variant="secondary"
+          >
+            Undang anggota
+          </Button>
         </div>
       </div>
 
@@ -149,6 +164,8 @@ export default async function DashboardPage({
           </p>
         </div>
       )}
+
+      {queryError ? <QueryErrorBanner /> : null}
 
       <section aria-label="KPI operasional" className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-5">
         <KPIStatCard label="Direncanakan" value={kpis.planned} icon="📝" empty={!kpis.hasData} />

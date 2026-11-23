@@ -10,13 +10,7 @@ import { INTEGRATIONS_TABLES_UNAVAILABLE_ID } from "./constants";
 
 export { INTEGRATIONS_TABLES_UNAVAILABLE_ID };
 
-export type QueryOutcome<T> = { ok: true; data: T } | { ok: false; unavailable: true };
-
-function wrap<T>(fn: () => Promise<T>): Promise<QueryOutcome<T>> {
-  return fn()
-    .then((data) => ({ ok: true as const, data }))
-    .catch(() => ({ ok: false as const, unavailable: true as const }));
-}
+import { wrapQueryOutcome as wrap, type QueryOutcome } from "@/lib/query";
 
 /** Channel workspace + capability snapshot-nya (RLS menyaring scope). */
 export async function listChannelsWithCapabilities(
@@ -33,16 +27,18 @@ export async function listChannelsWithCapabilities(
       .order("platform", { ascending: true })
       .order("account_name", { ascending: true });
     if (error) throw error;
-    return ((data ?? []) as unknown as Array<{
-      id: string;
-      brand_id: string;
-      platform: string;
-      account_name: string | null;
-      connection_status: string;
-      capability_snapshot: Record<string, unknown> | null;
-      capability_checked_at: string | null;
-      brands: { name: string | null };
-    }>).map((c) => ({
+    return (
+      (data ?? []) as unknown as Array<{
+        id: string;
+        brand_id: string;
+        platform: string;
+        account_name: string | null;
+        connection_status: string;
+        capability_snapshot: Record<string, unknown> | null;
+        capability_checked_at: string | null;
+        brands: { name: string | null };
+      }>
+    ).map((c) => ({
       id: c.id,
       brand_id: c.brand_id,
       brand_name: c.brands?.name ?? null,

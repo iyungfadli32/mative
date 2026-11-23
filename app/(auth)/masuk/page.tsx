@@ -43,7 +43,7 @@ export default function MasukPage() {
           required
         />
         {state.message ? (
-          <p role="alert" className="text-sm text-[var(--mt-rose-500)]">
+          <p role="alert" className="text-sm text-[var(--mt-rose-700)]">
             {state.message}
           </p>
         ) : null}

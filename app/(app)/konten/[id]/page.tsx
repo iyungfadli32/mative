@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
@@ -7,7 +8,7 @@ import { PlacementForm } from "@/features/planning/components/PlacementForm";
 import { TransitionForm } from "@/features/planning/components/TransitionForm";
 import { DistributionForm } from "@/features/planning/components/DistributionForm";
 import { StatusHistory } from "@/features/planning/components/StatusHistory";
-import { EmptyState } from "@/components/ui/States";
+import { EmptyState, LoadingSkeleton } from "@/components/ui/States";
 import { ProductionStatusBadge, StatusBadge } from "@/components/ui/Badges";
 import { ChannelIcon } from "@/components/ui/ChannelIcon";
 import { Button } from "@/components/ui/Button";
@@ -131,7 +132,7 @@ async function KontenDetailContent({
       notFound();
     }
     return (
-      <p role="alert" className="text-sm text-[var(--mt-rose-500)]">
+      <p role="alert" className="text-sm text-[var(--mt-rose-700)]">
         Gagal memuat konten: {detail.item.error ?? "tidak ditemukan"}
       </p>
     );
@@ -200,55 +201,69 @@ async function KontenDetailContent({
       </nav>
 
       {tab === "overview" ? (
-        <OverviewTab
-          item={item}
-          workspaceId={workspaceId}
-          timezone={timezone}
-          role={role}
-          canEdit={canEdit}
-          latestVersion={latestVersion}
-          events={detail.events.data}
-        />
+        <Suspense fallback={<LoadingSkeleton lines={4} label="Memuat bagian…" />}>
+          <OverviewTab
+            item={item}
+            workspaceId={workspaceId}
+            timezone={timezone}
+            role={role}
+            canEdit={canEdit}
+            latestVersion={latestVersion}
+            events={detail.events.data}
+          />
+        </Suspense>
       ) : null}
       {tab === "brief" ? (
-        <BriefTab
-          contentItemId={item.id}
-          workspaceId={workspaceId}
-          role={role}
-          canEdit={canEdit}
-          latestVersion={latestVersion}
-        />
+        <Suspense fallback={<LoadingSkeleton lines={4} label="Memuat bagian…" />}>
+          <BriefTab
+            contentItemId={item.id}
+            workspaceId={workspaceId}
+            role={role}
+            canEdit={canEdit}
+            latestVersion={latestVersion}
+          />
+        </Suspense>
       ) : null}
       {tab === "script" ? (
-        <ScriptTab
-          contentItemId={item.id}
-          workspaceId={workspaceId}
-          canEdit={canEdit}
-          latestVersion={latestVersion}
-        />
+        <Suspense fallback={<LoadingSkeleton lines={4} label="Memuat bagian…" />}>
+          <ScriptTab
+            contentItemId={item.id}
+            workspaceId={workspaceId}
+            canEdit={canEdit}
+            latestVersion={latestVersion}
+          />
+        </Suspense>
       ) : null}
       {tab === "media" ? (
-        <MediaTab contentItemId={item.id} workspaceId={workspaceId} canEdit={canEdit} />
+        <Suspense fallback={<LoadingSkeleton lines={4} label="Memuat bagian…" />}>
+          <MediaTab contentItemId={item.id} workspaceId={workspaceId} canEdit={canEdit} />
+        </Suspense>
       ) : null}
       {tab === "placements" ? (
-        <PlacementsTab item={item} workspaceId={workspaceId} canEdit={canEdit} role={role} />
+        <Suspense fallback={<LoadingSkeleton lines={4} label="Memuat bagian…" />}>
+          <PlacementsTab item={item} workspaceId={workspaceId} canEdit={canEdit} role={role} />
+        </Suspense>
       ) : null}
       {tab === "tasks" ? (
-        <TasksTab
-          contentItemId={item.id}
-          contentTitle={item.title}
-          workspaceId={workspaceId}
-          role={role}
-          userId={userId}
-        />
+        <Suspense fallback={<LoadingSkeleton lines={4} label="Memuat bagian…" />}>
+          <TasksTab
+            contentItemId={item.id}
+            contentTitle={item.title}
+            workspaceId={workspaceId}
+            role={role}
+            userId={userId}
+          />
+        </Suspense>
       ) : null}
       {tab === "comments" ? (
-        <CommentsTab
-          contentItemId={item.id}
-          workspaceId={workspaceId}
-          role={role}
-          userId={userId}
-        />
+        <Suspense fallback={<LoadingSkeleton lines={4} label="Memuat bagian…" />}>
+          <CommentsTab
+            contentItemId={item.id}
+            workspaceId={workspaceId}
+            role={role}
+            userId={userId}
+          />
+        </Suspense>
       ) : null}
       {tab === "versions" ? (
         <section className="rounded-2xl border border-[var(--mt-border)] bg-[var(--mt-surface)] p-4">
@@ -268,17 +283,19 @@ async function KontenDetailContent({
         </section>
       ) : null}
       {tab === "approval" ? (
-        <ApprovalTab
-          contentItemId={item.id}
-          contentTitle={item.title}
-          workspaceId={workspaceId}
-          role={role}
-          userId={userId}
-          canEdit={canEdit}
-          latestVersionId={latestVersion?.id ?? ""}
-          latestVersionNumber={latestVersion?.version_number ?? 0}
-          productionStatus={item.production_status}
-        />
+        <Suspense fallback={<LoadingSkeleton lines={4} label="Memuat bagian…" />}>
+          <ApprovalTab
+            contentItemId={item.id}
+            contentTitle={item.title}
+            workspaceId={workspaceId}
+            role={role}
+            userId={userId}
+            canEdit={canEdit}
+            latestVersionId={latestVersion?.id ?? ""}
+            latestVersionNumber={latestVersion?.version_number ?? 0}
+            productionStatus={item.production_status}
+          />
+        </Suspense>
       ) : null}
     </div>
   );

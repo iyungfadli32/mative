@@ -38,7 +38,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         {...rest}
       />
       {error ? (
-        <p id={`${id}-error`} role="alert" className="text-[13px] text-[var(--mt-rose-500)]">
+        <p id={`${id}-error`} role="alert" className="text-[13px] text-[var(--mt-rose-700)]">
           {error}
         </p>
       ) : hint ? (

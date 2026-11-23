@@ -69,7 +69,7 @@ export function ContentForm({
           pernah bisa menyimpan). */}
       {initial ? <input type="hidden" name="brandId" value={initial.brand_id} /> : null}
       <label className="flex flex-col gap-1.5 text-sm font-medium">
-        Brand <span className="text-[var(--mt-rose-500)]">*</span>
+        Brand <span className="text-[var(--mt-rose-700)]">*</span>
         <select
           name="brandId"
           defaultValue={initial?.brand_id ?? ""}

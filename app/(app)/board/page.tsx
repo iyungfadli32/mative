@@ -3,6 +3,7 @@ import { PlanningShell } from "@/features/planning/components/PlanningShell";
 import { FilterBar } from "@/features/planning/components/FilterBar";
 import { BoardClient, type BoardCard } from "@/features/planning/components/BoardClient";
 import { EmptyState } from "@/components/ui/States";
+import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner";
 import {
   listBrands,
   listChannels,
@@ -73,6 +74,7 @@ async function BoardContent({
     brands.data.map((b) => b.id),
   );
   const unavailable = brands.unavailable || items.unavailable;
+  const queryError = brands.error ?? items.error ?? channels.error ?? null;
   const platformByChannel = new Map(channels.data.map((c) => [c.id, c.platform]));
   let cards: BoardCard[] = items.data.map((item) => {
     const placements = item.placements ?? [];
@@ -98,6 +100,7 @@ async function BoardContent({
   }
   return (
     <div className="flex flex-col gap-4">
+      {queryError ? <QueryErrorBanner /> : null}
       {unavailable ? (
         <div
           role="alert"

@@ -87,7 +87,7 @@ export function Topbar({
       </div>
 
       {!envStatus.supabaseConfigured && (
-        <span className="hidden rounded-full bg-[var(--mt-mint-100)] px-2.5 py-1 text-xs font-medium text-[var(--mt-amber-500)] lg:inline-flex">
+        <span className="hidden rounded-full bg-[var(--mt-mint-100)] px-2.5 py-1 text-xs font-medium text-[var(--mt-amber-800)] lg:inline-flex">
           ⚠️ Supabase belum dikonfigurasi
         </span>
       )}
@@ -214,7 +214,7 @@ export function Topbar({
           </Link>
           <button
             type="button"
-            className="block w-full rounded-lg px-3 py-2 text-left text-sm text-[var(--mt-rose-500)] hover:bg-[var(--mt-canvas)]"
+            className="block w-full rounded-lg px-3 py-2 text-left text-sm text-[var(--mt-rose-700)] hover:bg-[var(--mt-canvas)]"
             onClick={() => {
               setProfileOpen(false);
               onSignOut();
@@ -237,42 +237,42 @@ export function Topbar({
             persis keluhan D3. Tanpa prefetch, klik langsung memulai
             navigasi + loading.tsx tampil instan. */}
         <div className="flex flex-col gap-2">
-          <Link
+          <Button
             href={withWorkspace("/konten/baru", activeWorkspaceId)}
             prefetch={false}
+            variant="secondary"
+            className="w-full justify-start"
             onClick={() => setQuickCreateOpen(false)}
           >
-            <Button variant="secondary" className="w-full justify-start">
-              📝 Buat konten
-            </Button>
-          </Link>
-          <Link
+            📝 Buat konten
+          </Button>
+          <Button
             href={withWorkspace("/ide", activeWorkspaceId)}
             prefetch={false}
+            variant="secondary"
+            className="w-full justify-start"
             onClick={() => setQuickCreateOpen(false)}
           >
-            <Button variant="secondary" className="w-full justify-start">
-              💡 Tangkap ide
-            </Button>
-          </Link>
-          <Link
+            💡 Tangkap ide
+          </Button>
+          <Button
             href={withWorkspace("/pustaka", activeWorkspaceId)}
             prefetch={false}
+            variant="secondary"
+            className="w-full justify-start"
             onClick={() => setQuickCreateOpen(false)}
           >
-            <Button variant="secondary" className="w-full justify-start">
-              🖼️ Unggah aset
-            </Button>
-          </Link>
-          <Link
+            🖼️ Unggah aset
+          </Button>
+          <Button
             href={withWorkspace("/pengaturan/organisasi", activeWorkspaceId)}
             prefetch={false}
+            variant="secondary"
+            className="w-full justify-start"
             onClick={() => setQuickCreateOpen(false)}
           >
-            <Button variant="secondary" className="w-full justify-start">
-              🏢 Buat organisasi / workspace
-            </Button>
-          </Link>
+            🏢 Buat organisasi / workspace
+          </Button>
         </div>
       </Dialog>
     </header>

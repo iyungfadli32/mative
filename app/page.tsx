@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { envStatus } from "@/lib/env";
 
@@ -20,19 +19,15 @@ export default function HomePage() {
         sebagai sumber kebenaran semua tampilan.
       </p>
       <div className="mt-8 flex flex-wrap gap-3">
-        <Link href="/masuk">
-          <Button size="lg">Masuk</Button>
-        </Link>
-        <Link href="/daftar">
-          <Button size="lg" variant="secondary">
-            Daftar akun
-          </Button>
-        </Link>
-        <Link href="/portal">
-          <Button size="lg" variant="ghost">
-            Portal Klien →
-          </Button>
-        </Link>
+        <Button href="/masuk" size="lg">
+          Masuk
+        </Button>
+        <Button href="/daftar" variant="secondary" size="lg">
+          Daftar akun
+        </Button>
+        <Button href="/portal" variant="ghost" size="lg">
+          Portal Klien →
+        </Button>
       </div>
       <div className="mt-10 rounded-2xl border border-[var(--mt-border)] bg-[var(--mt-surface)] p-5">
         <h2 className="text-base font-semibold">Status fondasi — Phase 1 (DRAF)</h2>

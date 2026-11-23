@@ -3,17 +3,17 @@ import { cn } from "@/lib/utils";
 /**
  * StatusBadge & PriorityBadge — Dok 03 §3/§7.
  * Status SELALU teks + ikon, bukan warna saja. Pemetaan warna di bawah
- * SEMENTARA (Keputusan #14) memakai token yang ada yang paling dekat.
+ * Setiap tone memakai token latar + teks sendiri (kontras >= 4,5:1, WCAG AA).
  */
 export type StatusTone = "neutral" | "info" | "progress" | "success" | "warning" | "danger";
 
-const toneClass: Record<StatusTone, string> = {
-  neutral: "bg-[var(--mt-canvas)] text-[var(--mt-text-muted)]",
-  info: "bg-[var(--mt-mint-100)] text-[var(--mt-teal-700)]",
-  progress: "bg-[var(--mt-mint-100)] text-[var(--mt-indigo-600)]",
-  success: "bg-[var(--mt-mint-100)] text-[var(--mt-teal-700)]",
-  warning: "bg-[var(--mt-mint-100)] text-[var(--mt-amber-500)]",
-  danger: "bg-[var(--mt-mint-100)] text-[var(--mt-rose-500)]",
+export const badgeToneClasses: Record<StatusTone, string> = {
+  neutral: "bg-[var(--mt-surface)] text-[var(--mt-text-muted)]",
+  info: "bg-[var(--mt-blue-100)] text-[var(--mt-blue-800)]",
+  progress: "bg-[var(--mt-indigo-100)] text-[var(--mt-indigo-800)]",
+  success: "bg-[var(--mt-mint-100)] text-[var(--mt-teal-800)]",
+  warning: "bg-[var(--mt-amber-100)] text-[var(--mt-amber-800)]",
+  danger: "bg-[var(--mt-rose-100)] text-[var(--mt-rose-700)]",
 };
 
 export function StatusBadge({
@@ -29,7 +29,7 @@ export function StatusBadge({
     <span
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium",
-        toneClass[tone],
+        badgeToneClasses[tone],
       )}
     >
       {icon ? <span aria-hidden="true">{icon}</span> : null}
