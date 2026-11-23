@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { withWorkspace, useActiveWorkspaceId } from "@/features/planning/workspace-url";
+
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
@@ -9,8 +11,17 @@ import { cn } from "@/lib/utils";
  * Semua item aktif sejak Phase 2 (Kalender) dan Phase 4 (Approval).
  * Quick-create membuka bottom sheet (berisi aksi yang tersedia saja).
  */
-export function MobileBottomNav({ onQuickCreate }: { onQuickCreate: () => void }) {
+export function MobileBottomNav({
+  workspaceId,
+  onQuickCreate,
+}: {
+  workspaceId?: string | null;
+  onQuickCreate: () => void;
+}) {
   const pathname = usePathname();
+  // Batch 4 (T-1): workspace aktif dari prop, atau dari ?workspace= URL.
+  const urlWorkspaceId = useActiveWorkspaceId();
+  const activeWorkspaceId = workspaceId ?? urlWorkspaceId;
   const items = [
     { href: "/dashboard", label: "Home", icon: "🏠", available: true },
     { href: "/kalender", label: "Kalender", icon: "📅", available: true },
@@ -58,7 +69,11 @@ export function MobileBottomNav({ onQuickCreate }: { onQuickCreate: () => void }
                   <span className="text-[11px]">Buat</span>
                 </button>
               ) : item.available && item.href ? (
-                <Link href={item.href} className={cls} aria-current={active ? "page" : undefined}>
+                <Link
+                  href={withWorkspace(item.href, activeWorkspaceId)}
+                  className={cls}
+                  aria-current={active ? "page" : undefined}
+                >
                   {inner}
                 </Link>
               ) : (

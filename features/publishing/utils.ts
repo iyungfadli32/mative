@@ -115,9 +115,7 @@ export function resolvePublishingTimezone(
   _itemTimezone: string | null | undefined,
   placementTimezone: string | null | undefined,
 ): string {
-  return placementTimezone && placementTimezone.trim() !== ""
-    ? placementTimezone
-    : "Asia/Jakarta";
+  return placementTimezone && placementTimezone.trim() !== "" ? placementTimezone : "Asia/Jakarta";
 }
 
 /** Label status 9 label Dok 08 §6 — harfiah, tanpa sinonim. */
@@ -216,4 +214,24 @@ export function isJobDueSoon(
   if (!job.scheduled_at) return false;
   const t = new Date(job.scheduled_at).getTime();
   return t > nowMs && t <= nowMs + windowHours * 3600 * 1000;
+}
+
+/**
+ * Batch 4 (T-4): normalisasi tanggal ke UTC ISO. ISO ber-offset dipakai apa
+ * adanya sebagai instan absolut; wall-clock polos ("YYYY-MM-DDTHH:mm" dari
+ * datetime-local) dibaca di zona yang diberikan. JANGAN `new Date(v)` untuk
+ * wall-clock polos -- zona server UTC menggesernya 7 jam untuk WIB (cacat
+ * Phase 6, A6.2: placement menyimpan 19:53 UTC padahal pengguna maksud
+ * 19:53 WIB, lalu write-back job menembakkan trigger 0014).
+ */
+export function wallClockToUtcIso(
+  value: string | null | undefined,
+  timeZone: string,
+): string | null {
+  if (!value) return null;
+  if (new RegExp("[zZ]$|[+-][0-9]{2}:?[0-9]{2}$").test(value)) {
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  }
+  return zonedWallClockToUtcIso(value, timeZone);
 }

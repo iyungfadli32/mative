@@ -112,7 +112,11 @@ const optionalDatetime = z
   .refine((v) => v === "" || !Number.isNaN(Date.parse(v)), {
     message: "Tanggal/waktu tidak valid.",
   })
-  .transform((v) => (v === "" ? null : new Date(v).toISOString()))
+  // Batch 4 (T-4): JANGAN konversi ke UTC di sini -- `new Date(v)` memakai zona
+  // server (UTC) sehingga wall-clock WIB bergeser 7 jam. Nilai mentah
+  // dipertahankan; action mengonversinya dengan zona item/workspace
+  // (zonedWallClockToUtcIso) seperti placement.
+  .transform((v) => (v === "" ? null : v))
   .nullable()
   .optional();
 
@@ -403,19 +407,10 @@ export const placementSchema = z.object({
   platformHashtags: z.array(z.string().trim().min(1).max(60)).max(30).default([]),
   scheduledAt: optionalWallClock,
   timezone: z.string().min(1).max(64).default("Asia/Jakarta"),
-  distributionStatus: z
-    .enum([
-      "draft",
-      "ready",
-      "scheduled_locally",
-      "sending",
-      "uploaded_or_draft_created",
-      "published",
-      "failed",
-      "needs_manual_action",
-      "cancelled",
-    ])
-    .default("draft"),
+  // Batch 4 (T-3): status awal placement hanya draft/ready. Status
+  // published/uploaded_or_draft_created hanya diisi lewat alur publishing
+  // (trigger 0030 + 0028 melarang penulisan langsung).
+  distributionStatus: z.enum(["draft", "ready"]).default("draft"),
 });
 
 export const reschedulePlacementSchema = z.object({

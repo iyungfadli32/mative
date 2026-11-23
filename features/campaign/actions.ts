@@ -34,6 +34,7 @@ import {
   PLANNING_TABLES_UNAVAILABLE_ID,
 } from "@/features/planning/context";
 import { listCampaigns } from "@/features/planning/queries";
+import { wallClockToUtcIso } from "@/features/publishing/utils";
 import type { Campaign } from "@/features/planning/types";
 import { CAMPAIGN_TABLES_UNAVAILABLE_ID } from "./constants";
 import { exportCampaignsCsv, parseCampaignCsv, validateCampaignCsvRow } from "./csv";
@@ -173,14 +174,25 @@ export async function updateCampaignAction(
     targetMetrics.target_deliverables = metrics.target_deliverables;
   if (metrics.target_date !== undefined) targetMetrics.target_date = metrics.target_date;
   if (metrics.notes !== undefined) targetMetrics.notes = metrics.notes;
+  // Batch 4 (T-4): tanggal campaign wall-clock -> UTC di zona workspace.
+  const { data: wsRow } = await supabase
+    .from("workspaces")
+    .select("timezone")
+    .eq("id", parsed.data.workspaceId)
+    .single();
+  const campaignTz = wsRow?.timezone ?? "Asia/Jakarta";
+  const startAtUtc = wallClockToUtcIso(parsed.data.startAt, campaignTz);
+  const endAtUtc = wallClockToUtcIso(parsed.data.endAt, campaignTz);
+  if ((parsed.data.startAt && !startAtUtc) || (parsed.data.endAt && !endAtUtc))
+    return fail("Tanggal/waktu tidak valid.");
   const { error } = await supabase
     .from("campaigns")
     .update({
       name: parsed.data.name,
       objective: parsed.data.objective || null,
       audience_id: parsed.data.audienceId ?? null,
-      start_at: parsed.data.startAt ?? null,
-      end_at: parsed.data.endAt ?? null,
+      start_at: startAtUtc,
+      end_at: endAtUtc,
       target_metrics: targetMetrics,
     })
     .eq("id", parsed.data.campaignId);

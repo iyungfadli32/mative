@@ -14,6 +14,8 @@ export type PlanningContext = {
   workspaces: WorkspaceMembership[];
   workspace: WorkspaceMembership;
   role: string;
+  /** true bila ?workspace= diminta tetapi bukan milik pemanggil (Batch 4, T-1). */
+  requestedWorkspaceNotMember: boolean;
 };
 
 /** Workspace aktif + peran; null bila belum masuk / belum ada workspace / Supabase belum siap. */
@@ -40,12 +42,17 @@ export async function getPlanningContext(
       ? workspaces.find((w) => w.workspaceId === requestedWorkspaceId)
       : undefined) ?? workspaces[0];
   if (!workspace) return null;
+  const requestedWorkspaceNotMember =
+    requestedWorkspaceId != null &&
+    requestedWorkspaceId !== "" &&
+    !workspaces.some((w) => w.workspaceId === requestedWorkspaceId);
   return {
     userId: user.id,
     userEmail: user.email ?? null,
     workspaces,
     workspace,
     role: workspace.role,
+    requestedWorkspaceNotMember,
   };
 }
 

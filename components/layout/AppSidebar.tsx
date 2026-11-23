@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { withWorkspace, useActiveWorkspaceId } from "@/features/planning/workspace-url";
+
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
@@ -95,12 +97,17 @@ export function AppSidebar({
   collapsed,
   onToggleCollapse,
   workspaceName,
+  workspaceId,
 }: {
   collapsed: boolean;
   onToggleCollapse: () => void;
   workspaceName: string;
+  workspaceId?: string | null;
 }) {
   const pathname = usePathname();
+  // Batch 4 (T-1): workspace aktif dari prop, atau dari ?workspace= URL.
+  const urlWorkspaceId = useActiveWorkspaceId();
+  const activeWorkspaceId = workspaceId ?? urlWorkspaceId;
   return (
     <aside
       aria-label="Navigasi utama"
@@ -111,7 +118,7 @@ export function AppSidebar({
     >
       <div className="flex items-center justify-between px-4 py-4">
         <Link
-          href="/dashboard"
+          href={withWorkspace("/dashboard", activeWorkspaceId)}
           className="flex items-center gap-2"
           aria-label="MaTive — ke Command Center"
         >
@@ -178,7 +185,7 @@ export function AppSidebar({
                   <li key={item.href}>
                     {item.available ? (
                       <Link
-                        href={item.href}
+                        href={withWorkspace(item.href, activeWorkspaceId)}
                         className={cls}
                         aria-current={active ? "page" : undefined}
                       >

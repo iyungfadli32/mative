@@ -13,6 +13,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { SUPABASE_NOT_CONFIGURED_ID } from "@/lib/env";
 import { brandInScope, can } from "@/lib/permissions";
@@ -43,27 +44,7 @@ import {
 } from "./transitions";
 import { findCollision } from "./calendar";
 import type { ContentPlacement } from "./types";
-import { zonedWallClockToUtcIso } from "../publishing/utils";
-
-/**
- * Normalisasi jadwal placement ke UTC ISO. Wall-clock polos ("YYYY-MM-DDTHH:mm"
- * dari datetime-local) dibaca di zona placement; ISO ber-offset (jalur edit /
- * nilai lama dari DB) dipakai apa adanya sebagai instan absolut. JANGAN
- * `new Date(v)` untuk wall-clock polos — zona server UTC menggesernya 7 jam
- * untuk WIB (cacat Phase 6, A6.2: placement menyimpan 19:53 UTC padahal
- * pengguna maksud 19:53 WIB, lalu write-back job menembakkan trigger 0014).
- */
-function placementScheduledAtToUtc(
-  value: string | null | undefined,
-  timeZone: string,
-): string | null {
-  if (!value) return null;
-  if (/[zZ]$|[+-]\d{2}:?\d{2}$/.test(value)) {
-    const d = new Date(value);
-    return Number.isNaN(d.getTime()) ? null : d.toISOString();
-  }
-  return zonedWallClockToUtcIso(value, timeZone);
-}
+import { wallClockToUtcIso } from "../publishing/utils";
 
 export type PlanningActionResult = {
   ok: boolean;
@@ -454,6 +435,17 @@ export async function createCampaignAction(
       return fail("Salah satu brand yang dipilih di luar scope Anda.");
     }
   }
+  // Batch 4 (T-4): tanggal campaign wall-clock -> UTC di zona workspace.
+  const { data: wsRow } = await supabase
+    .from("workspaces")
+    .select("timezone")
+    .eq("id", parsed.data.workspaceId)
+    .single();
+  const campaignTz = wsRow?.timezone ?? "Asia/Jakarta";
+  const startAtUtc = wallClockToUtcIso(parsed.data.startAt, campaignTz);
+  const endAtUtc = wallClockToUtcIso(parsed.data.endAt, campaignTz);
+  if ((parsed.data.startAt && !startAtUtc) || (parsed.data.endAt && !endAtUtc))
+    return fail("Tanggal/waktu tidak valid.");
   const { data: campaign, error } = await supabase
     .from("campaigns")
     .insert({
@@ -461,8 +453,8 @@ export async function createCampaignAction(
       name: parsed.data.name,
       objective: parsed.data.objective || null,
       audience_id: parsed.data.audienceId ?? null,
-      start_at: parsed.data.startAt ?? null,
-      end_at: parsed.data.endAt ?? null,
+      start_at: startAtUtc,
+      end_at: endAtUtc,
       status: parsed.data.status,
       owner_user_id: user.id,
       target_metrics: parsed.data.targetMetrics,
@@ -600,8 +592,7 @@ export async function convertIdeaAction(
   // (b) K-3: brand efektif = p_brand_id (bila diisi) atau brand ide.
   // Cek scope terhadap brand efektif itu — sama seperti createCampaignAction.
   // Bila belum ada brand efektif, biarkan RPC menolak dengan pesan bersih.
-  const effectiveBrandId =
-    brandIdRaw || (idea?.brand_id as string | null | undefined) || null;
+  const effectiveBrandId = brandIdRaw || (idea?.brand_id as string | null | undefined) || null;
   if (effectiveBrandId) {
     const scope = await getCallerBrandScope(workspaceId, user.id);
     if (!brandInScope(scope, effectiveBrandId)) {
@@ -663,6 +654,9 @@ export async function createContentAction(
   if (!brandInScope(scope, parsed.data.brandId)) {
     return fail("Brand yang dipilih di luar scope Anda.");
   }
+  // Batch 4 (T-4): due date wall-clock -> UTC di zona item (bukan new Date(v)).
+  const dueAtUtc = wallClockToUtcIso(parsed.data.dueAt, parsed.data.timezone ?? "Asia/Jakarta");
+  if (parsed.data.dueAt && !dueAtUtc) return fail("Tanggal/waktu tidak valid.");
   const { data, error } = await supabase.rpc("create_content_item_with_version", {
     p_workspace_id: parsed.data.workspaceId,
     p_brand_id: parsed.data.brandId,
@@ -674,7 +668,7 @@ export async function createContentAction(
     p_objective: parsed.data.objective || null,
     p_funnel_stage: parsed.data.funnelStage ?? null,
     p_priority: parsed.data.priority ?? null,
-    p_due_at: parsed.data.dueAt ?? null,
+    p_due_at: dueAtUtc,
     p_timezone: parsed.data.timezone,
     p_origin_idea_id: parsed.data.originIdeaId ?? null,
     p_script: parsed.data.script || null,
@@ -725,7 +719,7 @@ export async function updateContentAction(
     return fail("Peran Anda tidak boleh mengedit konten.");
   const { data: item } = await supabase
     .from("content_items")
-    .select("owner_user_id")
+    .select("owner_user_id, timezone")
     .eq("id", parsed.data.contentItemId)
     .single();
   if (!item) return fail("Content item tidak ditemukan.");
@@ -742,6 +736,9 @@ export async function updateContentAction(
     .order("version_number", { ascending: false })
     .limit(1)
     .single();
+  // Batch 4 (T-4): due date wall-clock -> UTC di zona item tersimpan.
+  const dueAtUtc = wallClockToUtcIso(parsed.data.dueAt, item.timezone ?? "Asia/Jakarta");
+  if (parsed.data.dueAt && !dueAtUtc) return fail("Tanggal/waktu tidak valid.");
   const { data, error } = await supabase.rpc("update_content_item_with_version", {
     p_content_item_id: parsed.data.contentItemId,
     p_title: parsed.data.title,
@@ -749,7 +746,7 @@ export async function updateContentAction(
     p_objective: parsed.data.objective || null,
     p_funnel_stage: parsed.data.funnelStage ?? null,
     p_priority: parsed.data.priority ?? null,
-    p_due_at: parsed.data.dueAt ?? null,
+    p_due_at: dueAtUtc,
     p_campaign_id: parsed.data.campaignId ?? null,
     p_pillar_id: parsed.data.pillarId ?? null,
     p_audience_id: parsed.data.audienceId ?? null,
@@ -814,6 +811,63 @@ export async function transitionContentAction(
   if (!result?.ok) return fail(result?.message ?? "Gagal mengubah status.");
   revalidatePlanning();
   return ok(`Status produksi diubah: ${from} → ${to}.`);
+}
+
+// Batch 4 (T-6): soft-delete + duplikasi konten (RPC 0030).
+// Aksi form polos (seperti deletePlacementAction): satu argumen FormData,
+// Promise<void>; kegagalan berhenti diam-diam, sukses redirect.
+export async function deleteContentItemAction(formData: FormData): Promise<void> {
+  const contentItemId = String(formData.get("contentItemId") ?? "");
+  const workspaceId = String(formData.get("workspaceId") ?? "");
+  if (!contentItemId || !workspaceId) return;
+  const { supabase, user } = await requireUser();
+  if (!supabase || !user) return;
+  const role = await requireRole(workspaceId, user.id);
+  if (!role || !can(role, "create_edit_content")) return;
+  const { data: item } = await supabase
+    .from("content_items")
+    .select("owner_user_id")
+    .eq("id", contentItemId)
+    .is("deleted_at", null)
+    .single();
+  if (!item) return;
+  if (!canEditSpecificContent(role, item.owner_user_id === user.id)) return;
+  const { data, error } = await supabase.rpc("soft_delete_content_item", {
+    p_content_item_id: contentItemId,
+    p_reason: String(formData.get("reason") ?? "").trim() || null,
+  });
+  if (error) return;
+  const result = data as { ok: boolean; message?: string } | null;
+  if (!result?.ok) return;
+  revalidatePlanning();
+  redirect(`/konten?workspace=${workspaceId}`);
+}
+
+export async function duplicateContentItemAction(formData: FormData): Promise<void> {
+  const contentItemId = String(formData.get("contentItemId") ?? "");
+  const workspaceId = String(formData.get("workspaceId") ?? "");
+  if (!contentItemId || !workspaceId) return;
+  const { supabase, user } = await requireUser();
+  if (!supabase || !user) return;
+  const role = await requireRole(workspaceId, user.id);
+  if (!role || !can(role, "create_edit_content")) return;
+  const { data: item } = await supabase
+    .from("content_items")
+    .select("owner_user_id")
+    .eq("id", contentItemId)
+    .is("deleted_at", null)
+    .single();
+  if (!item) return;
+  if (!canEditSpecificContent(role, item.owner_user_id === user.id)) return;
+  const { data, error } = await supabase.rpc("duplicate_content_item", {
+    p_content_item_id: contentItemId,
+  });
+  if (error) return;
+  const result = data as { ok: boolean; message?: string; content_item_id?: string } | null;
+  if (!result?.ok) return;
+  revalidatePlanning();
+  if (result.content_item_id)
+    redirect(`/konten/${result.content_item_id}?workspace=${workspaceId}`);
 }
 
 export async function transitionDistributionAction(
@@ -887,12 +941,15 @@ export async function createPlacementAction(
   });
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Data tidak valid.");
   // Jadwal wall-clock → UTC di zona placement (BUKAN new Date(v) — lihat
-  // placementScheduledAtToUtc). Bila konversi gagal, tolak dengan jelas.
-  const scheduledAtUtc = placementScheduledAtToUtc(
-    parsed.data.scheduledAt,
-    parsed.data.timezone,
-  );
+  // wallClockToUtcIso). Bila konversi gagal, tolak dengan jelas.
+  const scheduledAtUtc = wallClockToUtcIso(parsed.data.scheduledAt, parsed.data.timezone);
   if (parsed.data.scheduledAt && !scheduledAtUtc) return fail("Tanggal/waktu tidak valid.");
+  // Batch 4 (T-3): status awal hanya draft/ready (skema sudah membatasi);
+  // ready wajib punya jadwal agar trigger 0030 tidak menolak tanpa pesan jelas.
+  if (parsed.data.distributionStatus !== "draft" && parsed.data.distributionStatus !== "ready")
+    return fail("Status awal placement hanya boleh draft atau ready.");
+  if (parsed.data.distributionStatus === "ready" && !scheduledAtUtc)
+    return fail("Status ready wajib memiliki jadwal (scheduledAt).");
   const { supabase, user } = await requireUser();
   if (!supabase || !user)
     return fail(supabase ? "Anda harus masuk dulu." : SUPABASE_NOT_CONFIGURED_ID);
@@ -1102,9 +1159,12 @@ export async function reschedulePlacementAction(
   const role = await requireRole(parsed.data.workspaceId, user.id);
   if (!role || !can(role, "schedule_publish"))
     return fail("Hanya owner/admin/manager/strategist yang boleh menjadwalkan ulang.");
+  // Batch 4 (T-4): jadwal wall-clock -> UTC di zona placement (bukan new Date(v)).
+  const scheduledAtUtc = wallClockToUtcIso(parsed.data.scheduledAt, parsed.data.timezone);
+  if (!scheduledAtUtc) return fail("Tanggal/waktu tidak valid.");
   const { data, error } = await supabase.rpc("reschedule_placement", {
     p_placement_id: parsed.data.placementId,
-    p_scheduled_at: new Date(parsed.data.scheduledAt).toISOString(),
+    p_scheduled_at: scheduledAtUtc,
     p_timezone: parsed.data.timezone,
     p_force: parsed.data.force,
   });

@@ -52,6 +52,8 @@ export function isDistributionStatus(value: string): value is DistributionStatus
  */
 export function isValidProductionTransition(from: ProductionStatus, to: ProductionStatus): boolean {
   if (from === to) return false;
+  // Batch 4 (0030) T-6: arsip dari status apa pun (selain archived), dengan alasan.
+  if (to === "archived" && from !== "archived") return true;
   if ((EXCEPTIONS as readonly string[]).includes(from)) {
     return to === "editing" || to === "idea";
   }
@@ -65,7 +67,7 @@ export function validProductionTargets(from: ProductionStatus): ProductionStatus
   return PRODUCTION_STATUSES.filter((to) => isValidProductionTransition(from, to));
 }
 
-/** Alasan wajib bila masuk ATAU keluar dari exception, atau batal arsip. */
+/** Alasan wajib bila masuk ATAU keluar dari exception, batal arsip, atau mengarsipkan. */
 export function productionTransitionRequiresReason(
   from: ProductionStatus,
   to: ProductionStatus,
@@ -73,6 +75,8 @@ export function productionTransitionRequiresReason(
   if ((EXCEPTIONS as readonly string[]).includes(to)) return true;
   if ((EXCEPTIONS as readonly string[]).includes(from)) return true;
   if (from === "archived" && to === "idea") return true;
+  // Batch 4 (0030) T-6: arsip dari status apa pun wajib beralasan.
+  if (to === "archived") return true;
   return false;
 }
 

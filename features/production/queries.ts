@@ -233,7 +233,19 @@ export async function listAssets(
   supabase: SupabaseClient,
   workspaceId: string,
 ): Promise<QueryResult<Asset[]>> {
-  return runQuery<Asset[]>(
+  // Batch 4 (T-5): hitung total agar halaman bisa memperingatkan bila
+  // pengambilan 200 aset terpotong.
+  let total = 0;
+  try {
+    const { count } = await supabase
+      .from("assets")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId);
+    total = count ?? 0;
+  } catch {
+    total = 0;
+  }
+  const result = await runQuery<Asset[]>(
     supabase
       .from("assets")
       .select("*")
@@ -242,6 +254,11 @@ export async function listAssets(
       .limit(200),
     [],
   );
+  return {
+    ...result,
+    total,
+    truncated: result.data.length >= 200 && total > result.data.length,
+  };
 }
 
 export async function listContentAssets(
@@ -378,7 +395,9 @@ export async function listAssetVersions(
   return runQuery<AssetVersion[]>(
     supabase
       .from("asset_versions")
-      .select("id, asset_id, version_number, storage_object_key, mime_type, byte_size, uploaded_by, created_at")
+      .select(
+        "id, asset_id, version_number, storage_object_key, mime_type, byte_size, uploaded_by, created_at",
+      )
       .eq("asset_id", assetId)
       .order("version_number", { ascending: false }),
     [],
@@ -394,7 +413,9 @@ export async function listAssetVersionsByAssetIds(
   const result = await runQuery<AssetVersion[]>(
     supabase
       .from("asset_versions")
-      .select("id, asset_id, version_number, storage_object_key, mime_type, byte_size, uploaded_by, created_at")
+      .select(
+        "id, asset_id, version_number, storage_object_key, mime_type, byte_size, uploaded_by, created_at",
+      )
       .in("asset_id", assetIds)
       .order("version_number", { ascending: false }),
     [],

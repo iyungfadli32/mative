@@ -43,6 +43,20 @@ type CollisionState = {
  * (ADR-0008 §1) + alternatif tombol untuk perangkat sentuh/keyboard.
  * Collision: peringatan + pengguna memilih tetap / geser 1 jam / batal.
  */
+/**
+ * Batch 4 (T-8): tautan kalender (bulan/tampilan) membawa semua parameter
+ * aktif — bukan hanya workspace, month, view — agar filter tidak hilang.
+ */
+function calendarHref(
+  carried: Record<string, string>,
+  workspaceId: string,
+  month: string,
+  view: string,
+): string {
+  const params = new URLSearchParams({ ...carried, workspace: workspaceId, month, view });
+  return `/kalender?${params.toString()}`;
+}
+
 export function CalendarClient({
   month,
   timezone,
@@ -51,6 +65,7 @@ export function CalendarClient({
   backlog,
   canSchedule,
   view,
+  carriedParams = {},
 }: {
   month: string;
   timezone: string;
@@ -59,6 +74,7 @@ export function CalendarClient({
   backlog: CalendarTile[];
   canSchedule: boolean;
   view: "month" | "agenda";
+  carriedParams?: Record<string, string>;
 }) {
   const [year, monthNum] = month.split("-").map(Number);
   const weeks = buildMonthGrid(year, monthNum);
@@ -145,7 +161,7 @@ export function CalendarClient({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Link
-            href={`/kalender?workspace=${workspaceId}&month=${prevMonth}&view=${view}`}
+            href={calendarHref(carriedParams, workspaceId, prevMonth, view)}
             className="rounded-lg border border-[var(--mt-border)] bg-[var(--mt-surface)] px-3 py-2 text-sm"
             aria-label="Bulan sebelumnya"
           >
@@ -153,7 +169,7 @@ export function CalendarClient({
           </Link>
           <h2 className="text-lg font-semibold">{monthLabel(year, monthNum)}</h2>
           <Link
-            href={`/kalender?workspace=${workspaceId}&month=${nextMonth}&view=${view}`}
+            href={calendarHref(carriedParams, workspaceId, nextMonth, view)}
             className="rounded-lg border border-[var(--mt-border)] bg-[var(--mt-surface)] px-3 py-2 text-sm"
             aria-label="Bulan berikutnya"
           >
@@ -163,14 +179,14 @@ export function CalendarClient({
         <div className="flex items-center gap-2 text-sm">
           <span className="text-[var(--mt-text-muted)]">Zona waktu: {timezoneLabel(timezone)}</span>
           <Link
-            href={`/kalender?workspace=${workspaceId}&month=${month}&view=month`}
+            href={calendarHref(carriedParams, workspaceId, month, "month")}
             aria-current={view === "month" ? "page" : undefined}
             className={`rounded-lg px-3 py-2 ${view === "month" ? "bg-[var(--mt-teal-700)] font-medium text-white" : "border border-[var(--mt-border)] bg-[var(--mt-surface)]"}`}
           >
             Bulan
           </Link>
           <Link
-            href={`/kalender?workspace=${workspaceId}&month=${month}&view=agenda`}
+            href={calendarHref(carriedParams, workspaceId, month, "agenda")}
             aria-current={view === "agenda" ? "page" : undefined}
             className={`rounded-lg px-3 py-2 ${view === "agenda" ? "bg-[var(--mt-teal-700)] font-medium text-white" : "border border-[var(--mt-border)] bg-[var(--mt-surface)]"}`}
           >

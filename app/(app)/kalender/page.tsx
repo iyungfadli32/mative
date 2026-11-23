@@ -12,7 +12,7 @@ import {
   listWorkspaceMembers,
 } from "@/features/planning/queries";
 import { PLANNING_TABLES_UNAVAILABLE_ID } from "@/features/planning/context";
-import { parsePlanningFilters } from "@/features/planning/search";
+import { carrySearchParams, parsePlanningFilters } from "@/features/planning/search";
 import { canSchedule } from "@/features/planning/transitions";
 import { dateKeyInTimezone } from "@/features/planning/calendar";
 import {
@@ -70,6 +70,21 @@ async function KalenderContent({
     if (typeof v === "string") params.set(k, v);
   }
   const filters = parsePlanningFilters(params, workspaceId);
+  // Batch 4 (T-8): parameter aktif yang dibawa FilterBar (hidden) dan
+  // tautan bulan/tampilan kalender agar filter tidak hilang.
+  const carried = carrySearchParams(sp, [
+    "brandId",
+    "channelId",
+    "platform",
+    "format",
+    "productionStatus",
+    "distributionStatus",
+    "pillarId",
+    "campaignId",
+    "ownerId",
+    "month",
+    "view",
+  ]);
   const view = params.get("view") === "agenda" ? "agenda" : "month";
   const [brands, campaigns, pillars, members, items] = await Promise.all([
     listBrands(supabase, workspaceId),
@@ -129,7 +144,7 @@ async function KalenderContent({
       <FilterBar
         action="/kalender"
         workspaceId={workspaceId}
-        hidden={{ month: filters.month, view }}
+        hidden={carried}
         fields={[
           {
             name: "brandId",
@@ -215,6 +230,7 @@ async function KalenderContent({
           backlog={backlog}
           canSchedule={canSchedule(role)}
           view={view}
+          carriedParams={carried}
         />
       )}
     </div>

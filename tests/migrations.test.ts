@@ -22,7 +22,7 @@ function migrationFiles(): Array<{ name: string; sql: string }> {
 }
 
 describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
-  it("memiliki 29 migrasi berversi berurutan 0001–0029", () => {
+  it("memiliki 30 migrasi berversi berurutan 0001–0030", () => {
     const files = migrationFiles();
     expect(files.map((f) => f.name)).toEqual([
       "0001_profiles.sql",
@@ -53,7 +53,8 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
       "0026_enforce_brand_scope_in_rpc.sql",
       "0027_guard_member_owner_escalation.sql",
       "0028_publishing_recovery_atomic_reschedule.sql",
-    "0029_asset_upload_recovery_versioning_comment_notifications.sql",
+      "0029_asset_upload_recovery_versioning_comment_notifications.sql",
+      "0030_batch4_planning_fixes.sql",
     ]);
   });
 
@@ -72,11 +73,11 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
       // tabel/policy baru); 0025 hanya menulis ulang dua fungsi RPC
       // (preflight + decide, tanpa tabel/policy baru); 0026 hanya
       // menulis ulang dua fungsi RPC (tanpa tabel/policy baru); 0027 hanya
-    // menulis ulang policy INSERT + trigger (tanpa tabel/policy baru); 0028 hanya
-    // menulis ulang empat fungsi RPC + satu fungsi RPC baru + satu fungsi
-    // trigger + satu indeks (tanpa tabel/policy baru); 0029 hanya
-    // menulis ulang satu fungsi RPC + dua fungsi RPC baru + menambah dua
-    // kolom + memperluas satu CHECK (tanpa tabel/policy baru).
+      // menulis ulang policy INSERT + trigger (tanpa tabel/policy baru); 0028 hanya
+      // menulis ulang empat fungsi RPC + satu fungsi RPC baru + satu fungsi
+      // trigger + satu indeks (tanpa tabel/policy baru); 0029 hanya
+      // menulis ulang satu fungsi RPC + dua fungsi RPC baru + menambah dua
+      // kolom + memperluas satu CHECK (tanpa tabel/policy baru).
       if (
         name === "0008_planning_transactions.sql" ||
         name === "0010_production_transactions.sql" ||
@@ -88,9 +89,10 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
         name === "0018_set_visual_order_fixes.sql" ||
         name === "0025_enforce_client_review_gate.sql" ||
         name === "0026_enforce_brand_scope_in_rpc.sql" ||
-      name === "0027_guard_member_owner_escalation.sql" ||
-      name === "0028_publishing_recovery_atomic_reschedule.sql" ||
-        name === "0029_asset_upload_recovery_versioning_comment_notifications.sql"
+        name === "0027_guard_member_owner_escalation.sql" ||
+        name === "0028_publishing_recovery_atomic_reschedule.sql" ||
+        name === "0029_asset_upload_recovery_versioning_comment_notifications.sql" ||
+        name === "0030_batch4_planning_fixes.sql"
       ) {
         expect(sql, `${name} tidak boleh membuat tabel`).not.toMatch(/create table/i);
         expect(sql, `${name} harus berisi fungsi RPC`).toMatch(/create or replace function/i);

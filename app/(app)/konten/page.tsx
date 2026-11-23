@@ -15,7 +15,7 @@ import {
   listPillars,
 } from "@/features/planning/queries";
 import { PLANNING_TABLES_UNAVAILABLE_ID } from "@/features/planning/context";
-import { parsePlanningFilters } from "@/features/planning/search";
+import { carrySearchParams, parsePlanningFilters } from "@/features/planning/search";
 import { canCreateEditContent } from "@/features/planning/transitions";
 import { PRODUCTION_STATUS_LABELS, PLATFORM_LABELS } from "@/features/planning/constants";
 import type { WorkspaceRole } from "@/lib/permissions";
@@ -100,6 +100,15 @@ async function KontenContent({
         action="/konten"
         workspaceId={workspaceId}
         query={filters.q}
+        hidden={carrySearchParams(sp, [
+          "q",
+          "brandId",
+          "productionStatus",
+          "campaignId",
+          "pillarId",
+          "platform",
+          "priority",
+        ])}
         resetHref={`/konten?workspace=${workspaceId}`}
         fields={[
           {
@@ -148,6 +157,15 @@ async function KontenContent({
           },
         ]}
       />
+      {items.truncated ? (
+        <div
+          role="status"
+          className="rounded-2xl border border-[var(--mt-amber-500)] bg-[var(--mt-surface)] p-4 text-sm"
+        >
+          Menampilkan hingga 200 konten pertama dari {items.total ?? items.data.length} konten di
+          workspace ini. Persempit filter atau gunakan pencarian untuk melihat konten lainnya.
+        </div>
+      ) : null}
       {items.data.length === 0 && !unavailable ? (
         <EmptyState
           title="Belum ada konten"

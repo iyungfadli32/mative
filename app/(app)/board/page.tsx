@@ -10,7 +10,7 @@ import {
   listWorkspaceMembers,
 } from "@/features/planning/queries";
 import { PLANNING_TABLES_UNAVAILABLE_ID } from "@/features/planning/context";
-import { parsePlanningFilters } from "@/features/planning/search";
+import { carrySearchParams, parsePlanningFilters } from "@/features/planning/search";
 import { canCreateEditContent } from "@/features/planning/transitions";
 import { dateKeyInTimezone } from "@/features/planning/calendar";
 import type { WorkspaceRole } from "@/lib/permissions";
@@ -110,6 +110,7 @@ async function BoardContent({
         action="/board"
         workspaceId={workspaceId}
         query={filters.q}
+        hidden={carrySearchParams(sp, ["q", "brandId", "ownerId", "priority", "dueDate"])}
         dateFilter={{ name: "dueDate", label: "Tenggat (tanggal)", value: dueDate }}
         fields={[
           {

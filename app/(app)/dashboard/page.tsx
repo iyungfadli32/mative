@@ -2,6 +2,7 @@ import { getCurrentUser, getSupabaseServerClient } from "@/lib/supabase/server";
 import { listMyWorkspaces } from "@/features/tenancy/actions";
 import { signOutAction } from "@/features/identity/auth";
 import { AppShell } from "@/components/layout/AppShell";
+import { withWorkspace } from "@/features/planning/workspace-url";
 import { KPIStatCard } from "@/components/ui/KPIStatCard";
 import { EmptyState } from "@/components/ui/States";
 import { EMPTY_KPIS } from "@/features/dashboard/kpis";
@@ -38,6 +39,10 @@ export default async function DashboardPage({
     (workspaceParam ? workspaces.find((w) => w.workspace.id === workspaceParam) : undefined) ??
     workspaces[0];
   const workspaceName = active?.workspace.name ?? "Belum ada workspace";
+  // Batch 4 (T-1): workspace yang diminta bukan milik pengguna -> AppShell menampilkan peringatan.
+  const requestedWorkspaceNotMember = Boolean(
+    workspaceParam && !workspaces.some((w) => w.workspace.id === workspaceParam),
+  );
   let kpis = EMPTY_KPIS;
   const supabase = await getSupabaseServerClient();
   if (supabase && active) {
@@ -76,6 +81,8 @@ export default async function DashboardPage({
 
   return (
     <AppShell
+      workspaceId={active?.workspace.id ?? null}
+      requestedWorkspaceNotMember={requestedWorkspaceNotMember}
       workspaceName={workspaceName}
       userEmail={user?.email ?? null}
       onSignOut={signOutAction}
@@ -93,27 +100,27 @@ export default async function DashboardPage({
         <div className="flex flex-wrap gap-2">
           {workspaces.length === 0 ? (
             <>
-              <Link href="/pengaturan/organisasi">
+              <Link href={withWorkspace("/pengaturan/organisasi", active?.workspace.id)}>
                 <Button>＋ Buat organisasi &amp; workspace</Button>
               </Link>
-              <Link href="/konten/baru">
+              <Link href={withWorkspace("/konten/baru", active?.workspace.id)}>
                 <Button variant="secondary">＋ Buat konten</Button>
               </Link>
             </>
           ) : (
             <>
-              <Link href="/konten/baru">
+              <Link href={withWorkspace("/konten/baru", active?.workspace.id)}>
                 <Button variant="secondary">＋ Buat konten</Button>
               </Link>
-              <Link href="/pengaturan/organisasi">
+              <Link href={withWorkspace("/pengaturan/organisasi", active?.workspace.id)}>
                 <Button variant="secondary">＋ Buat workspace</Button>
               </Link>
             </>
           )}
-          <Link href="/kalender">
+          <Link href={withWorkspace("/kalender", active?.workspace.id)}>
             <Button variant="secondary">📅 Kalender</Button>
           </Link>
-          <Link href="/pengaturan/anggota">
+          <Link href={withWorkspace("/pengaturan/anggota", active?.workspace.id)}>
             <Button variant="secondary">Undang anggota</Button>
           </Link>
         </div>
@@ -228,7 +235,10 @@ export default async function DashboardPage({
               icon="🎯"
             />
             <p className="mt-2 text-center text-sm">
-              <Link href="/kampanye" className="font-medium text-[var(--mt-teal-700)] underline">
+              <Link
+                href={withWorkspace("/kampanye", active?.workspace.id)}
+                className="font-medium text-[var(--mt-teal-700)] underline"
+              >
                 Ke halaman campaign →
               </Link>
             </p>
@@ -242,7 +252,7 @@ export default async function DashboardPage({
           <p className="mt-2 text-sm text-[var(--mt-text-muted)]">
             Belum ada workspace yang bisa Anda akses.{" "}
             <Link
-              href="/pengaturan/organisasi"
+              href={withWorkspace("/pengaturan/organisasi", active?.workspace.id)}
               className="font-medium text-[var(--mt-teal-700)] underline"
             >
               Buat organisasi + workspace pertama →

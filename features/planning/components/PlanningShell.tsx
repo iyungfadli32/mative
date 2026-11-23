@@ -32,6 +32,8 @@ export async function PlanningShell({
   const user = await getCurrentUser();
   return (
     <AppShell
+      workspaceId={ctx?.workspace.workspaceId ?? null}
+      requestedWorkspaceNotMember={ctx?.requestedWorkspaceNotMember ?? false}
       workspaceName={ctx?.workspace.workspaceName ?? "Belum ada workspace"}
       userEmail={user?.email ?? null}
       onSignOut={signOutAction}

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { withWorkspace, useActiveWorkspaceId } from "@/features/planning/workspace-url";
+
 import { Button } from "@/components/ui/Button";
 import { Popover } from "@/components/ui/Dialog";
 import { Dialog } from "@/components/ui/Dialog";
@@ -20,10 +22,12 @@ import type { AppNotification } from "@/features/production/types";
  */
 export function Topbar({
   workspaceName,
+  workspaceId,
   userEmail,
   onSignOut,
 }: {
   workspaceName: string;
+  workspaceId?: string | null;
   userEmail: string | null;
   onSignOut: () => void;
 }) {
@@ -54,6 +58,9 @@ export function Topbar({
   }, []);
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
   const [search, setSearch] = useState("");
+  // Batch 4 (T-1/T-2): workspace aktif dari prop, atau dari ?workspace= URL.
+  const urlWorkspaceId = useActiveWorkspaceId();
+  const activeWorkspaceId = workspaceId ?? urlWorkspaceId;
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-[var(--mt-border)] bg-[var(--mt-surface)] px-4">
@@ -65,6 +72,9 @@ export function Topbar({
           <label htmlFor="global-search" className="sr-only">
             Cari di MaTive
           </label>
+          {activeWorkspaceId ? (
+            <input type="hidden" name="workspace" value={activeWorkspaceId} />
+          ) : null}
           <input
             id="global-search"
             name="q"
@@ -90,7 +100,9 @@ export function Topbar({
         <Button
           variant="ghost"
           size="sm"
-          aria-label={bellUnread > 0 ? "Notifikasi (" + bellUnread + " belum dibaca)" : "Notifikasi"}
+          aria-label={
+            bellUnread > 0 ? "Notifikasi (" + bellUnread + " belum dibaca)" : "Notifikasi"
+          }
           aria-expanded={bellOpen}
           aria-haspopup="menu"
           onClick={() => {
@@ -157,7 +169,7 @@ export function Topbar({
             </ul>
           )}
           <Link
-            href="/tugas"
+            href={withWorkspace("/tugas", activeWorkspaceId)}
             onClick={() => setBellOpen(false)}
             className="block px-3 py-2 text-sm font-medium text-[var(--mt-teal-700)] underline underline-offset-2"
           >
@@ -187,14 +199,14 @@ export function Topbar({
         </Button>
         <Popover open={profileOpen} onClose={() => setProfileOpen(false)} label="Menu profil">
           <Link
-            href="/profil"
+            href={withWorkspace("/profil", activeWorkspaceId)}
             className="block rounded-lg px-3 py-2 text-sm hover:bg-[var(--mt-canvas)]"
             onClick={() => setProfileOpen(false)}
           >
             👤 Profil saya
           </Link>
           <Link
-            href="/pengaturan"
+            href={withWorkspace("/pengaturan", activeWorkspaceId)}
             className="block rounded-lg px-3 py-2 text-sm hover:bg-[var(--mt-canvas)]"
             onClick={() => setProfileOpen(false)}
           >
@@ -225,23 +237,35 @@ export function Topbar({
             persis keluhan D3. Tanpa prefetch, klik langsung memulai
             navigasi + loading.tsx tampil instan. */}
         <div className="flex flex-col gap-2">
-          <Link href="/konten/baru" prefetch={false} onClick={() => setQuickCreateOpen(false)}>
+          <Link
+            href={withWorkspace("/konten/baru", activeWorkspaceId)}
+            prefetch={false}
+            onClick={() => setQuickCreateOpen(false)}
+          >
             <Button variant="secondary" className="w-full justify-start">
               📝 Buat konten
             </Button>
           </Link>
-          <Link href="/ide" prefetch={false} onClick={() => setQuickCreateOpen(false)}>
+          <Link
+            href={withWorkspace("/ide", activeWorkspaceId)}
+            prefetch={false}
+            onClick={() => setQuickCreateOpen(false)}
+          >
             <Button variant="secondary" className="w-full justify-start">
               💡 Tangkap ide
             </Button>
           </Link>
-          <Link href="/pustaka" prefetch={false} onClick={() => setQuickCreateOpen(false)}>
+          <Link
+            href={withWorkspace("/pustaka", activeWorkspaceId)}
+            prefetch={false}
+            onClick={() => setQuickCreateOpen(false)}
+          >
             <Button variant="secondary" className="w-full justify-start">
               🖼️ Unggah aset
             </Button>
           </Link>
           <Link
-            href="/pengaturan/organisasi"
+            href={withWorkspace("/pengaturan/organisasi", activeWorkspaceId)}
             prefetch={false}
             onClick={() => setQuickCreateOpen(false)}
           >

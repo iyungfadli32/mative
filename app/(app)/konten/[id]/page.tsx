@@ -13,7 +13,9 @@ import { ChannelIcon } from "@/components/ui/ChannelIcon";
 import { Button } from "@/components/ui/Button";
 import {
   createPlacementAction,
+  deleteContentItemAction,
   deletePlacementAction,
+  duplicateContentItemAction,
   transitionContentAction,
   updateContentAction,
   updatePlacementAction,
@@ -359,6 +361,29 @@ async function OverviewTab({
         </p>
       )}
       <section className="rounded-2xl border border-[var(--mt-border)] bg-[var(--mt-surface)] p-4">
+        <h2 className="font-semibold">Kelola konten</h2>
+        <p className="mt-1 text-sm text-[var(--mt-text-muted)]">
+          Duplikasi membuat salinan baru berstatus ide dengan naskah versi terbaru. Hapus
+          memindahkan konten ke tempat sampah (soft-delete) — konten tidak lagi tampil di daftar.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <form action={duplicateContentItemAction}>
+            <input type="hidden" name="contentItemId" value={item.id} />
+            <input type="hidden" name="workspaceId" value={workspaceId} />
+            <Button type="submit" size="sm" variant="secondary">
+              Duplikasi konten
+            </Button>
+          </form>
+          <form action={deleteContentItemAction}>
+            <input type="hidden" name="contentItemId" value={item.id} />
+            <input type="hidden" name="workspaceId" value={workspaceId} />
+            <Button type="submit" size="sm" variant="ghost">
+              Hapus konten
+            </Button>
+          </form>
+        </div>
+      </section>
+      <section className="rounded-2xl border border-[var(--mt-border)] bg-[var(--mt-surface)] p-4">
         <h2 className="font-semibold">Riwayat status ({events.length})</h2>
         <div className="mt-3">
           <StatusHistory events={events} />
@@ -684,9 +709,9 @@ async function PlacementsTab({
                     </details>
                     <form action={deletePlacementAction}>
                       <p className="text-sm text-[var(--mt-text-muted)]">
-                        Menghapus placement juga menghapus job publishing dan riwayatnya.
-                        Placement yang sudah terbit atau masih punya job aktif tidak bisa
-                        dilepas — batalkan dulu job-nya.
+                        Menghapus placement juga menghapus job publishing dan riwayatnya. Placement
+                        yang sudah terbit atau masih punya job aktif tidak bisa dilepas — batalkan
+                        dulu job-nya.
                       </p>
                       <input type="hidden" name="placementId" value={p.id} />
                       <input type="hidden" name="workspaceId" value={workspaceId} />

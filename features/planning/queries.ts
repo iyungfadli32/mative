@@ -160,6 +160,21 @@ export async function listContentItems(
   supabase: SupabaseClient,
   filters: PlanningFilters,
 ): Promise<QueryResult<ContentItemWithRelations[]>> {
+  // Batch 4 (T-5): total baris workspace (di luar filter memori) agar halaman
+  // bisa memperingatkan bila pengambilan 200 baris terpotong; (T-6) abaikan
+  // konten yang sudah di-soft-delete.
+  let total = 0;
+  try {
+    const { count } = await supabase
+      .from("content_items")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", filters.workspaceId)
+      .is("deleted_at", null)
+      .is("deleted_at", null);
+    total = count ?? 0;
+  } catch {
+    total = 0;
+  }
   const result = await runQuery<ContentItemWithRelations[]>(
     supabase
       .from("content_items")
@@ -169,7 +184,8 @@ export async function listContentItems(
       .limit(200),
     [],
   );
-  if (result.error || result.data.length === 0) return result;
+  const truncated = result.data.length >= 200 && total > result.data.length;
+  if (result.error || result.data.length === 0) return { ...result, total, truncated: false };
   const channelPlatforms: Record<string, string> = {};
   for (const item of result.data) {
     for (const p of item.placements ?? []) {
@@ -191,7 +207,7 @@ export async function listContentItems(
   const searched = filters.q
     ? filtered.filter((item) => matchesContentSearch(item, filters.q))
     : filtered;
-  return { data: searched, error: null, unavailable: false };
+  return { data: searched, error: null, unavailable: false, total, truncated };
 }
 
 export async function getContentItemDetail(
@@ -204,7 +220,12 @@ export async function getContentItemDetail(
   tags: QueryResult<Tag[]>;
 }> {
   const item = await runQuery<ContentItemWithRelations | null>(
-    supabase.from("content_items").select(CONTENT_SELECT).eq("id", contentItemId).single(),
+    supabase
+      .from("content_items")
+      .select(CONTENT_SELECT)
+      .eq("id", contentItemId)
+      .is("deleted_at", null)
+      .single(),
     null,
   );
   const versions = await runQuery<ContentVersion[]>(
@@ -276,6 +297,7 @@ export async function searchPlanning(
         .from("content_items")
         .select("id, title, production_status")
         .eq("workspace_id", workspaceId)
+        .is("deleted_at", null)
         .ilike("title", pattern)
         .limit(10),
       [],
@@ -317,7 +339,7 @@ export async function searchPlanning(
       id: c.id,
       title: c.title,
       detail: `Konten · ${c.production_status}`,
-      href: `/konten/${c.id}`,
+      href: `/konten/${c.id}?workspace=${workspaceId}`,
     });
   for (const c of campaigns.data)
     hits.push({

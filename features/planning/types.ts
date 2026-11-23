@@ -187,6 +187,10 @@ export type QueryResult<T> = {
   error: string | null;
   /** true bila tabel/fungsi belum ada di database live (migrasi belum diterapkan). */
   unavailable: boolean;
+  /** Batch 4 (T-5): total baris pada cakupan dasar (workspace), bila dihitung. */
+  total?: number;
+  /** Batch 4 (T-5): true bila pengambilan dibatasi (mis. 200 baris) padahal total lebih besar. */
+  truncated?: boolean;
 };
 
 /** Peran pemanggil di satu workspace (dibaca dari workspace_members). */

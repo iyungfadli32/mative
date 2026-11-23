@@ -3,7 +3,11 @@ import { PlanningShell } from "@/features/planning/components/PlanningShell";
 import { EmptyState } from "@/components/ui/States";
 import { PLANNING_TABLES_UNAVAILABLE_ID } from "@/features/planning/context";
 import { sweepStaleAssetUploadsAction } from "@/features/production/actions";
-import { getAssetSignedUrl, listAssetVersionsByAssetIds, listAssets } from "@/features/production/queries";
+import {
+  getAssetSignedUrl,
+  listAssetVersionsByAssetIds,
+  listAssets,
+} from "@/features/production/queries";
 import { AssetCard } from "@/features/production/components/AssetCard";
 import { AssetUploadForm } from "@/features/production/components/AssetUploadForm";
 import { can } from "@/lib/permissions";
@@ -90,6 +94,15 @@ async function PustakaContent({ workspaceId, role }: { workspaceId: string; role
 
       <section>
         <h2 className="font-semibold">Aset ({assets.data.length})</h2>
+        {assets.truncated ? (
+          <div
+            role="status"
+            className="rounded-2xl border border-[var(--mt-amber-500)] bg-[var(--mt-surface)] p-4 text-sm"
+          >
+            Menampilkan hingga 200 aset pertama dari {assets.total ?? assets.data.length} aset di
+            workspace ini. Persempit filter atau gunakan pencarian untuk melihat aset lainnya.
+          </div>
+        ) : null}
         {assets.data.length === 0 && !assets.unavailable ? (
           <div className="mt-3">
             <EmptyState

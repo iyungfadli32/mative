@@ -93,6 +93,25 @@ export function buildPlanningQueryString(
   if (filters.unscheduledOnly) params.set("unscheduledOnly", "1");
   return params.toString();
 }
+/**
+ * Batch 4 (T-8): kembalikan parameter aktif dari `searchParams` yang harus
+ * dipertahankan — semua kunci kecuali yang dirender sebagai field terlihat
+ * (atau `workspace`, yang sudah dirender FilterBar sebagai hidden input).
+ * Dipakai sebagai `hidden` FilterBar dan sebagai parameter yang dibawa
+ * tautan navigasi (mis. bulan/tampilan kalender) agar filter tidak hilang.
+ */
+export function carrySearchParams(
+  sp: Record<string, string | string[] | undefined>,
+  rendered: string[],
+): Record<string, string> {
+  const carried: Record<string, string> = {};
+  for (const [key, value] of Object.entries(sp)) {
+    if (key === "workspace" || rendered.includes(key)) continue;
+    const first = Array.isArray(value) ? value[0] : value;
+    if (first) carried[key] = first;
+  }
+  return carried;
+}
 
 /** Apakah satu content item cocok dengan kata kunci (judul/deskripsi/tujuan)? */
 export function matchesContentSearch(

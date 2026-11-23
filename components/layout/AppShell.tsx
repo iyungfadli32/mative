@@ -7,6 +7,7 @@ import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import Link from "next/link";
+import { withWorkspace, useActiveWorkspaceId } from "@/features/planning/workspace-url";
 
 /**
  * AppShell — Dok 02 §2 / Dok 03 §8.
@@ -17,16 +18,23 @@ import Link from "next/link";
 export function AppShell({
   children,
   workspaceName,
+  workspaceId,
+  requestedWorkspaceNotMember,
   userEmail,
   onSignOut,
 }: {
   children: ReactNode;
   workspaceName: string;
+  workspaceId?: string | null;
+  requestedWorkspaceNotMember?: boolean;
   userEmail: string | null;
   onSignOut: () => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
+  // Batch 4 (T-1): workspace aktif dari prop halaman, atau dari ?workspace= URL.
+  const urlWorkspaceId = useActiveWorkspaceId();
+  const activeWorkspaceId = workspaceId ?? urlWorkspaceId;
 
   return (
     <div className="flex h-dvh overflow-hidden bg-[var(--mt-canvas)]">
@@ -34,14 +42,32 @@ export function AppShell({
         collapsed={collapsed}
         onToggleCollapse={() => setCollapsed((v) => !v)}
         workspaceName={workspaceName}
+        workspaceId={activeWorkspaceId}
       />
       <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar workspaceName={workspaceName} userEmail={userEmail} onSignOut={onSignOut} />
+        <Topbar
+          workspaceName={workspaceName}
+          workspaceId={activeWorkspaceId}
+          userEmail={userEmail}
+          onSignOut={onSignOut}
+        />
+        {requestedWorkspaceNotMember ? (
+          <div
+            role="alert"
+            className="bg-amber-50 px-4 py-2 text-xs font-medium text-amber-800 md:px-6"
+          >
+            Workspace yang diminta bukan milik Anda; menampilkan workspace pertama yang dapat
+            diakses.
+          </div>
+        ) : null}
         <main className="flex-1 overflow-y-auto px-4 pb-24 pt-4 md:px-6 md:pb-8 md:pt-6">
           {children}
         </main>
       </div>
-      <MobileBottomNav onQuickCreate={() => setQuickCreateOpen(true)} />
+      <MobileBottomNav
+        workspaceId={activeWorkspaceId}
+        onQuickCreate={() => setQuickCreateOpen(true)}
+      />
       <Dialog
         open={quickCreateOpen}
         onClose={() => setQuickCreateOpen(false)}
@@ -52,23 +78,35 @@ export function AppShell({
             tautan dialog diklik segera setelah terbuka; prefetch yang masih
             berjalan membuat router menunggu tanpa umpan balik. */}
         <div className="flex flex-col gap-2">
-          <Link href="/konten/baru" prefetch={false} onClick={() => setQuickCreateOpen(false)}>
+          <Link
+            href={withWorkspace("/konten/baru", activeWorkspaceId)}
+            prefetch={false}
+            onClick={() => setQuickCreateOpen(false)}
+          >
             <Button variant="secondary" className="w-full justify-start">
               📝 Buat konten
             </Button>
           </Link>
-          <Link href="/ide" prefetch={false} onClick={() => setQuickCreateOpen(false)}>
+          <Link
+            href={withWorkspace("/ide", activeWorkspaceId)}
+            prefetch={false}
+            onClick={() => setQuickCreateOpen(false)}
+          >
             <Button variant="secondary" className="w-full justify-start">
               💡 Tangkap ide
             </Button>
           </Link>
-          <Link href="/pustaka" prefetch={false} onClick={() => setQuickCreateOpen(false)}>
+          <Link
+            href={withWorkspace("/pustaka", activeWorkspaceId)}
+            prefetch={false}
+            onClick={() => setQuickCreateOpen(false)}
+          >
             <Button variant="secondary" className="w-full justify-start">
               🖼️ Unggah aset
             </Button>
           </Link>
           <Link
-            href="/pengaturan/organisasi"
+            href={withWorkspace("/pengaturan/organisasi", activeWorkspaceId)}
             prefetch={false}
             onClick={() => setQuickCreateOpen(false)}
           >
