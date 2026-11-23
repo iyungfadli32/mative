@@ -269,11 +269,17 @@ export function AnalyticsReports({
           </p>
         ) : (
           [...byCampaign.entries()].map(([campaignId, metrics]) => {
-            const reach = metrics.find((m) => m.metric_key === "reach");
-            const engagements = metrics.find((m) => m.metric_key === "engagements");
+            // F-6 (Batch 6): rate dihitung dari jumlah reach/engagements semua baris
+            // periode, bukan dari satu baris pertama yang arbitrer.
+            const reachTotal = metrics
+              .filter((m) => m.metric_key === "reach")
+              .reduce((acc, m) => acc + Number(m.value), 0);
+            const engagementsTotal = metrics
+              .filter((m) => m.metric_key === "engagements")
+              .reduce((acc, m) => acc + Number(m.value), 0);
             const rate = computeEngagementRate(
-              engagements ? Number(engagements.value) : null,
-              reach ? Number(reach.value) : null,
+              metrics.some((m) => m.metric_key === "engagements") ? engagementsTotal : null,
+              metrics.some((m) => m.metric_key === "reach") ? reachTotal : null,
             );
             return (
               <div key={campaignId} className="flex flex-col gap-2">
@@ -282,10 +288,10 @@ export function AnalyticsReports({
                   {rate != null ? ` — engagement rate ${formatMetricValue(rate, "persen")} %` : ""}
                 </h3>
                 <Table
-                  headers={["Metrik", "Nilai", "Satuan"]}
+                  headers={["Metrik", "Nilai", "Satuan", "Periode"]}
                   rows={metrics.map((m) => (
                     <Row
-                      key={m.metric_key}
+                      key={`${m.metric_key}|${m.period_start}|${m.period_end}`}
                       cells={[
                         <span key="l" className="font-medium">
                           {METRIC_LABEL_BY_KEY[m.metric_key as keyof typeof METRIC_LABEL_BY_KEY] ??
@@ -293,6 +299,7 @@ export function AnalyticsReports({
                         </span>,
                         formatMetricValue(Number(m.value), m.unit),
                         m.unit,
+                        `${m.period_start} s.d. ${m.period_end}`,
                       ]}
                     />
                   ))}

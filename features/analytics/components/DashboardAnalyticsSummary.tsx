@@ -51,6 +51,9 @@ export async function DashboardAnalyticsSummary({
           {s.lastRetrievedAt
             ? ` · Terakhir diperbarui ${new Date(s.lastRetrievedAt).toLocaleDateString("id-ID")}`
             : ""}
+          {s.partialPeriodRows > 0
+            ? ` · Catatan: ${s.partialPeriodRows} baris periode impor hanya sebagian masuk 30 hari terakhir sehingga tidak dihitung dalam total di atas.`
+            : ""}
         </p>
       )}
       <p className="mt-2 text-sm">

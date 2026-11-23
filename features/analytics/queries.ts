@@ -17,6 +17,7 @@ import {
   analyticsDataStatus,
   computeEngagementRate,
   computePublishingAdherence,
+  isPeriodFullyContained,
 } from "./metrics";
 import type {
   AnalyticsSnapshot,
@@ -136,10 +137,10 @@ export async function listContentMetrics(
 export async function listCampaignMetrics(
   supabase: SupabaseClient,
   workspaceId: string,
-  range: { from: string; to: string },
+  range: { from: string; to: string; brandId?: string | null },
 ): Promise<QueryOutcome<CampaignMetric[]>> {
   return wrap(async () => {
-    const { data, error } = await supabase
+    let q = supabase
       .from("campaign_metrics")
       .select(CAMPAIGN_METRIC_COLUMNS)
       .eq("workspace_id", workspaceId)
@@ -147,7 +148,10 @@ export async function listCampaignMetrics(
       .gte("period_end", range.from)
       .order("campaign_id", { ascending: true })
       .order("metric_key", { ascending: true })
+      .order("period_start", { ascending: true })
       .limit(1000);
+    if (range.brandId) q = q.eq("brand_id", range.brandId);
+    const { data, error } = await q;
     if (error) throw error;
     return (data ?? []) as CampaignMetric[];
   });
@@ -293,6 +297,20 @@ export async function getDashboardSummary(
   range: { from: string; to: string; brandId?: string | null },
 ): Promise<QueryOutcome<DashboardSummary>> {
   return wrap(async () => {
+    // F-5 (Batch 6): adherence mengikuti filter brand lewat placement brand tersebut.
+    const adherencePlacementIds = range.brandId
+      ? await listPlacementIdsForBrand(supabase, workspaceId, range.brandId)
+      : null;
+    let jobsQuery = supabase
+      .from("publishing_jobs")
+      .select("id, placement_id, scheduled_at, status")
+      .eq("workspace_id", workspaceId)
+      .gte("scheduled_at", `${range.from}T00:00:00Z`)
+      .lt("scheduled_at", `${nextDay(range.to)}T00:00:00Z`)
+      .limit(500);
+    if (adherencePlacementIds !== null && adherencePlacementIds.length > 0) {
+      jobsQuery = jobsQuery.in("placement_id", adherencePlacementIds);
+    }
     const [allSnapshotsRes, metricsRes, brandsRes, placementsCountRes, jobsRes] =
       await Promise.all([
         listAllSnapshots(supabase, workspaceId),
@@ -302,13 +320,7 @@ export async function getDashboardSummary(
           .from("content_placements")
           .select("id, content_items!inner(workspace_id)", { count: "exact", head: true })
           .eq("content_items.workspace_id", workspaceId),
-        supabase
-          .from("publishing_jobs")
-          .select("id, placement_id, scheduled_at, status")
-          .eq("workspace_id", workspaceId)
-          .gte("scheduled_at", `${range.from}T00:00:00Z`)
-          .lt("scheduled_at", `${nextDay(range.to)}T00:00:00Z`)
-          .limit(500),
+        jobsQuery,
       ]);
     if (!allSnapshotsRes.ok) throw new Error("snapshots unavailable");
     if (!metricsRes.ok) throw new Error("metrics unavailable");
@@ -318,8 +330,25 @@ export async function getDashboardSummary(
 
     const allSnapshots = allSnapshotsRes.data;
     const metrics = metricsRes.data;
+    // F-1 (Batch 6): KPI hanya menjumlah periode impor yang sepenuhnya berada
+    // dalam rentang yang dipilih. Baris latest-wins yang periodenya hanya
+    // sebagian masuk rentang tidak dihitung (jumlahnya di partialPeriodRows).
+    // retrieved_at tidak ada di content_metrics - latest-wins memakai
+    // created_at baris (satu snapshot = satu waktu impor; urutan antar
+    // snapshot dipertahankan karena created_at naik seiring impor).
+    const latestBySubjectKey = new Map<string, ContentMetric>();
+    for (const m of metrics) {
+      const k = `${m.subject_type}|${m.subject_id}|${m.metric_key}|${m.period_start}|${m.period_end}`;
+      const prev = latestBySubjectKey.get(k);
+      if (!prev || m.created_at >= prev.created_at) latestBySubjectKey.set(k, m);
+    }
+    const latestRows = [...latestBySubjectKey.values()];
+    const containedRows = latestRows.filter((m) =>
+      isPeriodFullyContained(m.period_start, m.period_end, range.from, range.to),
+    );
+    const partialPeriodRows = latestRows.length - containedRows.length;
     const totals = aggregateLatestWins(
-      metrics.map((m) => ({
+      containedRows.map((m) => ({
         subject_type: m.subject_type,
         subject_id: m.subject_id,
         metric_key: m.metric_key,
@@ -329,9 +358,6 @@ export async function getDashboardSummary(
         retrieved_at: m.created_at,
       })),
     );
-    // retrieved_at tidak ada di content_metrics — latest-wins memakai
-    // created_at baris (satu snapshot = satu waktu impor; urutan antar
-    // snapshot dipertahankan karena created_at naik seiring impor).
     const reach = totals.find((t) => t.metric_key === "reach")?.value ?? null;
     const engagements = totals.find((t) => t.metric_key === "engagements")?.value ?? null;
     const engagementRate =
@@ -339,13 +365,7 @@ export async function getDashboardSummary(
 
     const brandName = new Map<string, string>(brandsRes.data.map((b) => [b.id, b.name]));
     const byBrandMap = new Map<string, { reach: number; engagements: number }>();
-    const latestBySubjectKey = new Map<string, ContentMetric>();
-    for (const m of metrics) {
-      const k = `${m.subject_type}|${m.subject_id}|${m.metric_key}|${m.period_start}|${m.period_end}`;
-      const prev = latestBySubjectKey.get(k);
-      if (!prev || m.created_at >= prev.created_at) latestBySubjectKey.set(k, m);
-    }
-    for (const m of latestBySubjectKey.values()) {
+    for (const m of containedRows) {
       const cur = byBrandMap.get(m.brand_id) ?? { reach: 0, engagements: 0 };
       if (m.metric_key === "reach") cur.reach += Number(m.value);
       if (m.metric_key === "engagements") cur.engagements += Number(m.value);
@@ -361,11 +381,14 @@ export async function getDashboardSummary(
       }))
       .sort((a, b) => b.reach - a.reach);
 
-    const jobs = (jobsRes.data ?? []) as Array<{
-      placement_id: string;
-      scheduled_at: string | null;
-      status: string;
-    }>;
+    const jobs =
+      adherencePlacementIds !== null && adherencePlacementIds.length === 0
+        ? []
+        : ((jobsRes.data ?? []) as Array<{
+            placement_id: string;
+            scheduled_at: string | null;
+            status: string;
+          }>);
     let posts: Array<{ placement_id: string; published_at: string }> = [];
     const placementIds = [...new Set(jobs.map((j) => j.placement_id))];
     if (placementIds.length > 0) {
@@ -379,7 +402,7 @@ export async function getDashboardSummary(
     const publishingAdherence = computePublishingAdherence(jobs, posts);
 
     const placementsWithMetrics = new Set(
-      [...latestBySubjectKey.values()]
+      containedRows
         .filter((m) => m.subject_type === "placement")
         .map((m) => m.subject_id),
     ).size;
@@ -398,6 +421,7 @@ export async function getDashboardSummary(
       publishingAdherence,
       byBrand,
       placementCoverage: { withMetrics: placementsWithMetrics, total: totalPlacements },
+      partialPeriodRows,
     };
   });
 }
@@ -419,19 +443,59 @@ export async function listCampaignNames(
 }
 
 /** Volume publishing: jumlah job per status dalam periode (laporan 5). */
+/**
+ * Placement milik sebuah brand (placement -> content_item -> brand).
+ * Dipakai filter brand untuk volume publishing dan adherence (F-5, Batch 6):
+ * publishing_jobs hanya menyimpan placement_id.
+ */
+async function listPlacementIdsForBrand(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  brandId: string,
+): Promise<string[]> {
+  const itemsRes = await supabase
+    .from("content_items")
+    .select("id")
+    .eq("workspace_id", workspaceId)
+    .eq("brand_id", brandId)
+    .limit(1000);
+  if (itemsRes.error) throw itemsRes.error;
+  const itemIds = (itemsRes.data ?? []).map((row) => row.id);
+  if (itemIds.length === 0) return [];
+  const placementsRes = await supabase
+    .from("content_placements")
+    .select("id")
+    .eq("workspace_id", workspaceId)
+    .in("content_item_id", itemIds)
+    .limit(1000);
+  if (placementsRes.error) throw placementsRes.error;
+  return (placementsRes.data ?? []).map((row) => row.id);
+}
+
 export async function getPublishingVolume(
   supabase: SupabaseClient,
   workspaceId: string,
-  range: { from: string; to: string },
+  range: { from: string; to: string; brandId?: string | null },
 ): Promise<QueryOutcome<{ total: number; byStatus: Record<string, number> }>> {
   return wrap(async () => {
-    const { data, error } = await supabase
+    // F-5 (Batch 6): volume mengikuti filter brand lewat placement brand tersebut.
+    const placementIds = range.brandId
+      ? await listPlacementIdsForBrand(supabase, workspaceId, range.brandId)
+      : null;
+    if (placementIds !== null && placementIds.length === 0) {
+      return { total: 0, byStatus: {} };
+    }
+    let q = supabase
       .from("publishing_jobs")
       .select("status")
       .eq("workspace_id", workspaceId)
       .gte("scheduled_at", `${range.from}T00:00:00Z`)
       .lt("scheduled_at", `${nextDay(range.to)}T00:00:00Z`)
       .limit(1000);
+    if (placementIds !== null) {
+      q = q.in("placement_id", placementIds);
+    }
+    const { data, error } = await q;
     if (error) throw error;
     const byStatus: Record<string, number> = {};
     for (const j of (data ?? []) as Array<{ status: string }>) {

@@ -15,6 +15,7 @@ import {
   defaultDateRange,
   formatMetricValue,
   integrationBackoffSeconds,
+  isPeriodFullyContained,
   isSnapshotStale,
   sumByMetric,
 } from "@/features/analytics/metrics";
@@ -141,7 +142,22 @@ describe("aggregateLatestWins (impor ulang menimpa)", () => {
   });
 });
 
-describe("sumByMetric", () => {
+describe("isPeriodFullyContained (F-1 Batch 6)", () => {
+    it("periode yang sepenuhnya di dalam rentang dihitung", () => {
+      expect(isPeriodFullyContained("2026-11-01", "2026-11-30", "2026-11-01", "2026-11-30")).toBe(true);
+      expect(isPeriodFullyContained("2026-11-05", "2026-11-10", "2026-11-01", "2026-11-30")).toBe(true);
+      expect(isPeriodFullyContained("2026-11-01", "2026-11-01", "2026-11-01", "2026-11-30")).toBe(true);
+    });
+
+    it("periode yang hanya sebagian masuk rentang tidak dihitung", () => {
+      expect(isPeriodFullyContained("2026-10-25", "2026-11-05", "2026-11-01", "2026-11-30")).toBe(false);
+      expect(isPeriodFullyContained("2026-11-25", "2026-12-05", "2026-11-01", "2026-11-30")).toBe(false);
+      expect(isPeriodFullyContained("2026-10-01", "2026-12-31", "2026-11-01", "2026-11-30")).toBe(false);
+      expect(isPeriodFullyContained("2026-12-01", "2026-12-31", "2026-11-01", "2026-11-30")).toBe(false);
+    });
+  });
+
+  describe("sumByMetric", () => {
   it("menjumlahkan per kunci", () => {
     const m = sumByMetric([
       { metric_key: "reach", value: 100 },
@@ -244,7 +260,7 @@ describe("CSV analytics (ASUMSI-7E)", () => {
     ).toMatchObject({ ok: false, error: expect.stringContaining("'akun'") });
   });
 
-  it("nilai negatif / bukan angka / tanggal di luar periode / subject_ref bukan UUID ditolak", () => {
+  it("nilai negatif ditolak kecuali followers_net_change / bukan angka / tanggal di luar periode / subject_ref bukan UUID ditolak", () => {
     expect(
       validateAnalyticsCsvRow({ ...validRow, value: "-5" }, "2026-11-01", "2026-11-30", 2),
     ).toMatchObject({ ok: false });
@@ -259,7 +275,34 @@ describe("CSV analytics (ASUMSI-7E)", () => {
     ).toMatchObject({ ok: false });
   });
 
-  it("video_views/conversions tanpa source_notes ditolak (ASUMSI-7C)", () => {
+  it("nilai negatif diterima hanya untuk followers_net_change (F-4 Batch 6)", () => {
+      expect(
+        validateAnalyticsCsvRow(
+          { ...validRow, metric_key: "followers_net_change", value: "-5" },
+          "2026-11-01",
+          "2026-11-30",
+          2,
+        ),
+      ).toMatchObject({ ok: true });
+      expect(
+        validateAnalyticsCsvRow(
+          { ...validRow, metric_key: "followers_net_change", value: "-5.5" },
+          "2026-11-01",
+          "2026-11-30",
+          2,
+        ),
+      ).toMatchObject({ ok: true });
+      expect(
+        validateAnalyticsCsvRow(
+          { ...validRow, metric_key: "followers_net_change", value: "abc" },
+          "2026-11-01",
+          "2026-11-30",
+          2,
+        ),
+      ).toMatchObject({ ok: false });
+    });
+
+    it("video_views/conversions tanpa source_notes ditolak (ASUMSI-7C)", () => {
     expect(
       validateAnalyticsCsvRow(
         { ...validRow, metric_key: "video_views", unit: "tayangan", source_notes: "" },

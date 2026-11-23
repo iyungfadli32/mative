@@ -80,7 +80,13 @@ export function AnalyticsDashboard({
                 : `Lengkap: ${summary.placementCoverage.withMetrics} dari ${summary.placementCoverage.total} placement punya metrik di periode ini.`}
           </p>
           <p className="mt-2">
-            Semua angka dari impor manual/CSV berlabel — tanpa periode pembanding di Phase 7.
+            Total di atas hanya menjumlah periode impor yang sepenuhnya berada
+            dalam rentang yang dipilih
+            {summary.partialPeriodRows > 0
+              ? ` — ${summary.partialPeriodRows} baris periode impor hanya sebagian masuk rentang ini sehingga tidak dihitung.`
+              : "."}{" "}
+            Semua angka dari impor manual/CSV berlabel — tanpa periode
+            pembanding di Phase 7.
           </p>
         </div>
       </section>

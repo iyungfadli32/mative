@@ -117,6 +117,8 @@ export type DashboardSummary = {
   }>;
   /** Jumlah placement di workspace vs yang punya metrik di periode ini. */
   placementCoverage: { withMetrics: number; total: number };
+  /** Jumlah baris metrik (latest-wins) yang periodenya hanya sebagian masuk rentang sehingga TIDAK dihitung di KPI (F-1, Batch 6). */
+  partialPeriodRows: number;
 };
 
 /** Satu baris laporan performa konten. */

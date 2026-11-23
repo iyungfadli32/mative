@@ -99,6 +99,14 @@ export async function GET(req: NextRequest) {
       t.unit,
       source,
     ]);
+    if (summaryRes.data.partialPeriodRows > 0) {
+      lines.push([
+        "Catatan periode",
+        `${summaryRes.data.partialPeriodRows} baris periode impor hanya sebagian masuk rentang ${from} s.d. ${to} sehingga tidak dihitung dalam total di atas.`,
+        "",
+        "",
+      ]);
+    }
     return csvResponse(filename, exportReportCsv(["Metrik", "Nilai", "Satuan", "Sumber"], lines));
   }
 
@@ -143,7 +151,7 @@ export async function GET(req: NextRequest) {
 
   if (report === "campaign") {
     const [metricsRes, namesRes] = await Promise.all([
-      listCampaignMetrics(supabase, workspaceId, { from, to }),
+      listCampaignMetrics(supabase, workspaceId, range),
       listCampaignNames(supabase, workspaceId),
     ]);
     if (!metricsRes.ok || !namesRes.ok) {
@@ -190,7 +198,7 @@ export async function GET(req: NextRequest) {
   // report === "publishing"
   const [summaryRes, volumeRes] = await Promise.all([
     getDashboardSummary(supabase, workspaceId, range),
-    getPublishingVolume(supabase, workspaceId, { from, to }),
+    getPublishingVolume(supabase, workspaceId, range),
   ]);
   if (!summaryRes.ok || !volumeRes.ok) {
     return errorJson("UNAVAILABLE", ANALYTICS_TABLES_UNAVAILABLE_ID, 503);

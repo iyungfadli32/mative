@@ -13,7 +13,8 @@
  *   lihat tabel referensi di halaman impor).
  * - metric_key wajib kunci impor (12); turunan ditolak (dihitung).
  * - unit wajib sama dengan unit kanonis kunci itu.
- * - value wajib angka ≥ 0 (regex sama dengan RPC: ^[0-9]+(\.[0-9]+)?$).
+ * - value wajib angka ≥ 0 (regex sama dengan RPC: ^[0-9]+(\.[0-9]+)?$), KECUALI
+ *   followers_net_change yang boleh negatif (mis. -5).
  * - Duplikat (subject + kunci) dalam satu file ditolak.
  */
 import { parseCsv, serializeCsvRow } from "@/lib/csv";
@@ -43,6 +44,7 @@ export type ValidatedAnalyticsCsvRow = {
 const UUID_RE =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 const VALUE_RE = /^[0-9]+(\.[0-9]+)?$/;
+const NEGATIVE_VALUE_RE = /^-?[0-9]+(\.[0-9]+)?$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Gabung label sumber ke source_notes (provenance, bukan klaim integrasi). */
@@ -91,11 +93,16 @@ export function validateAnalyticsCsvRow(
     return fail(`metric_key '${metricKey}' tidak dikenal (lihat katalog 14 kunci).`);
   }
   const valueRaw = (row.value ?? "").trim();
-  if (!VALUE_RE.test(valueRaw)) {
-    return fail("value harus angka ≥ 0 (mis. 1000 atau 12.5).");
+  const valueRe = metricKey === "followers_net_change" ? NEGATIVE_VALUE_RE : VALUE_RE;
+  if (!valueRe.test(valueRaw)) {
+    return fail(
+      metricKey === "followers_net_change"
+        ? "value harus angka (boleh negatif, mis. -5)."
+        : "value harus angka ≥ 0 (mis. 1000 atau 12.5).",
+    );
   }
   const value = Number(valueRaw);
-  if (!Number.isFinite(value) || value < 0) {
+  if (!Number.isFinite(value) || (value < 0 && metricKey !== "followers_net_change")) {
     return fail("value harus angka ≥ 0.");
   }
   const unit = (row.unit ?? "").trim();

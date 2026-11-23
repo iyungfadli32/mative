@@ -75,10 +75,10 @@ async function LaporanContent({
   const [summaryRes, campaignRes, contentRes, snapshotsRes, volumeRes, brandsRes, namesRes] =
     await Promise.all([
       getDashboardSummary(supabase, workspaceId, range),
-      listCampaignMetrics(supabase, workspaceId, { from, to }),
+      listCampaignMetrics(supabase, workspaceId, range),
       getContentPerformance(supabase, workspaceId, range),
       listSnapshots(supabase, workspaceId, range),
-      getPublishingVolume(supabase, workspaceId, { from, to }),
+      getPublishingVolume(supabase, workspaceId, range),
       listBrandsForWorkspace(supabase, workspaceId),
       listCampaignNames(supabase, workspaceId),
     ]);

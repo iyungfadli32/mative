@@ -119,6 +119,21 @@ export function aggregateLatestWins(rows: LatestWinsRowInput[]): AggregatedMetri
     .sort((a, b) => a.metric_key.localeCompare(b.metric_key));
 }
 
+/**
+ * F-1 (Batch 6): sebuah periode impor hanya dihitung di KPI bila sepenuhnya
+ * berada dalam rentang yang dipilih. Baris metrik yang periodenya hanya
+ * sebagian tumpang-tindih TIDAK dihitung - nilai penuhnya bukan milik
+ * rentang ini. Tanggal ISO (YYYY-MM-DD) bisa dibandingkan sebagai string.
+ */
+export function isPeriodFullyContained(
+  periodStart: string,
+  periodEnd: string,
+  from: string,
+  to: string,
+): boolean {
+  return periodStart >= from && periodEnd <= to;
+}
+
 /** Jumlah sederhana per kunci (dipakai bila baris sudah latest-wins). */
 export function sumByMetric(
   rows: Array<{ metric_key: string; value: number }>,
