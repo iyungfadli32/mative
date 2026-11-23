@@ -236,6 +236,40 @@ export async function assignWorkflowStepAction(
   const role = await requireRole(parsed.data.workspaceId, user.id);
   if (!role || !canManageApproval(role))
     return fail("Hanya owner/admin/manager yang boleh mengatur penugasan workflow.");
+  // Batch 5 (0031) F-03: jangan tugaskan submitter request aktif ke langkah workflow
+  // itu (pemisahan tugas) - kecuali workspace mengizinkan self-approval.
+  if (parsed.data.assigneeUserId) {
+    const { data: stepRow } = await supabase
+      .from("approval_steps")
+      .select("workflow_id")
+      .eq("id", parsed.data.stepId)
+      .single();
+    if (stepRow) {
+      const { data: selfApprovalRow } = await supabase
+        .from("workspace_settings")
+        .select("value_json")
+        .eq("workspace_id", parsed.data.workspaceId)
+        .eq("key", "approval.allow_self_approval")
+        .limit(1);
+      const allowSelfApproval =
+        ((selfApprovalRow ?? [])[0]?.value_json as { enabled?: boolean } | undefined)?.enabled ??
+        false;
+      if (!allowSelfApproval) {
+        const { data: ownRequest } = await supabase
+          .from("approval_requests")
+          .select("id")
+          .eq("workflow_id", stepRow.workflow_id)
+          .eq("submitted_by", parsed.data.assigneeUserId)
+          .eq("status", "in_review")
+          .limit(1)
+          .maybeSingle();
+        if (ownRequest)
+          return fail(
+            "Pengguna tersebut sedang mengajukan approval pada workflow ini - tugaskan approver lain (pemisahan tugas).",
+          );
+      }
+    }
+  }
   const { error } = await supabase
     .from("approval_steps")
     .update({

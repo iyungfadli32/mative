@@ -7,6 +7,7 @@ import {
   getCriticalFields,
   isClientCommentAllowed,
   isClientReviewEnabled,
+  isSelfApprovalAllowed,
   listApprovalQueue,
 } from "@/features/approval/queries";
 import { APPROVAL_QUEUE_TABS } from "@/features/approval/constants";
@@ -162,13 +163,14 @@ async function PersetujuanContent({
   });
 
   const canManage = ["owner", "admin", "manager"].includes(role);
-  const [clientReviewEnabled, clientCanComment, criticalFields] = canManage
+  const [clientReviewEnabled, clientCanComment, criticalFields, allowSelfApproval] = canManage
     ? await Promise.all([
         isClientReviewEnabled(supabase, workspaceId),
         isClientCommentAllowed(supabase, workspaceId),
         getCriticalFields(supabase, workspaceId),
+        isSelfApprovalAllowed(supabase, workspaceId),
       ])
-    : [false, false, [] as string[]];
+    : [false, false, [] as string[], false];
 
   return (
     <div className="flex flex-col gap-4">
@@ -178,6 +180,7 @@ async function PersetujuanContent({
           workspaceId={workspaceId}
           clientReviewEnabled={clientReviewEnabled}
           clientCanComment={clientCanComment}
+          allowSelfApproval={allowSelfApproval}
           criticalFields={criticalFields}
         />
       ) : null}

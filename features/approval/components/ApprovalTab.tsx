@@ -19,6 +19,7 @@ import {
 import { isActiveRequestStatus } from "@/features/approval/transitions";
 import type { ApprovalWorkflow } from "@/features/approval/types";
 import { DecisionForm } from "./DecisionForm";
+import { ReapprovalRecoveryForm } from "./ReapprovalRecoveryForm";
 import { StepAssignmentForm } from "./StepAssignmentForm";
 import { SubmitClientReviewForm } from "./SubmitClientReviewForm";
 import { SubmitForApprovalForm } from "./SubmitForApprovalForm";
@@ -176,6 +177,30 @@ export async function ApprovalTab({
           ⚠️ Request aktif ini menunjuk versi lama (bukan v{latestVersionNumber}). Keputusan atas
           versi basi akan ditolak server — ajukan ulang versi terbaru bila perlu.
         </p>
+      ) : null}
+
+      {activeRequest?.status === "reapproval_required" ? (
+        <div
+          role="alert"
+          className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+        >
+          <p className="font-medium">
+            Konten ini berubah sesudah disetujui - perlu approval ulang.
+          </p>
+          <p>
+            Approval sebelumnya tidak lagi berlaku karena ada perubahan pada field kritis sesudah
+            konten disetujui. Untuk memulihkan: pindahkan status ke Editing, perbaiki konten, lalu
+            ajukan ulang approval.
+          </p>
+          {productionStatus === "approved" ? (
+            <ReapprovalRecoveryForm contentItemId={contentItemId} workspaceId={workspaceId} />
+          ) : (
+            <p>
+              Konten sudah berada di status {productionStatus} - lanjutkan perbaikan lalu ajukan
+              ulang approval.
+            </p>
+          )}
+        </div>
       ) : null}
 
       {activeRequest ? (

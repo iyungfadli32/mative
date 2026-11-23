@@ -291,6 +291,21 @@ export async function isClientReviewEnabled(
 }
 
 /** Apakah workspace mengizinkan komentar klien di portal? (default TIDAK.) */
+// Batch 5 (0031) F-03: setelan workspace allow_self_approval (default: mati).
+export async function isSelfApprovalAllowed(
+  supabase: SupabaseClient,
+  workspaceId: string,
+): Promise<boolean> {
+  const { data } = await supabase
+    .from("workspace_settings")
+    .select("value_json")
+    .eq("workspace_id", workspaceId)
+    .eq("key", "approval.allow_self_approval")
+    .limit(1);
+  const row = (data ?? [])[0] as { value_json?: { enabled?: boolean } } | undefined;
+  return row?.value_json?.enabled ?? false;
+}
+
 export async function isClientCommentAllowed(
   supabase: SupabaseClient,
   workspaceId: string,

@@ -15,11 +15,13 @@ export function ApprovalSettingsForm({
   workspaceId,
   clientReviewEnabled,
   clientCanComment,
+  allowSelfApproval,
   criticalFields,
 }: {
   workspaceId: string;
   clientReviewEnabled: boolean;
   clientCanComment: boolean;
+  allowSelfApproval: boolean;
   criticalFields: string[];
 }) {
   const [state, formAction, pending] = useActionState(updateApprovalSettingsAction, {
@@ -55,6 +57,21 @@ export function ApprovalSettingsForm({
         <select
           name="clientCanComment"
           defaultValue={clientCanComment ? "true" : "false"}
+          className="h-9 rounded-[10px] border border-[var(--mt-border)] bg-[var(--mt-surface)] px-3 text-sm font-normal"
+        >
+          <option value="true">Diizinkan</option>
+          <option value="false">Tidak diizinkan</option>
+        </select>
+      </label>
+      <label className="flex flex-col gap-1 text-sm font-medium">
+        Self-approval (pengaju memutuskan request sendiri)
+        <span className="text-xs font-normal text-[var(--mt-text-muted)]">
+          Default: mati (pemisahan tugas). Aktifkan hanya untuk workspace satu orang supaya pengaju
+          bisa menyetujui request-nya sendiri.
+        </span>
+        <select
+          name="allowSelfApproval"
+          defaultValue={allowSelfApproval ? "true" : "false"}
           className="h-9 rounded-[10px] border border-[var(--mt-border)] bg-[var(--mt-surface)] px-3 text-sm font-normal"
         >
           <option value="true">Diizinkan</option>

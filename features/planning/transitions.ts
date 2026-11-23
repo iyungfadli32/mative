@@ -50,8 +50,16 @@ export function isDistributionStatus(value: string): value is DistributionStatus
  * Apakah transisi production from → to diizinkan (tanpa memeriksa izin role)?
  * Aturan exception didahulukan: dari exception hanya ke editing/idea.
  */
-export function isValidProductionTransition(from: ProductionStatus, to: ProductionStatus): boolean {
+export function isValidProductionTransition(
+  from: ProductionStatus,
+  to: ProductionStatus,
+  opts?: { hasReapprovalRequiredRequest?: boolean },
+): boolean {
   if (from === to) return false;
+  // Batch 5 (0031) F-02: konten approved yang berubah sesudah disetujui (ada request
+  // berstatus reapproval_required) boleh kembali ke editing untuk diperbaiki lalu
+  // diajukan ulang. RPC transition_content_item_status menegakkan syarat yang sama.
+  if (from === "approved" && to === "editing" && opts?.hasReapprovalRequiredRequest) return true;
   // Batch 4 (0030) T-6: arsip dari status apa pun (selain archived), dengan alasan.
   if (to === "archived" && from !== "archived") return true;
   if ((EXCEPTIONS as readonly string[]).includes(from)) {

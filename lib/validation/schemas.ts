@@ -782,6 +782,8 @@ export const updateApprovalSettingsSchema = z.object({
   workspaceId: z.string().uuid("workspace_id tidak valid."),
   clientReviewEnabled: z.enum(["true", "false", ""]).default(""),
   clientCanComment: z.enum(["true", "false", ""]).default(""),
+  // Batch 5 (0031) F-03: setelan workspace allow_self_approval (default mati).
+  allowSelfApproval: z.enum(["true", "false", ""]).default(""),
   criticalFields: z.string().default(""),
 });
 

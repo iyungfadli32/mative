@@ -797,7 +797,23 @@ export async function transitionContentAction(
     return fail("Anda hanya boleh mengubah status konten yang ditugaskan kepada Anda.");
   const from = item.production_status as Parameters<typeof isValidProductionTransition>[0];
   const to = parsed.data.toStatus;
-  if (!isValidProductionTransition(from, to))
+  // Batch 5 (0031) F-02: pemulihan reapproval - transisi approved -> editing legal
+  // bila ada request approval berstatus reapproval_required untuk konten ini.
+  // Penegakan utamanya ada di RPC transition_content_item_status; flag ini hanya
+  // dipakai agar cermin validasi TS (isValidProductionTransition) sejalan dengan RPC.
+  const { data: reapprovalRequest } = await supabase
+    .from("approval_requests")
+    .select("id")
+    .eq("target_type", "content_item")
+    .eq("target_id", parsed.data.contentItemId)
+    .eq("status", "reapproval_required")
+    .limit(1)
+    .maybeSingle();
+  if (
+    !isValidProductionTransition(from, to, {
+      hasReapprovalRequiredRequest: reapprovalRequest !== null,
+    })
+  )
     return fail(`Transisi ${from} → ${to} tidak diizinkan.`);
   if (productionTransitionRequiresReason(from, to) && !parsed.data.reason.trim())
     return fail("Alasan wajib diisi untuk transisi ini.");
