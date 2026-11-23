@@ -648,6 +648,57 @@ export const assetConfirmUploadSchema = z.object({
   workspaceId: z.string().uuid("workspace_id tidak valid."),
 });
 
+// Perbaikan (c) T-1: unggah ulang aset yang gagal (baris DB dipakai ulang,
+// alur signed URL + confirm sama seperti unggah baru).
+export const assetRetryUploadSchema = z.object({
+  assetId: z.string().uuid("asset_id tidak valid."),
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  fileName: z.string().trim().min(1, "Nama file wajib diisi.").max(200),
+  byteSize: z.coerce
+    .number()
+    .int("Ukuran file tidak valid.")
+    .positive("Ukuran file tidak valid.")
+    .max(MAX_ASSET_BYTES, "File melebihi batas 10 MB."),
+  mimeType: z.enum(ALLOWED_ASSET_MIME_TYPES, {
+    error: "Jenis file tidak diizinkan.",
+  }),
+});
+
+// Perbaikan (c) T-3: unggah versi baru aset (nomor versi dihitung server).
+export const assetPrepareVersionUploadSchema = z.object({
+  assetId: z.string().uuid("asset_id tidak valid."),
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  fileName: z.string().trim().min(1, "Nama file wajib diisi.").max(200),
+  byteSize: z.coerce
+    .number()
+    .int("Ukuran file tidak valid.")
+    .positive("Ukuran file tidak valid.")
+    .max(MAX_ASSET_BYTES, "File melebihi batas 10 MB."),
+  mimeType: z.enum(ALLOWED_ASSET_MIME_TYPES, {
+    error: "Jenis file tidak diizinkan.",
+  }),
+});
+
+export const assetConfirmVersionUploadSchema = z.object({
+  assetId: z.string().uuid("asset_id tidak valid."),
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  versionNumber: z.coerce.number().int().positive("Nomor versi tidak valid."),
+  fileName: z.string().trim().min(1, "Nama file wajib diisi.").max(200),
+});
+
+// Perbaikan (c) T-3: pulihkan versi aset lama (mengikuti restoreVersionSchema).
+export const assetRestoreVersionSchema = z.object({
+  assetId: z.string().uuid("asset_id tidak valid."),
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  versionId: z.string().uuid("version_id tidak valid."),
+});
+
+// Perbaikan (c) T-1: penyapu unggahan yang terjebak 'uploading'.
+export const sweepStaleAssetUploadsSchema = z.object({
+  workspaceId: z.string().uuid("workspace_id tidak valid."),
+  olderThanMinutes: z.coerce.number().int().min(1).max(10080).default(60),
+});
+
 export const restoreVersionSchema = z.object({
   contentItemId: z.string().uuid("content_item_id tidak valid."),
   workspaceId: z.string().uuid("workspace_id tidak valid."),

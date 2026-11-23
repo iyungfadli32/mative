@@ -3,8 +3,10 @@
 import { useActionState } from "react";
 import { Button } from "@/components/ui/Button";
 import { deleteAssetAction, detachAssetAction, type ProductionActionResult } from "../actions";
+import { AssetRetryButton } from "./AssetRetryButton";
+import { AssetVersionHistory } from "./AssetVersionHistory";
 import { ASSET_USAGE_ROLE_LABELS } from "../constants";
-import type { Asset, ContentAsset } from "../types";
+import type { Asset, AssetVersion, ContentAsset } from "../types";
 import { formatInTimezone } from "@/lib/time";
 
 /** Kartu aset di pustaka (P3-07): pratinjau lewat signed URL, metadata, hapus. */
@@ -14,12 +16,16 @@ export function AssetCard({
   uploaderName,
   canDelete,
   workspaceId,
+  versions = [],
+  canUpload = false,
 }: {
   asset: Asset;
   signedUrl: string | null;
   uploaderName: string | null;
   canDelete: boolean;
   workspaceId: string;
+  versions?: AssetVersion[];
+  canUpload?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(deleteAssetAction, {
     ok: false,
@@ -76,6 +82,18 @@ export function AssetCard({
           {state.message}
         </p>
       ) : null}
+      {asset.processing_status === "failed" && canUpload ? (
+        <div className="mt-3">
+          <AssetRetryButton assetId={asset.id} workspaceId={workspaceId} />
+        </div>
+      ) : null}
+      <AssetVersionHistory
+        workspaceId={workspaceId}
+        assetId={asset.id}
+        currentObjectKey={asset.object_key}
+        versions={versions}
+        canManage={canUpload}
+      />
     </li>
   );
 }

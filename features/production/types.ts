@@ -13,7 +13,7 @@ export type TaskPriority = "low" | "medium" | "high" | "urgent";
 export type TaskParentType = "content_item" | "campaign";
 export type AssetUsageRole = "primary" | "reference" | "thumbnail" | "attachment";
 export type CommentTargetType = "content_item" | "campaign" | "task";
-export type NotificationType = "mention" | "task_assigned" | "task_status_change" | "comment_reply";
+export type NotificationType = "mention" | "task_assigned" | "task_status_change" | "comment_reply" | "comment_created";
 export type AssetProcessingStatus = "uploading" | "ready" | "failed";
 
 export type Task = {

@@ -17,10 +17,15 @@ import {
 } from "@/features/production/transitions";
 import {
   assetConfirmUploadSchema,
+  assetConfirmVersionUploadSchema,
   assetPrepareUploadSchema,
+  assetPrepareVersionUploadSchema,
+  assetRestoreVersionSchema,
+  assetRetryUploadSchema,
   briefSnapshotSchema,
   briefTemplateSchemaJson,
   commentSchema,
+  sweepStaleAssetUploadsSchema,
   taskSchema,
 } from "@/lib/validation/schemas";
 import { ALLOWED_ASSET_MIME_TYPES, MAX_ASSET_BYTES } from "@/features/production/constants";
@@ -304,6 +309,124 @@ describe("skema Zod upload signed URL (perbaikan (c) K-1)", () => {
       assetConfirmUploadSchema.safeParse({
         assetId: "bukan-uuid",
         workspaceId: "a1111111-1111-4111-8111-111111111111",
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("skema Zod pemulihan unggah + versioning aset (perbaikan (c) T-1/T-3)", () => {
+  const ws = "a1111111-1111-4111-8111-111111111111";
+  const asset = "b2222222-2222-4222-8222-222222222222";
+  const version = "c3333333-3333-4333-8333-333333333333";
+
+  it("assetRetryUploadSchema menerima metadata retry yang valid", () => {
+    expect(
+      assetRetryUploadSchema.safeParse({
+        assetId: asset,
+        workspaceId: ws,
+        fileName: "logo.png",
+        byteSize: 2 * 1024 * 1024,
+        mimeType: "image/png",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("assetRetryUploadSchema menolak assetId bukan UUID + ukuran di atas 10 MB", () => {
+    expect(
+      assetRetryUploadSchema.safeParse({
+        assetId: "bukan-uuid",
+        workspaceId: ws,
+        fileName: "logo.png",
+        byteSize: MAX_ASSET_BYTES + 1,
+        mimeType: "image/png",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("assetPrepareVersionUploadSchema menerima metadata versi baru yang valid", () => {
+    expect(
+      assetPrepareVersionUploadSchema.safeParse({
+        assetId: asset,
+        workspaceId: ws,
+        fileName: "logo-v2.png",
+        byteSize: 2 * 1024 * 1024,
+        mimeType: "image/png",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("assetPrepareVersionUploadSchema menolak MIME di luar allowlist", () => {
+    expect(
+      assetPrepareVersionUploadSchema.safeParse({
+        assetId: asset,
+        workspaceId: ws,
+        fileName: "logo.gif",
+        byteSize: 1024,
+        mimeType: "image/gif",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("assetConfirmVersionUploadSchema menerima nomor versi 2 yang valid", () => {
+    expect(
+      assetConfirmVersionUploadSchema.safeParse({
+        assetId: asset,
+        workspaceId: ws,
+        versionNumber: 2,
+        fileName: "logo-v2.png",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("assetConfirmVersionUploadSchema menolak versionNumber 0", () => {
+    expect(
+      assetConfirmVersionUploadSchema.safeParse({
+        assetId: asset,
+        workspaceId: ws,
+        versionNumber: 0,
+        fileName: "logo-v2.png",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("assetRestoreVersionSchema menerima pasangan aset + versi yang valid", () => {
+    expect(
+      assetRestoreVersionSchema.safeParse({
+        assetId: asset,
+        workspaceId: ws,
+        versionId: version,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("assetRestoreVersionSchema menolak versionId bukan UUID", () => {
+    expect(
+      assetRestoreVersionSchema.safeParse({
+        assetId: asset,
+        workspaceId: ws,
+        versionId: "bukan-uuid",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("sweepStaleAssetUploadsSchema menerima olderThanMinutes 60 + default 60", () => {
+    expect(
+      sweepStaleAssetUploadsSchema.safeParse({
+        workspaceId: ws,
+        olderThanMinutes: 60,
+      }).success,
+    ).toBe(true);
+    expect(
+      sweepStaleAssetUploadsSchema.safeParse({ workspaceId: ws }).data
+        ?.olderThanMinutes,
+    ).toBe(60);
+  });
+
+  it("sweepStaleAssetUploadsSchema menolak olderThanMinutes 0", () => {
+    expect(
+      sweepStaleAssetUploadsSchema.safeParse({
+        workspaceId: ws,
+        olderThanMinutes: 0,
       }).success,
     ).toBe(false);
   });

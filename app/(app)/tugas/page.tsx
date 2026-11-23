@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { listCampaigns, listContentItems, listWorkspaceMembers } from "@/features/planning/queries";
 import { EMPTY_FILTERS } from "@/features/planning/search";
 import { PLANNING_TABLES_UNAVAILABLE_ID } from "@/features/planning/context";
-import { listMyNotifications, listMyTasks, listTasks } from "@/features/production/queries";
+import { countUnreadNotifications, listMyNotifications, listMyTasks, listTasks } from "@/features/production/queries";
 import { TaskForm } from "@/features/production/components/TaskForm";
 import { TaskStatusForm } from "@/features/production/components/TaskStatusForm";
 import { TaskChecklist } from "@/features/production/components/TaskChecklist";
@@ -30,6 +30,7 @@ export default async function TugasPage({
   const sp = await searchParams;
   const workspaceParam = typeof sp.workspace === "string" ? sp.workspace : undefined;
   const tab = sp.tab === "team" ? "team" : "my";
+  const notificationPage = Math.max(1, Number.parseInt(typeof sp.notif === "string" ? sp.notif : "1", 10) || 1);
   return (
     <PlanningShell
       requestedWorkspaceId={workspaceParam}
@@ -42,37 +43,50 @@ export default async function TugasPage({
           role={ctx.role as WorkspaceRole}
           userId={ctx.userId}
           tab={tab}
+
+          notificationPage={notificationPage}
         />
       )}
     </PlanningShell>
   );
 }
 
+const NOTIFICATION_PAGE_SIZE = 20;
+
 async function TugasContent({
   workspaceId,
   role,
   userId,
   tab,
+  notificationPage,
 }: {
   workspaceId: string;
   role: WorkspaceRole;
   userId: string;
   tab: "my" | "team";
+  notificationPage: number;
 }) {
   const supabase = await getSupabaseServerClient();
   if (!supabase) return <p className="text-sm">Supabase belum dikonfigurasi.</p>;
   const canManage = can(role, "manage_tasks");
-  const [mine, team, notifications, contents, campaigns] = await Promise.all([
+  const [mine, team, notifications, unreadTotal, contents, campaigns] = await Promise.all([
     listMyTasks(supabase, workspaceId, userId),
     listTasks(supabase, workspaceId),
-    listMyNotifications(supabase, userId),
+    listMyNotifications(supabase, userId, {
+      limit: NOTIFICATION_PAGE_SIZE + 1,
+      offset: (notificationPage - 1) * NOTIFICATION_PAGE_SIZE,
+    }),
+    countUnreadNotifications(supabase, userId),
     listContentItems(supabase, { ...EMPTY_FILTERS, workspaceId }),
     listCampaigns(supabase, workspaceId),
   ]);
   const unavailable = mine.unavailable || team.unavailable;
   const members = await listWorkspaceMembers(supabase, workspaceId);
   const shown = tab === "my" ? mine.data : team.data;
-  const unread = notifications.data.filter((n) => !n.read_at);
+  const hasNextNotificationPage = notifications.data.length > NOTIFICATION_PAGE_SIZE;
+  const pageNotifications = hasNextNotificationPage
+    ? notifications.data.slice(0, NOTIFICATION_PAGE_SIZE)
+    : notifications.data;
   const parents = [
     ...contents.data.map((c) => ({ id: c.id, title: c.title, kind: "content_item" as const })),
     ...campaigns.data.map((c) => ({ id: c.id, title: c.name, kind: "campaign" as const })),
@@ -225,12 +239,12 @@ async function TugasContent({
       </section>
 
       <section className="rounded-2xl border border-[var(--mt-border)] bg-[var(--mt-surface)] p-4">
-        <h2 className="font-semibold">Notifikasi saya ({unread.length} belum dibaca)</h2>
-        {notifications.data.length === 0 ? (
+        <h2 className="font-semibold">Notifikasi saya ({unreadTotal} belum dibaca)</h2>
+        {pageNotifications.length === 0 ? (
           <p className="mt-2 text-sm text-[var(--mt-text-muted)]">Belum ada notifikasi.</p>
         ) : (
           <ul className="mt-3 flex flex-col gap-2">
-            {notifications.data.map((n) => (
+            {pageNotifications.map((n) => (
               <li
                 key={n.id}
                 className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--mt-border)] p-3 text-sm"
@@ -254,6 +268,25 @@ async function TugasContent({
             ))}
           </ul>
         )}
+        <div className="mt-3 flex items-center gap-3 text-sm">
+          {notificationPage > 1 ? (
+            <a
+              href={"/tugas?tab=" + tab + "&notif=" + String(notificationPage - 1)}
+              className="font-medium text-[var(--mt-teal-700)] underline underline-offset-2"
+            >
+              Sebelumnya
+            </a>
+          ) : null}
+          <span className="text-[var(--mt-text-muted)]">Halaman {notificationPage}</span>
+          {hasNextNotificationPage ? (
+            <a
+              href={"/tugas?tab=" + tab + "&notif=" + String(notificationPage + 1)}
+              className="font-medium text-[var(--mt-teal-700)] underline underline-offset-2"
+            >
+              Berikutnya
+            </a>
+          ) : null}
+        </div>
       </section>
     </div>
   );

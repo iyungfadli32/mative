@@ -1,11 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Popover } from "@/components/ui/Dialog";
 import { Dialog } from "@/components/ui/Dialog";
 import { envStatus } from "@/lib/env";
+import {
+  getNotificationBellAction,
+  markNotificationReadAction,
+} from "@/features/production/actions";
+import { NOTIFICATION_TYPE_LABELS } from "@/features/production/constants";
+import type { AppNotification } from "@/features/production/types";
 
 /**
  * Topbar — Dok 02 §2: global search shell, quick create, notification center,
@@ -22,6 +28,30 @@ export function Topbar({
   onSignOut: () => void;
 }) {
   const [profileOpen, setProfileOpen] = useState(false);
+  // Perbaikan (c) T-4: lonceng notifikasi -- badge belum dibaca + daftar 10
+  // terbaru. Dimuat saat Topbar dipasang dan setiap kali lonceng dibuka.
+  const [bellOpen, setBellOpen] = useState(false);
+  const [bellUnread, setBellUnread] = useState(0);
+  const [bellItems, setBellItems] = useState<AppNotification[]>([]);
+  const [bellLoaded, setBellLoaded] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    getNotificationBellAction()
+      .then((result) => {
+        if (cancelled) return;
+        if (result.ok) {
+          setBellUnread(result.unreadCount);
+          setBellItems(result.notifications);
+        }
+        setBellLoaded(true);
+      })
+      .catch(() => {
+        if (!cancelled) setBellLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
   const [search, setSearch] = useState("");
 
@@ -56,14 +86,85 @@ export function Topbar({
         ＋ Buat cepat
       </Button>
 
-      <Button
-        variant="ghost"
-        size="sm"
-        aria-label="Notifikasi (belum ada notifikasi di fase ini)"
-        title="Notifikasi dasar hadir di Phase 3–4"
-      >
-        🔔
-      </Button>
+      <div className="relative">
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-label={bellUnread > 0 ? "Notifikasi (" + bellUnread + " belum dibaca)" : "Notifikasi"}
+          aria-expanded={bellOpen}
+          aria-haspopup="menu"
+          onClick={() => {
+            const next = !bellOpen;
+            setBellOpen(next);
+            if (next) {
+              void getNotificationBellAction()
+                .then((result) => {
+                  if (result.ok) {
+                    setBellUnread(result.unreadCount);
+                    setBellItems(result.notifications);
+                  }
+                })
+                .catch(() => undefined);
+            }
+          }}
+        >
+          {"\u{1F514}"}
+          {bellUnread > 0 ? (
+            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
+              {bellUnread > 99 ? "99+" : bellUnread}
+            </span>
+          ) : null}
+        </Button>
+        <Popover open={bellOpen} onClose={() => setBellOpen(false)} label="Notifikasi">
+          <p className="px-3 py-2 text-sm font-semibold">Notifikasi</p>
+          {bellItems.length === 0 ? (
+            <p className="px-3 py-2 text-sm text-[var(--mt-text-muted)]">
+              {bellLoaded ? "Belum ada notifikasi." : "Memuat notifikasi..."}
+            </p>
+          ) : (
+            <ul className="max-h-80 overflow-y-auto">
+              {bellItems.map((item) => (
+                <li
+                  key={item.id}
+                  className="flex items-start justify-between gap-2 border-t border-[var(--mt-border)] px-3 py-2 text-sm"
+                >
+                  <span>
+                    <span className="font-medium">{item.title}</span>{" "}
+                    <span className="text-[var(--mt-text-muted)]">
+                      {NOTIFICATION_TYPE_LABELS[item.type]} -{" "}
+                      {new Date(item.created_at).toLocaleDateString("id-ID", {
+                        day: "numeric",
+                        month: "short",
+                      })}
+                    </span>
+                    {item.body ? (
+                      <span className="block text-[var(--mt-text-muted)]">{item.body}</span>
+                    ) : null}
+                  </span>
+                  {!item.read_at ? (
+                    <form action={markNotificationReadAction}>
+                      <input type="hidden" name="notificationId" value={item.id} />
+                      <button
+                        type="submit"
+                        className="shrink-0 text-xs font-medium text-[var(--mt-teal-700)] underline underline-offset-2"
+                      >
+                        Tandai dibaca
+                      </button>
+                    </form>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
+          <Link
+            href="/tugas"
+            onClick={() => setBellOpen(false)}
+            className="block px-3 py-2 text-sm font-medium text-[var(--mt-teal-700)] underline underline-offset-2"
+          >
+            Lihat semua notifikasi
+          </Link>
+        </Popover>
+      </div>
 
       <div className="relative">
         <Button

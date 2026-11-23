@@ -2,7 +2,8 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { PlanningShell } from "@/features/planning/components/PlanningShell";
 import { EmptyState } from "@/components/ui/States";
 import { PLANNING_TABLES_UNAVAILABLE_ID } from "@/features/planning/context";
-import { getAssetSignedUrl, listAssets } from "@/features/production/queries";
+import { sweepStaleAssetUploadsAction } from "@/features/production/actions";
+import { getAssetSignedUrl, listAssetVersionsByAssetIds, listAssets } from "@/features/production/queries";
 import { AssetCard } from "@/features/production/components/AssetCard";
 import { AssetUploadForm } from "@/features/production/components/AssetUploadForm";
 import { can } from "@/lib/permissions";
@@ -37,9 +38,22 @@ export default async function PustakaPage({
 async function PustakaContent({ workspaceId, role }: { workspaceId: string; role: WorkspaceRole }) {
   const supabase = await getSupabaseServerClient();
   if (!supabase) return <p className="text-sm">Supabase belum dikonfigurasi.</p>;
+  // Perbaikan (c) T-1: penyapu berkala -- setiap kali Pustaka dibuka,
+  // unggahan uploading yang lebih tua dari 60 menit ditandai gagal dan
+  // objek Storage yatimnya ikut dihapus. Gagal menyapu tidak menghalangi
+  // halaman (daftar aset tetap ditampilkan apa adanya).
+  try {
+    await sweepStaleAssetUploadsAction({ workspaceId, olderThanMinutes: 60 });
+  } catch {
+    // Abaikan: penyapu tidak boleh merusak halaman Pustaka.
+  }
   const canUpload = can(role, "upload_assets");
   const canDelete = ["owner", "admin", "manager"].includes(role);
   const assets = await listAssets(supabase, workspaceId);
+  const versionsByAsset = await listAssetVersionsByAssetIds(
+    supabase,
+    assets.data.map((asset) => asset.id),
+  );
   const members = await listWorkspaceMembers(supabase, workspaceId);
   const names = new Map(members.map((m) => [m.userId, m.displayName]));
   const signedUrls = new Map<string, string | null>();
@@ -94,6 +108,8 @@ async function PustakaContent({ workspaceId, role }: { workspaceId: string; role
                 uploaderName={asset.uploaded_by ? (names.get(asset.uploaded_by) ?? null) : null}
                 canDelete={canDelete}
                 workspaceId={workspaceId}
+                versions={versionsByAsset.get(asset.id) ?? []}
+                canUpload={canUpload}
               />
             ))}
           </ul>

@@ -31,6 +31,11 @@ import {
   assetDeleteSchema,
   assetDetachSchema,
   assetPrepareUploadSchema,
+  assetConfirmVersionUploadSchema,
+  assetPrepareVersionUploadSchema,
+  assetRestoreVersionSchema,
+  assetRetryUploadSchema,
+  sweepStaleAssetUploadsSchema,
   briefTemplateSchema,
   briefTemplateUpdateSchema,
   briefTemplateSchemaJson,
@@ -52,7 +57,8 @@ import { canEditSpecificContent } from "@/features/planning/transitions";
 import { isValidTaskTransition } from "./transitions";
 import { ASSET_BUCKET, DEFAULT_BRIEF_TEMPLATE_FIELDS } from "./constants";
 import { sanitizeFileName, validateAssetFile } from "./mime";
-import type { BriefTemplate } from "./types";
+import { countUnreadNotifications, listMyNotifications } from "./queries";
+import type { AppNotification, BriefTemplate } from "./types";
 
 export type ProductionActionResult = {
   ok: boolean;
@@ -76,6 +82,18 @@ export type PrepareAssetUploadResult = {
   assetId?: string;
   objectKey?: string;
   signedUrl?: string;
+  versionNumber?: number;
+};
+
+export type SweepStaleAssetUploadsResult = ProductionActionResult & {
+  sweptCount?: number;
+  storageRemoved?: number;
+  storageFailed?: number;
+};
+
+export type NotificationBellResult = ProductionActionResult & {
+  unreadCount: number;
+  notifications: AppNotification[];
 };
 
 const ok = (message: string, extra?: Partial<ProductionActionResult>): ProductionActionResult => ({
@@ -774,6 +792,8 @@ export async function confirmAssetUploadAction(input: {
     asset_id: parsed.data.assetId,
     version_number: 1,
     storage_object_key: objectKey,
+    mime_type: validated.detected.mimeType,
+    byte_size: buffer.byteLength,
     uploaded_by: user.id,
   });
   if (versionError && versionError.code !== "23505") {
@@ -794,6 +814,325 @@ export async function confirmAssetUploadAction(input: {
   if (readyError) return fail(dbErrorMessage(readyError, "Gagal menandai aset siap"));
   revalidateProduction();
   return ok("Aset diunggah.", { assetId: parsed.data.assetId });
+}
+
+// Perbaikan (c) T-1: unggah ulang aset yang gagal -- baris DB dipakai ulang
+// (bukan baris baru), lalu confirmAssetUploadAction yang sama memvalidasi
+// dan mengembalikan status 'ready'. Bila pembuatan signed URL gagal, baris
+// dikembalikan ke 'failed' supaya tetap bisa dicoba lagi.
+export async function prepareAssetRetryUploadAction(
+  input: unknown,
+): Promise<PrepareAssetUploadResult> {
+  const parsed = assetRetryUploadSchema.safeParse(input);
+  if (!parsed.success) return fail("Data unggah ulang aset tidak valid.");
+  const { assetId, workspaceId } = parsed.data;
+  const { supabase, user } = await requireUser();
+  if (!supabase || !user) {
+    return fail(supabase ? "Anda harus masuk dulu." : SUPABASE_NOT_CONFIGURED_ID);
+  }
+  const role = await requireRole(workspaceId, user.id);
+  if (!role || !can(role, "upload_assets")) {
+    return fail("Anda tidak berhak mengunggah aset di workspace ini.");
+  }
+  const { data: asset, error: assetError } = await supabase
+    .from("assets")
+    .select("id, workspace_id, object_key, processing_status")
+    .eq("id", assetId)
+    .eq("workspace_id", workspaceId)
+    .single();
+  if (assetError || !asset) return fail("Aset tidak ditemukan.");
+  if (asset.processing_status !== "failed") {
+    return fail("Hanya aset yang gagal diunggah yang bisa diunggah ulang.");
+  }
+  const { error: resetError } = await supabase
+    .from("assets")
+    .update({ processing_status: "uploading", updated_at: new Date().toISOString() })
+    .eq("id", assetId)
+    .eq("workspace_id", workspaceId);
+  if (resetError) {
+    return fail(dbErrorMessage(resetError, "Gagal menyiapkan unggah ulang aset."));
+  }
+  const admin = getSupabaseAdminClient();
+  if (!admin) {
+    await supabase
+      .from("assets")
+      .update({ processing_status: "failed", updated_at: new Date().toISOString() })
+      .eq("id", assetId)
+      .eq("workspace_id", workspaceId);
+    return fail("Unggahan belum bisa dipakai: kunci service-role belum dikonfigurasi di server.");
+  }
+  const { data: signed, error: signedError } = await admin.storage
+    .from(ASSET_BUCKET)
+    .createSignedUploadUrl(asset.object_key);
+  if (signedError || !signed?.signedUrl) {
+    await supabase
+      .from("assets")
+      .update({ processing_status: "failed", updated_at: new Date().toISOString() })
+      .eq("id", assetId)
+      .eq("workspace_id", workspaceId);
+    return fail("Gagal menyiapkan unggah ulang aset. Coba lagi.");
+  }
+  revalidateProduction();
+  return {
+    ok: true,
+    message: "Siap mengunggah ulang",
+    assetId: asset.id,
+    objectKey: asset.object_key,
+    signedUrl: signed.signedUrl,
+  };
+}
+
+// Perbaikan (c) T-3: siapkan unggahan versi baru aset. Nomor versi dihitung
+// dari riwayat; baris versi baru dibuat saat confirm (bukan di sini) supaya
+// unggahan yang ditinggalkan tidak meninggalkan baris versi setengah jadi.
+export async function prepareAssetVersionUploadAction(
+  input: unknown,
+): Promise<PrepareAssetUploadResult> {
+  const parsed = assetPrepareVersionUploadSchema.safeParse(input);
+  if (!parsed.success) return fail("Data unggah versi aset tidak valid.");
+  const { assetId, workspaceId, fileName } = parsed.data;
+  const { supabase, user } = await requireUser();
+  if (!supabase || !user) {
+    return fail(supabase ? "Anda harus masuk dulu." : SUPABASE_NOT_CONFIGURED_ID);
+  }
+  const role = await requireRole(workspaceId, user.id);
+  if (!role || !can(role, "upload_assets")) {
+    return fail("Anda tidak berhak mengunggah aset di workspace ini.");
+  }
+  const { data: asset, error: assetError } = await supabase
+    .from("assets")
+    .select("id, workspace_id, processing_status")
+    .eq("id", assetId)
+    .eq("workspace_id", workspaceId)
+    .single();
+  if (assetError || !asset) return fail("Aset tidak ditemukan.");
+  if (asset.processing_status !== "ready") {
+    return fail("Versi baru hanya bisa diunggah untuk aset yang sudah siap. Bila gagal, unggah ulang asetnya.");
+  }
+  const { data: latest, error: latestError } = await supabase
+    .from("asset_versions")
+    .select("version_number")
+    .eq("asset_id", assetId)
+    .order("version_number", { ascending: false })
+    .limit(1);
+  if (latestError) {
+    return fail(dbErrorMessage(latestError, "Gagal memuat riwayat versi aset."));
+  }
+  const versionNumber = (latest?.[0]?.version_number ?? 0) + 1;
+  const objectKey =
+    workspaceId + "/" + assetId + "/v" + String(versionNumber) + "-" + sanitizeFileName(fileName);
+  const admin = getSupabaseAdminClient();
+  if (!admin) {
+    return fail("Unggahan belum bisa dipakai: kunci service-role belum dikonfigurasi di server.");
+  }
+  const { data: signed, error: signedError } = await admin.storage
+    .from(ASSET_BUCKET)
+    .createSignedUploadUrl(objectKey);
+  if (signedError || !signed?.signedUrl) {
+    return fail("Gagal menyiapkan unggah versi aset. Coba lagi.");
+  }
+  return {
+    ok: true,
+    message: "Siap mengunggah versi " + String(versionNumber),
+    assetId: asset.id,
+    versionNumber,
+    objectKey,
+    signedUrl: signed.signedUrl,
+  };
+}
+
+// Perbaikan (c) T-3: konfirmasi unggahan versi baru -- validasi file sama
+// seperti confirmAssetUploadAction, lalu simpan baris versi dan arahkan aset
+// ke object_key versi baru. Bila validasi gagal, objek versi dihapus dan
+// aset tetap menunjuk versi lama (tidak ditandai gagal).
+export async function confirmAssetVersionUploadAction(
+  input: unknown,
+): Promise<ProductionActionResult> {
+  const parsed = assetConfirmVersionUploadSchema.safeParse(input);
+  if (!parsed.success) return fail("Data konfirmasi versi aset tidak valid.");
+  const { assetId, workspaceId, versionNumber, fileName } = parsed.data;
+  const { supabase, user } = await requireUser();
+  if (!supabase || !user) {
+    return fail(supabase ? "Anda harus masuk dulu." : SUPABASE_NOT_CONFIGURED_ID);
+  }
+  const role = await requireRole(workspaceId, user.id);
+  if (!role || !can(role, "upload_assets")) {
+    return fail("Anda tidak berhak mengunggah aset di workspace ini.");
+  }
+  const { data: asset, error: assetError } = await supabase
+    .from("assets")
+    .select("id, workspace_id, object_key, processing_status")
+    .eq("id", assetId)
+    .eq("workspace_id", workspaceId)
+    .single();
+  if (assetError || !asset) return fail("Aset tidak ditemukan.");
+  const objectKey =
+    workspaceId + "/" + assetId + "/v" + String(versionNumber) + "-" + sanitizeFileName(fileName);
+  const admin = getSupabaseAdminClient();
+  if (!admin) {
+    return fail("Konfirmasi unggahan belum bisa dipakai: kunci service-role belum dikonfigurasi di server.");
+  }
+  const { data: downloaded, error: downloadError } = await admin.storage
+    .from(ASSET_BUCKET)
+    .download(objectKey);
+  if (downloadError || !downloaded) {
+    return fail("File versi belum terunggah ke penyimpanan. Unggah dulu, lalu konfirmasi.");
+  }
+  const buffer = Buffer.from(await downloaded.arrayBuffer());
+  const validated = validateAssetFile(buffer);
+  if (!validated.ok) {
+    await admin.storage.from(ASSET_BUCKET).remove([objectKey]);
+    return fail(validated.message ?? "File versi tidak valid.");
+  }
+  const { error: versionError } = await supabase.from("asset_versions").insert({
+    asset_id: assetId,
+    version_number: versionNumber,
+    storage_object_key: objectKey,
+    mime_type: validated.detected.mimeType,
+    byte_size: buffer.byteLength,
+    uploaded_by: user.id,
+  });
+  if (versionError) {
+    if (versionError.code === "23505") {
+      return fail("Versi ini sudah dikonfirmasi. Siapkan unggahan versi baru.");
+    }
+    return fail(dbErrorMessage(versionError, "Gagal menyimpan versi aset."));
+  }
+  const { error: updateError } = await supabase
+    .from("assets")
+    .update({
+      object_key: objectKey,
+      mime_type: validated.detected.mimeType,
+      byte_size: buffer.byteLength,
+      width: validated.detected.width ?? null,
+      height: validated.detected.height ?? null,
+      checksum: validated.detected.sha256,
+      processing_status: "ready",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", assetId)
+    .eq("workspace_id", workspaceId);
+  if (updateError) return fail(dbErrorMessage(updateError, "Gagal mengaktifkan versi aset."));
+  revalidateProduction();
+  return {
+    ok: true,
+    message: "Versi " + String(versionNumber) + " aset berhasil diunggah.",
+    assetId,
+    versionNumber,
+  };
+}
+
+// Perbaikan (c) T-3: pulihkan versi aset lama -- mengikuti restoreVersionAction
+// (konten). RPC restore_asset_version mencatat pulihan sebagai versi BARU.
+export async function restoreAssetVersionAction(
+  _prevState: ProductionActionResult,
+  formData: FormData,
+): Promise<ProductionActionResult> {
+  const parsed = assetRestoreVersionSchema.safeParse({
+    assetId: formData.get("assetId"),
+    workspaceId: formData.get("workspaceId"),
+    versionId: formData.get("versionId"),
+  });
+  if (!parsed.success) return fail("Data pemulihan versi aset tidak valid.");
+  const { assetId, workspaceId, versionId } = parsed.data;
+  const { supabase, user } = await requireUser();
+  if (!supabase || !user) {
+    return fail(supabase ? "Anda harus masuk dulu." : SUPABASE_NOT_CONFIGURED_ID);
+  }
+  const role = await requireRole(workspaceId, user.id);
+  if (!role || !can(role, "upload_assets")) {
+    return fail("Anda tidak berhak memulihkan versi aset di workspace ini.");
+  }
+  const { data, error } = await supabase.rpc("restore_asset_version", {
+    p_workspace_id: workspaceId,
+    p_asset_id: assetId,
+    p_version_id: versionId,
+  });
+  if (error) return fail(dbErrorMessage(error, "Gagal memulihkan versi aset."));
+  const restored = data as { ok: boolean; version_number?: number; message?: string } | null;
+  if (!restored?.ok) return fail(restored?.message ?? "Gagal memulihkan versi aset.");
+  revalidateProduction();
+  return ok(
+    restored.version_number
+      ? "Versi " + String(restored.version_number) + " aset berhasil dipulihkan."
+      : "Versi aset berhasil dipulihkan.",
+  );
+}
+
+// Perbaikan (c) T-1: penyapu unggahan 'uploading' yang terjebak. Dipanggil
+// berkala dari halaman Pustaka; object_key hasil RPC ikut dihapus dari
+// Storage supaya tidak tertinggal file yatim.
+export async function sweepStaleAssetUploadsAction(
+  input: unknown,
+): Promise<SweepStaleAssetUploadsResult> {
+  const parsed = sweepStaleAssetUploadsSchema.safeParse(input);
+  if (!parsed.success) return fail("Data penyapu unggahan tidak valid.");
+  const { workspaceId, olderThanMinutes } = parsed.data;
+  const { supabase, user } = await requireUser();
+  if (!supabase || !user) {
+    return fail(supabase ? "Anda harus masuk dulu." : SUPABASE_NOT_CONFIGURED_ID);
+  }
+  const role = await requireRole(workspaceId, user.id);
+  if (!role || !can(role, "upload_assets")) {
+    return fail("Anda tidak berhak membersihkan unggahan di workspace ini.");
+  }
+  const { data, error } = await supabase.rpc("sweep_stale_asset_uploads", {
+    p_workspace_id: workspaceId,
+    p_older_than_minutes: olderThanMinutes,
+  });
+  if (error) return fail(dbErrorMessage(error, "Gagal membersihkan unggahan lama."));
+  const swept = data as {
+    ok: boolean;
+    swept_count?: number;
+    object_keys?: string[];
+    message?: string;
+  } | null;
+  if (!swept?.ok) return fail(swept?.message ?? "Gagal membersihkan unggahan lama.");
+  const objectKeys = swept.object_keys ?? [];
+  let storageRemoved = 0;
+  if (objectKeys.length > 0) {
+    const admin = getSupabaseAdminClient();
+    if (admin) {
+      const { data: removed } = await admin.storage.from(ASSET_BUCKET).remove(objectKeys);
+      storageRemoved = removed?.length ?? 0;
+    }
+  }
+  const storageFailed = objectKeys.length - storageRemoved;
+  const sweptCount = swept.swept_count ?? 0;
+  revalidateProduction();
+  return {
+    ok: true,
+    message:
+      sweptCount === 0
+        ? "Tidak ada unggahan lama yang perlu dibersihkan."
+        : "Berhasil membersihkan " + String(sweptCount) + " unggahan lama" + (storageFailed > 0 ? " (" + String(storageFailed) + " file belum terhapus dari penyimpanan)." : "."),
+    sweptCount,
+    storageRemoved,
+    storageFailed,
+  };
+}
+
+// Perbaikan (c) T-4: data lonceng notifikasi di Topbar (10 terbaru + jumlah
+// belum dibaca). Gagal memuat daftar tidak melempar -- lonceng menampilkan
+// kondisi kosong.
+export async function getNotificationBellAction(): Promise<NotificationBellResult> {
+  const { supabase, user } = await requireUser();
+  if (!supabase || !user) {
+    return {
+      ok: false,
+      message: supabase ? "Anda harus masuk dulu." : SUPABASE_NOT_CONFIGURED_ID,
+      unreadCount: 0,
+      notifications: [],
+    };
+  }
+  const [list, unreadCount] = await Promise.all([
+    listMyNotifications(supabase, user.id, { limit: 10 }),
+    countUnreadNotifications(supabase, user.id),
+  ]);
+  if (list.unavailable) {
+    return { ok: true, message: "Notifikasi belum tersedia.", unreadCount: 0, notifications: [] };
+  }
+  return { ok: true, message: "Notifikasi dimuat.", unreadCount, notifications: list.data };
 }
 
 export async function attachAssetAction(
@@ -886,12 +1225,19 @@ export async function deleteAssetAction(
     .select("object_key")
     .eq("id", parsed.data.assetId)
     .single();
+  // Perbaikan (c) T-2: hapus objek Storage DULU dan periksa hasilnya. Bila
+  // gagal, baris DB TIDAK dihapus supaya tidak lahir file yatim yang tak
+  // terlacak. Objek yang memang sudah tidak ada dianggap sudah bersih.
+  if (asset?.object_key) {
+    const { error: removeError } = await supabase.storage
+      .from(ASSET_BUCKET)
+      .remove([asset.object_key as string]);
+    if (removeError && !/not found/i.test(removeError.message)) {
+      return fail(`Gagal menghapus file aset dari penyimpanan: ${removeError.message}. Aset belum dihapus; coba lagi.`);
+    }
+  }
   const { error } = await supabase.from("assets").delete().eq("id", parsed.data.assetId);
   if (error) return fail(dbErrorMessage(error, "Gagal menghapus aset"));
-  if (asset?.object_key) {
-    // Best-effort: file yatim tidak terlihat aplikasi bila gagal dihapus.
-    await supabase.storage.from(ASSET_BUCKET).remove([asset.object_key as string]);
-  }
   revalidateProduction();
   return ok("Aset dihapus.");
 }

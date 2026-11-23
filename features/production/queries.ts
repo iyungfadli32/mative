@@ -14,6 +14,7 @@ import { ASSET_BUCKET, ASSET_SIGNED_URL_SECONDS } from "./constants";
 import type {
   AppNotification,
   Asset,
+  AssetVersion,
   BriefTemplate,
   Comment,
   ContentAsset,
@@ -337,16 +338,73 @@ export async function listComments(
 export async function listMyNotifications(
   supabase: SupabaseClient,
   userId: string,
+  opts?: { limit?: number; offset?: number },
 ): Promise<QueryResult<AppNotification[]>> {
+  // Perbaikan (c) T-4: daftar notifikasi bisa dipaginasi -- batas kaku 50
+  // diganti limit/offset (default tetap 50 dari awal supaya pemanggil lama
+  // tidak berubah perilakunya).
+  const limit = opts?.limit ?? 50;
+  const offset = opts?.offset ?? 0;
   return runQuery<AppNotification[]>(
     supabase
       .from("notifications")
       .select("*")
       .eq("recipient_user_id", userId)
       .order("created_at", { ascending: false })
-      .limit(50),
+      .range(offset, offset + limit - 1),
     [],
   );
+}
+
+export async function countUnreadNotifications(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<number> {
+  // Lonceng Topbar: gagal menghitung tidak boleh merusak halaman.
+  const { count, error } = await supabase
+    .from("notifications")
+    .select("id", { count: "exact", head: true })
+    .eq("recipient_user_id", userId)
+    .is("read_at", null);
+  if (error) return 0;
+  return count ?? 0;
+}
+
+// Perbaikan (c) T-3: riwayat versi aset (terbaru dulu).
+export async function listAssetVersions(
+  supabase: SupabaseClient,
+  assetId: string,
+): Promise<QueryResult<AssetVersion[]>> {
+  return runQuery<AssetVersion[]>(
+    supabase
+      .from("asset_versions")
+      .select("id, asset_id, version_number, storage_object_key, mime_type, byte_size, uploaded_by, created_at")
+      .eq("asset_id", assetId)
+      .order("version_number", { ascending: false }),
+    [],
+  );
+}
+
+export async function listAssetVersionsByAssetIds(
+  supabase: SupabaseClient,
+  assetIds: string[],
+): Promise<Map<string, AssetVersion[]>> {
+  const versionsByAsset = new Map<string, AssetVersion[]>();
+  if (assetIds.length === 0) return versionsByAsset;
+  const result = await runQuery<AssetVersion[]>(
+    supabase
+      .from("asset_versions")
+      .select("id, asset_id, version_number, storage_object_key, mime_type, byte_size, uploaded_by, created_at")
+      .in("asset_id", assetIds)
+      .order("version_number", { ascending: false }),
+    [],
+  );
+  for (const version of result.data) {
+    const list = versionsByAsset.get(version.asset_id) ?? [];
+    list.push(version);
+    versionsByAsset.set(version.asset_id, list);
+  }
+  return versionsByAsset;
 }
 
 /** Apakah workspace mengizinkan klien berkomentar (default: tidak). */

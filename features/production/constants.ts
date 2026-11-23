@@ -54,6 +54,7 @@ export const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
   task_assigned: "Task baru",
   task_status_change: "Status task berubah",
   comment_reply: "Balasan komentar",
+  comment_created: "Komentar baru",
 };
 
 /** Bucket privat aset (migrasi 0009). Akses hanya lewat signed URL 1 jam. */
