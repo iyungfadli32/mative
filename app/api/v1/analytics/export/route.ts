@@ -118,14 +118,16 @@ export async function GET(req: NextRequest) {
     if (!summaryRes.ok || !contentRes.ok) {
       return errorJson("UNAVAILABLE", ANALYTICS_TABLES_UNAVAILABLE_ID, 503);
     }
+    const periodLabel = `${from} s.d. ${to}`;
     const lines: string[][] = summaryRes.data.byBrand.map((b) => [
       b.brandName,
       String(b.reach),
       String(b.engagements),
       b.engagementRate != null ? formatMetricValue(b.engagementRate, "persen") : "",
+      periodLabel,
     ]);
     lines.push([]);
-    lines.push(["Channel", "Reach", "Engagements", "Engagement rate (%)"]);
+    lines.push(["Channel", "Reach", "Engagements", "Engagement rate (%)", "Periode"]);
     const byChannel = new Map<string, { reach: number; engagements: number }>();
     for (const r of contentRes.data) {
       const key = `${r.channelPlatform ?? "(tanpa channel)"} / ${r.channelAccount ?? "-"}`;
@@ -141,11 +143,12 @@ export async function GET(req: NextRequest) {
         String(v.reach),
         String(v.engagements),
         rate != null ? formatMetricValue(rate, "persen") : "",
+        periodLabel,
       ]);
     }
     return csvResponse(
       filename,
-      exportReportCsv(["Brand", "Reach", "Engagements", "Engagement rate (%)"], lines),
+      exportReportCsv(["Brand", "Reach", "Engagements", "Engagement rate (%)", "Periode"], lines),
     );
   }
 

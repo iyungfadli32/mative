@@ -36,6 +36,8 @@ const fail = (message: string, extra?: Partial<AnalyticsActionResult>): Analytic
 });
 
 function isMissingTableMessage(message: string): boolean {
+  // Kolom hilang ("column x.y does not exist") bukan tabel hilang.
+  if (/^column\s/i.test(message)) return false;
   return /Could not find the table|Could not find the function|does not exist|42P01|PGRST205/i.test(
     message,
   );

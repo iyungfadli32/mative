@@ -459,10 +459,11 @@ async function listPlacementIdsForBrand(
   if (itemsRes.error) throw itemsRes.error;
   const itemIds = (itemsRes.data ?? []).map((row) => row.id);
   if (itemIds.length === 0) return [];
+    // content_placements tidak punya workspace_id; lingkup workspace sudah
+    // dijamin lewat itemIds (content_items difilter workspace_id + brand_id).
   const placementsRes = await supabase
     .from("content_placements")
     .select("id")
-    .eq("workspace_id", workspaceId)
     .in("content_item_id", itemIds)
     .limit(1000);
   if (placementsRes.error) throw placementsRes.error;

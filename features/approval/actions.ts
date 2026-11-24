@@ -259,6 +259,7 @@ export async function assignWorkflowStepAction(
           .from("approval_requests")
           .select("id")
           .eq("workflow_id", stepRow.workflow_id)
+          .eq("workspace_id", parsed.data.workspaceId)
           .eq("submitted_by", parsed.data.assigneeUserId)
           .eq("status", "in_review")
           .limit(1)
@@ -295,6 +296,7 @@ export async function updateApprovalSettingsAction(
     workspaceId: formData.get("workspaceId"),
     clientReviewEnabled: formData.get("clientReviewEnabled") ?? "",
     clientCanComment: formData.get("clientCanComment") ?? "",
+    allowSelfApproval: formData.get("allowSelfApproval") ?? "",
     criticalFields: formData.get("criticalFields") ?? "",
   });
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Data tidak valid.");
@@ -317,6 +319,13 @@ export async function updateApprovalSettingsAction(
       workspace_id: parsed.data.workspaceId,
       key: "approval.client_can_comment",
       value_json: { allowed: parsed.data.clientCanComment === "true" },
+    });
+  }
+  if (parsed.data.allowSelfApproval !== "") {
+    rows.push({
+      workspace_id: parsed.data.workspaceId,
+      key: "approval.allow_self_approval",
+      value_json: { enabled: parsed.data.allowSelfApproval === "true" },
     });
   }
   if (parsed.data.criticalFields !== "") {
