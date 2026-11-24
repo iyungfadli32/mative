@@ -8,7 +8,6 @@
     "next": "16.4.6",
     "react": "19.3.1",
     "react-dom": "19.3.1",
-    "react-hook-form": "7.92.0",
     "zod": "4.6.7"
   },
   "description": "MaTive — Creative Content Operations Platform (PLAN → CREATE → COLLABORATE → APPROVE → PUBLISH → ANALYZE → OPTIMIZE)",
