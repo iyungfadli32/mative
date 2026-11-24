@@ -80,7 +80,10 @@ export async function shareResourceAction(formData: FormData): Promise<ActionRes
     shared_with_user_id: parsed.data.sharedWithUserId,
     shared_by: user.id,
   });
-  if (error) return { ok: false, message: `Gagal membagikan: ${error.message}` };
+  if (error) {
+    console.error("[portal] gagal membagikan", error.message);
+    return { ok: false, message: "Gagal membagikan. Coba lagi." };
+  }
   return { ok: true, message: "Resource dibagikan ke klien dan tercatat di audit." };
 }
 
@@ -89,6 +92,9 @@ export async function unshareResourceAction(shareId: string): Promise<ActionResu
   const supabase = await getSupabaseServerClient();
   if (!supabase) return { ok: false, message: SUPABASE_NOT_CONFIGURED_ID };
   const { error } = await supabase.from("resource_shares").delete().eq("id", shareId);
-  if (error) return { ok: false, message: `Gagal mencabut share: ${error.message}` };
+  if (error) {
+    console.error("[portal] gagal mencabut share", error.message);
+    return { ok: false, message: "Gagal mencabut share. Coba lagi." };
+  }
   return { ok: true, message: "Share dicabut; klien tidak lagi bisa melihat resource ini." };
 }

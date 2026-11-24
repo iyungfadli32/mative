@@ -43,7 +43,7 @@ async function runQuery<T>(
     if (error) {
       return {
         data: empty,
-        error: error.message ?? "Query gagal.",
+        error: "Query gagal.",
         unavailable: isMissingTable(error),
       };
     }

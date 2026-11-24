@@ -56,7 +56,9 @@ function isMissingTableMessage(message: string): boolean {
 function dbErrorMessage(error: { message?: string } | null, fallback: string): string {
   const message = error?.message ?? fallback;
   if (isMissingTableMessage(message)) return PUBLISHING_TABLES_UNAVAILABLE_ID;
-  return message;
+  // S-4: jangan bocorkan pesan database mentah ke UI; detail hanya ke log server.
+  if (error?.message) console.error("[db]", fallback, error.message);
+  return fallback;
 }
 
 type RpcResult = {

@@ -34,6 +34,12 @@ async function requireUser() {
   return { supabase, user };
 }
 
+// S-3: kuota anti-penyalahgunaan di sisi aplikasi. CAPTCHA + batas laju
+// Supabase Auth hanya bisa diatur di dashboard Supabase (lihat laporan
+// batch S-1); kuota di sini membatasi pembuatan organisasi & undangan.
+const MAX_ORGANIZATIONS_PER_USER = 10;
+const MAX_PENDING_INVITATIONS_PER_WORKSPACE = 20;
+
 export async function createOrganizationAction(
   _prevState: ActionResult,
   formData: FormData,
@@ -49,6 +55,25 @@ export async function createOrganizationAction(
   if (!supabase || !user) {
     return { ok: false, message: supabase ? "Anda harus masuk dulu." : SUPABASE_NOT_CONFIGURED_ID };
   }
+  // S-3: kuota organisasi per pengguna.
+  const { count: ownedCount, error: countError } = await supabase
+    .from("organization_members")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .eq("organization_role", "owner");
+  if (countError) {
+    console.error("[tenancy] hitung organisasi gagal", countError.message);
+    return { ok: false, message: "Gagal membuat organisasi. Coba lagi." };
+  }
+  if ((ownedCount ?? 0) >= MAX_ORGANIZATIONS_PER_USER) {
+    return {
+      ok: false,
+      message:
+        "Batas maksimum " +
+        String(MAX_ORGANIZATIONS_PER_USER) +
+        " organisasi per pengguna tercapai.",
+    };
+  }
   const { data: org, error } = await supabase
     .from("organizations")
     .insert({
@@ -59,7 +84,10 @@ export async function createOrganizationAction(
     })
     .select("id")
     .single();
-  if (error) return { ok: false, message: `Gagal membuat organisasi: ${error.message}` };
+  if (error) {
+    console.error("[tenancy] gagal membuat organisasi", error.message);
+    return { ok: false, message: "Gagal membuat organisasi. Coba lagi." };
+  }
   // Keanggotaan owner dibuat terpisah (lihat kebijakan RLS 0002
   // "org_members_insert_owner_or_admin" butir (a)): tanpa baris ini
   // organisasi tidak pernah muncul di daftar pengguna dan tombol
@@ -72,9 +100,10 @@ export async function createOrganizationAction(
     joined_at: new Date().toISOString(),
   });
   if (memberError) {
+    console.error("[tenancy] keanggotaan owner gagal", memberError.message);
     return {
       ok: false,
-      message: `Organisasi dibuat, tetapi keanggotaan owner gagal: ${memberError.message}`,
+      message: "Organisasi dibuat, tetapi keanggotaan owner gagal. Coba lagi.",
     };
   }
   revalidatePath("/pengaturan/organisasi");
@@ -116,7 +145,10 @@ export async function createWorkspaceAction(
     p_timezone: parsed.data.timezone,
     p_default_locale: parsed.data.defaultLocale,
   });
-  if (error) return { ok: false, message: `Gagal membuat workspace: ${error.message}` };
+  if (error) {
+    console.error("[tenancy] gagal membuat workspace", error.message);
+    return { ok: false, message: "Gagal membuat workspace. Coba lagi." };
+  }
   const result = data as { ok: boolean; message: string; workspace_id?: string } | null;
   if (!result?.ok) {
     return { ok: false, message: result?.message ?? "Gagal membuat workspace." };
@@ -195,6 +227,62 @@ export async function inviteMemberAction(
     if (parsed.data.role === "owner" && callerRole !== "owner") {
       return { ok: false, message: "Hanya owner workspace yang boleh mengundang owner baru." };
     }
+    // S-8: tolak duplikat dengan pesan ramah sebelum insert (constraint unique
+    // tetap jadi penahan terakhir; lihat pemetaan error 23505 di bawah).
+    const { data: pendingInvite } = await supabase
+      .from("workspace_invitations")
+      .select("id")
+      .eq("workspace_id", parsed.data.workspaceId)
+      .eq("email", parsed.data.email)
+      .eq("status", "pending")
+      .gt("expires_at", new Date().toISOString())
+      .maybeSingle();
+    if (pendingInvite) {
+      return {
+        ok: false,
+        message:
+          "Undangan untuk email ini masih menunggu. Cabut undangan lama sebelum mengirim yang baru.",
+      };
+    }
+    const { count: pendingCount } = await supabase
+      .from("workspace_invitations")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", parsed.data.workspaceId)
+      .eq("status", "pending")
+      .gt("expires_at", new Date().toISOString());
+    if ((pendingCount ?? 0) >= MAX_PENDING_INVITATIONS_PER_WORKSPACE) {
+      return {
+        ok: false,
+        message:
+          "Batas " +
+          String(MAX_PENDING_INVITATIONS_PER_WORKSPACE) +
+          " undangan menunggu per workspace tercapai. Cabut undangan lama sebelum mengirim yang baru.",
+      };
+    }
+    const adminForCheck = getSupabaseAdminClient();
+    if (adminForCheck) {
+      const { data: listedUsers } = await adminForCheck.auth.admin.listUsers({
+        perPage: 1000,
+      });
+      const existingUser = listedUsers?.users.find(
+        (candidate) => candidate.email?.toLowerCase() === parsed.data.email.toLowerCase(),
+      );
+      if (existingUser) {
+        const { data: existingMember } = await supabase
+          .from("workspace_members")
+          .select("id")
+          .eq("workspace_id", parsed.data.workspaceId)
+.eq("user_id", existingUser.id)
+          .eq("membership_status", "active")
+          .maybeSingle();
+        if (existingMember) {
+          return {
+            ok: false,
+            message: "Email ini sudah menjadi anggota aktif workspace.",
+          };
+        }
+      }
+    }
   // viewer_client TIDAK BOLEH diundang sebagai anggota workspace biasa?
   // Boleh — viewer_client adalah role baseline; aksesnya tetap dibatasi
   // ke resource yang dibagikan eksplisit (portal). Tidak ada pengecualian di sini.
@@ -210,38 +298,90 @@ export async function inviteMemberAction(
     invited_by: user.id,
     status: "pending",
   });
-  if (error) return { ok: false, message: `Gagal membuat undangan: ${error.message}` };
-  // Pengiriman email undangan mengikuti kemampuan Supabase Auth (inviteUserByEmail)
-  // bila service-role tersedia; bila tidak, token ditampilkan SEKALI ke pengundang
-  // untuk diteruskan manual — ini perilaku sementara fase ini, dicatat di laporan.
-  const admin = getSupabaseAdminClient();
-  if (admin) {
-    await admin.auth.admin.inviteUserByEmail(parsed.data.email, {
-      data: { workspace_id: parsed.data.workspaceId, role: parsed.data.role },
-    });
-  }
-  revalidatePath("/pengaturan/anggota");
-  return {
-    ok: true,
-    message: admin
-      ? "Undangan dibuat dan email undangan dikirim."
-      : "Undangan dibuat (email otomatis belum dikonfigurasi — salin tautan di bawah untuk diteruskan manual).",
-    inviteToken: admin ? undefined : token,
-  };
+    if (error) {
+      console.error("[tenancy] gagal membuat undangan", error.message);
+      if (error.code === "23505") {
+        return {
+          ok: false,
+          message:
+            "Undangan untuk email ini masih menunggu. Cabut undangan lama sebelum mengirim yang baru.",
+        };
+      }
+      return { ok: false, message: "Gagal membuat undangan. Coba lagi." };
+    }
+    // S-5: email adalah jalur utama bila service-role tersedia; bila
+    // pengiriman email gagal (atau service-role belum terpasang), token
+    // ditampilkan SEKALI ke pengundang untuk diteruskan manual.
+    const admin = getSupabaseAdminClient();
+    const emailResult = admin
+      ? await admin.auth.admin.inviteUserByEmail(parsed.data.email, {
+          data: { workspace_id: parsed.data.workspaceId, role: parsed.data.role },
+        })
+      : null;
+    if (emailResult?.error) {
+      console.error("[tenancy] gagal mengirim email undangan", emailResult.error.message);
+    }
+    revalidatePath("/pengaturan/anggota");
+    if (admin && !emailResult?.error) {
+      return { ok: true, message: "Undangan dibuat dan email undangan dikirim." };
+    }
+    return {
+      ok: true,
+      message: admin
+        ? "Undangan dibuat, tetapi email gagal dikirim. Salin tautan undangan di bawah untuk diteruskan manual."
+        : "Undangan dibuat (email otomatis belum dikonfigurasi — salin tautan di bawah untuk diteruskan manual).",
+      inviteToken: token,
+    };
 }
 
-/** Dipakai sebagai form action langsung (bukan useActionState). */
-export async function revokeInvitationAction(formData: FormData): Promise<void> {
+/** S-7: mencabut undangan dengan pemeriksaan peran + hasil yang jujur. */
+export async function revokeInvitationAction(
+  prevState: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  void prevState;
   const invitationId = String(formData.get("invitationId") ?? "");
-  if (!invitationId) return;
+  if (!invitationId) {
+    return { ok: false, message: "Undangan tidak ditemukan." };
+  }
   const { supabase, user } = await requireUser();
-  if (!supabase || !user) return;
-  await supabase
+  if (!supabase || !user) {
+    return { ok: false, message: "Anda harus masuk dulu." };
+  }
+  const { data: invitation } = await supabase
+    .from("workspace_invitations")
+    .select("workspace_id")
+    .eq("id", invitationId)
+    .maybeSingle();
+  if (!invitation) {
+    return { ok: false, message: "Undangan tidak ditemukan atau sudah tidak berlaku." };
+  }
+  const { data: membership } = await supabase
+    .from("workspace_members")
+    .select("workspace_role")
+    .eq("workspace_id", invitation.workspace_id)
+    .eq("user_id", user.id)
+    .eq("membership_status", "active")
+    .single();
+  const callerRole = membership?.workspace_role as string | undefined;
+  if (!callerRole || !canInvite(callerRole as never)) {
+    return { ok: false, message: "Hanya owner atau admin yang boleh mencabut undangan." };
+  }
+  const { data: revoked, error } = await supabase
     .from("workspace_invitations")
     .update({ status: "revoked", revoked_at: new Date().toISOString() })
     .eq("id", invitationId)
-    .eq("status", "pending");
+    .eq("status", "pending")
+    .select("id");
+  if (error) {
+    console.error("[tenancy] gagal mencabut undangan", error.message);
+    return { ok: false, message: "Gagal mencabut undangan. Coba lagi." };
+  }
+  if (!revoked || revoked.length === 0) {
+    return { ok: false, message: "Undangan tidak ditemukan atau sudah tidak berlaku." };
+  }
   revalidatePath("/pengaturan/anggota");
+  return { ok: true, message: "Undangan dicabut." };
 }
 
 /**
@@ -295,7 +435,8 @@ export async function removeMemberAction(
     .eq("id", parsed.data.memberId)
     .eq("workspace_id", parsed.data.workspaceId);
   if (error) {
-    return { ok: false, message: `Gagal menghapus anggota: ${error.message}` };
+    console.error("[tenancy] gagal menghapus anggota", error.message);
+    return { ok: false, message: "Gagal menghapus anggota. Coba lagi." };
   }
   revalidatePath("/pengaturan/anggota");
   return { ok: true, message: "Anggota dihapus — aksesnya ke workspace ini tercabut seketika." };
@@ -314,7 +455,8 @@ export async function acceptInvitationAction(token: string): Promise<ActionResul
     p_token_hash: tokenHash,
   });
   if (error) {
-    return { ok: false, message: `Gagal menerima undangan: ${error.message}` };
+    console.error("[tenancy] gagal menerima undangan", error.message);
+    return { ok: false, message: "Gagal menerima undangan. Coba lagi." };
   }
   const result = data as { ok: boolean; message: string } | null;
   if (!result?.ok) {

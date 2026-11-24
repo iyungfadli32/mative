@@ -18,6 +18,15 @@ export default function MasukPage() {
         ← Beranda MaTive
       </Link>
       <h1 className="mt-4 text-3xl font-bold">Masuk ke MaTive</h1>
+      <p className="mt-4 text-sm text-[var(--mt-stone-600)]">
+        <Link href="/lupa-password" className="text-[var(--mt-teal-700)] underline">
+          Lupa kata sandi?
+        </Link>{" "}
+        ·{" "}
+        <Link href="/kirim-ulang" className="text-[var(--mt-teal-700)] underline">
+          Kirim ulang email konfirmasi
+        </Link>
+      </p>
       <p className="mt-1 text-sm text-[var(--mt-text-muted)]">
         Belum punya akun?{" "}
         <Link href="/daftar" className="font-medium text-[var(--mt-teal-700)] underline">

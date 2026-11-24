@@ -1043,3 +1043,18 @@ export const insertAiDraftVersionSchema = z.object({
     .max(500, "Ringkasan perubahan maksimal 500 karakter."),
   aiGenerationId: z.string().uuid("ai_generation_id tidak valid."),
 });
+
+// S-1: lupa/reset kata sandi + kirim ulang konfirmasi email.
+export const passwordResetRequestSchema = z.object({
+  email: z.string().email("Masukkan email yang valid."),
+});
+
+export const passwordUpdateSchema = z
+  .object({
+    password: passwordSchema,
+    confirmPassword: z.string().min(1, "Ulangi kata sandi baru."),
+  })
+  .refine((v) => v.password === v.confirmPassword, {
+    message: "Konfirmasi kata sandi tidak cocok.",
+    path: ["confirmPassword"],
+  });

@@ -47,7 +47,8 @@ export async function setVisualOrderAction(formData: FormData): Promise<Campaign
     p_placement_ids: parsed.data.placementIds,
   });
   if (error) {
-    return { ok: false, message: `Gagal menyimpan urutan visual: ${error.message}` };
+    console.error("[visual-planner] gagal menyimpan urutan", error.message);
+    return { ok: false, message: "Gagal menyimpan urutan visual. Coba lagi." };
   }
   const result = data as { ok: boolean; code?: string; message?: string } | null;
   if (!result?.ok) {

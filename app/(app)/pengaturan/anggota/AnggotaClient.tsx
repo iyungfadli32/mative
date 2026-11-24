@@ -180,6 +180,26 @@ export default function AnggotaClient({
     ok: false,
     message: "",
   });
+  // S-5: tautan manual hanya disimpan di state lokal - ditampilkan sekali,
+  // bisa disalin, dan hilang saat ditutup (tidak dirender permanen).
+  const [manualInvite, setManualInvite] = useState<string | null>(null);
+  const [prevInviteToken, setPrevInviteToken] = useState<string | undefined>(undefined);
+  const [copied, setCopied] = useState(false);
+  const [revokeState, revokeFormAction] = useActionState(revokeInvitationAction, {
+    ok: false,
+    message: "",
+  });
+  // Menyelaraskan tautan sekali-pakai dengan token terbaru (pola "adjusting
+  // state during render" React): tanpa useEffect, supaya tidak melanggar
+  // aturan react-hooks/set-state-in-effect. Berjalan hanya di client
+  // sesudah aksi invite selesai; saat SSR inviteToken masih undefined.
+  if (state.inviteToken !== prevInviteToken) {
+    setPrevInviteToken(state.inviteToken);
+    setManualInvite(
+      state.inviteToken ? window.location.origin + "/undangan/" + state.inviteToken : null,
+    );
+    setCopied(false);
+  }
   // State hapus anggota dipegang di tingkat halaman (bukan per baris) —
   // lihat komentar RemoveMemberForm: pesan sukses harus bertahan sesudah
   // revalidasi menghapus baris anggota yang dihapus.
@@ -233,15 +253,35 @@ export default function AnggotaClient({
           {state.message ? (
             <p role={state.ok ? "status" : "alert"} className="text-sm text-[var(--mt-teal-700)]">
               {state.message}
-              {state.inviteToken ? (
-                <>
-                  <br />
-                  Tautan undangan (tampilkan sekali saja):{" "}
-                  <code className="break-all">/undangan/{state.inviteToken}</code>
-                </>
-              ) : null}
             </p>
           ) : null}
+        {manualInvite ? (
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800" role="status">
+            <p className="font-medium">Tautan undangan - hanya ditampilkan sekali.</p>
+            <p className="mt-1">
+              Email undangan gagal dikirim atau belum dikonfigurasi. Salin tautan ini
+              dan teruskan secara manual; tautan hilang setelah ditutup.
+            </p>
+            <code className="mt-2 block break-all rounded bg-white px-2 py-1">{manualInvite}</code>
+            <div className="mt-2 flex gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  void navigator.clipboard.writeText(manualInvite).then(
+                    () => setCopied(true),
+                    () => setCopied(false),
+                  );
+                }}
+              >
+                {copied ? "Disalin" : "Salin tautan"}
+              </Button>
+              <Button type="button" variant="ghost" onClick={() => setManualInvite(null)}>
+                Tutup
+              </Button>
+            </div>
+          </div>
+        ) : null}
           <Button
             type="submit"
             loading={pending}
@@ -313,6 +353,11 @@ export default function AnggotaClient({
       </section>
 
       <section>
+        {revokeState.message ? (
+          <p role={revokeState.ok ? "status" : "alert"} className="text-sm text-[var(--mt-stone-600)]">
+            {revokeState.message}
+          </p>
+        ) : null}
         <h2 className="text-lg font-semibold">Undangan</h2>
         <div className="mt-3">
           <DataTable<InvitationRow>
@@ -346,7 +391,7 @@ export default function AnggotaClient({
                 header: "Aksi",
                 render: (r) =>
                   r.status === "pending" ? (
-                    <form action={revokeInvitationAction}>
+                    <form action={revokeFormAction}>
                       <input type="hidden" name="invitationId" value={r.id} />
                       <Button type="submit" variant="secondary" size="sm">
                         Cabut

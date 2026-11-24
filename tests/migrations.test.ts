@@ -22,7 +22,7 @@ function migrationFiles(): Array<{ name: string; sql: string }> {
 }
 
 describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
-  it("memiliki 32 migrasi berversi berurutan 0001–0032", () => {
+  it("memiliki 34 migrasi berversi berurutan 0001–0034", () => {
     const files = migrationFiles();
     expect(files.map((f) => f.name)).toEqual([
       "0001_profiles.sql",
@@ -57,6 +57,8 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
       "0030_batch4_planning_fixes.sql",
       "0031_batch5_approval_fixes.sql",
       "0032_batch6_analytics_fixes.sql",
+  "0033_batch_s1_brand_scope_children.sql",
+  "0034_batch_s1_invitation_checks.sql",
     ]);
   });
 
@@ -82,6 +84,7 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
       // kolom + memperluas satu CHECK (tanpa tabel/policy baru).
       // 0031 hanya mendefinisikan ulang tiga fungsi approval + satu trigger (tanpa tabel/policy baru).
       // 0032 hanya menulis ulang satu fungsi RPC impor analitik + mengubah dua CHECK (tanpa tabel/policy baru).
+  // 0034 hanya mendefinisikan ulang accept_invitation() + grant (tanpa tabel/policy baru).
       if (
         name === "0008_planning_transactions.sql" ||
         name === "0010_production_transactions.sql" ||
@@ -98,7 +101,8 @@ describe("Migrasi — RLS + policy eksplisit (statis, tanpa DB)", () => {
         name === "0029_asset_upload_recovery_versioning_comment_notifications.sql" ||
         name === "0030_batch4_planning_fixes.sql" ||
         name === "0031_batch5_approval_fixes.sql" ||
-        name === "0032_batch6_analytics_fixes.sql"
+        name === "0032_batch6_analytics_fixes.sql" ||
+    name === "0034_batch_s1_invitation_checks.sql"
       ) {
         expect(sql, `${name} tidak boleh membuat tabel`).not.toMatch(/create table/i);
         expect(sql, `${name} harus berisi fungsi RPC`).toMatch(/create or replace function/i);

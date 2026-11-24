@@ -24,6 +24,12 @@ export default function DaftarPage() {
           Masuk
         </Link>
       </p>
+      <p className="mt-2 text-sm text-[var(--mt-text-muted)]">
+        Tidak menerima email konfirmasi?{" "}
+        <Link href="/kirim-ulang" className="font-medium text-[var(--mt-teal-700)] underline">
+          Kirim ulang
+        </Link>
+      </p>
       {!envStatus.supabaseConfigured && (
         <p
           role="status"
