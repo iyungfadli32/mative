@@ -48,7 +48,7 @@ export function FilterBar({
       {typeof query === "string" ? (
         <label className="flex min-w-52 flex-1 flex-col gap-1 text-sm font-medium">
           {queryLabel}
-          <input
+          <input key={query ?? ""}
             type="search"
             name="q"
             defaultValue={query}
@@ -60,7 +60,7 @@ export function FilterBar({
       {fields.map((f) => (
         <label key={f.name} className="flex flex-col gap-1 text-sm font-medium">
           {f.label}
-          <select
+          <select key={f.value}
             name={f.name}
             defaultValue={f.value}
             className="h-10 rounded-[10px] border border-[var(--mt-border)] bg-[var(--mt-surface)] px-2 text-sm font-normal"
@@ -77,7 +77,7 @@ export function FilterBar({
       {dateFilter ? (
         <label className="flex flex-col gap-1 text-sm font-medium">
           {dateFilter.label}
-          <input
+          <input key={dateFilter.value ?? ""}
             type="date"
             name={dateFilter.name}
             defaultValue={dateFilter.value}

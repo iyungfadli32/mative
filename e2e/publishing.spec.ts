@@ -132,7 +132,33 @@ async function openContentDetail(page: import("@playwright/test").Page, slug: st
 }
 
 /** Setujui v1: walk ke editing → tugaskan step ke diri sendiri → submit → setujui. */
+
+/**
+ * Aktifkan self-approval di pengaturan approval workspace ini.
+ * Self-approval default mati (pemisahan tugas, Batch 7): pengaju tidak
+ * boleh menjadi approver request-nya sendiri, jadi menugaskan owner
+ * sebagai approver ditolak guard assignWorkflowStepAction bila
+ * self-approval belum diaktifkan. Workspace uji baru hanya punya satu
+ * member (owner), jadi aktifkan dulu sebelum menugaskan owner.
+ */
+async function enableSelfApproval(page: import("@playwright/test").Page) {
+  await page.goto("/persetujuan");
+  await expect(
+    page.locator('select[name="allowSelfApproval"]'),
+  ).toBeVisible({ timeout: 30000 });
+  await page
+    .locator('select[name="allowSelfApproval"]')
+    .selectOption("true");
+  await page.getByRole("button", { name: "Simpan pengaturan" }).click();
+  await expect(page.getByText("Pengaturan approval disimpan.")).toBeVisible({
+    timeout: 30000,
+  });
+}
+
 async function approveV1(page: import("@playwright/test").Page, slug: string) {
+  // Self-approval harus aktif dulu: kalau tidak, penugasan owner sebagai
+  // approver di bawah ditolak guard pemisahan tugas (Batch 7).
+  await enableSelfApproval(page);
   await openContentDetail(page, slug);
   await walkToEditing(page);
   await page.getByRole("tab", { name: "Approval" }).click();

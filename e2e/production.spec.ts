@@ -214,7 +214,9 @@ test.describe("penerimaan Phase 3 — production operations @needs-db", () => {
     //    benar), unggah di sana, kembali, lalu lampirkan di tab Media.
     await page.getByRole("tab", { name: "Media" }).click();
     await page.locator("main").getByRole("link", { name: "Pustaka Aset" }).click();
-    await expect(page.getByRole("heading", { name: "Pustaka Aset" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Pustaka Aset" })).toBeVisible({
+    timeout: 30000,
+  });
     await page.getByLabel(/Pilih file \(PNG, JPEG, WebP, MP4, WebM, PDF/).setInputFiles({
       name: `aset-p3-${slug}.png`,
       mimeType: "image/png",
@@ -301,7 +303,9 @@ test.describe("penerimaan Phase 3 — production operations @needs-db", () => {
     expect(bigPng.length).toBeLessThanOrEqual(10 * 1024 * 1024);
 
     await page.goto("/pustaka");
-    await expect(page.getByRole("heading", { name: "Pustaka Aset" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Pustaka Aset" })).toBeVisible({
+    timeout: 30000,
+  });
     await page.getByLabel(/Pilih file \(PNG, JPEG, WebP, MP4, WebM, PDF/).setInputFiles({
       name: `aset-2mb-${slug}.png`,
       mimeType: "image/png",

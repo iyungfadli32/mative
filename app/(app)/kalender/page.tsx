@@ -70,8 +70,10 @@ async function KalenderContent({
     if (typeof v === "string") params.set(k, v);
   }
   const filters = parsePlanningFilters(params, workspaceId);
-  // Batch 4 (T-8): parameter aktif yang dibawa FilterBar (hidden) dan
-  // tautan bulan/tampilan kalender agar filter tidak hilang.
+  // Batch 4 (T-8): parameter aktif yang dibawa FilterBar sebagai hidden
+  // input agar filter tidak hilang saat form dikirim. carried sengaja
+  // mengecualikan field yang dirender sebagai kontrol terlihat (mis.
+  // brandId), karena kontrol itu sendiri yang mengirim nilainya.
   const carried = carrySearchParams(sp, [
     "brandId",
     "channelId",
@@ -85,6 +87,14 @@ async function KalenderContent({
     "month",
     "view",
   ]);
+
+  // Perbaikan: tautan bulan/tampilan kalender harus membawa SEMUA parameter
+  // aktif. Memakai ulang carried di sini justru membuang filter aktif
+  // (mis. brandId) karena carried mengecualikan field yang dirender
+  // FilterBar. Untuk navigasi, kecualikan hanya month/view -- nilainya
+  // ditentukan ulang oleh calendarHref (workspace selalu dikecualikan
+  // carrySearchParams dan ditambahkan lagi oleh calendarHref).
+  const navCarried = carrySearchParams(sp, ["month", "view"]);
   const view = params.get("view") === "agenda" ? "agenda" : "month";
   const [brands, campaigns, pillars, members, items] = await Promise.all([
     listBrands(supabase, workspaceId),
@@ -230,7 +240,7 @@ async function KalenderContent({
           backlog={backlog}
           canSchedule={canSchedule(role)}
           view={view}
-          carriedParams={carried}
+          carriedParams={navCarried}
         />
       )}
     </div>
