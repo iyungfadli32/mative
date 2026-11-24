@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { withWorkspace, useActiveWorkspaceId } from "@/features/planning/workspace-url";
+import { withWorkspace } from "@/features/planning/workspace-url";
+import { useActiveWorkspaceId } from "@/features/planning/use-active-workspace-id";
 
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";

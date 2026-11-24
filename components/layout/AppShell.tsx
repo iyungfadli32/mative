@@ -6,7 +6,8 @@ import { Topbar } from "@/components/layout/Topbar";
 import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
-import { withWorkspace, useActiveWorkspaceId } from "@/features/planning/workspace-url";
+import { withWorkspace } from "@/features/planning/workspace-url";
+import { useActiveWorkspaceId } from "@/features/planning/use-active-workspace-id";
 
 /**
  * AppShell — Dok 02 §2 / Dok 03 §8.

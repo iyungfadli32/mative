@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { withWorkspace, useActiveWorkspaceId } from "@/features/planning/workspace-url";
+import { withWorkspace } from "@/features/planning/workspace-url";
+import { useActiveWorkspaceId } from "@/features/planning/use-active-workspace-id";
 
 import { Button } from "@/components/ui/Button";
 import { Popover } from "@/components/ui/Dialog";
