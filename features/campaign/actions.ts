@@ -622,7 +622,7 @@ export async function saveContentAsTemplateAction(
   return ok("Template konten disimpan.");
 }
 
-/** Buat konten baru dari template (salinan saja; placement TANPA jadwal). */
+// Buat konten baru dari template (S-5): konten + placement dibuat atomik dalam satu RPC; placement TANPA jadwal.
 export async function createContentFromTemplateAction(
   _prev: CampaignActionResult,
   formData: FormData,
@@ -634,16 +634,16 @@ export async function createContentFromTemplateAction(
   });
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Data tidak valid.");
   const { supabase, user } = await requireUser();
-  if (!supabase || !user)
+  if (!supabase || !user) {
     return fail(supabase ? "Anda harus masuk dulu." : SUPABASE_NOT_CONFIGURED_ID);
+  }
   const role = await requireRole(parsed.data.workspaceId, user.id);
-  if (!role || !can(role, "create_edit_content"))
+  if (!role || !can(role, "create_edit_content")) {
     return fail("Peran Anda tidak boleh membuat konten.");
+  }
   const { data: template, error: templateError } = await supabase
     .from("content_templates")
-    .select(
-      "id, workspace_id, brand_id, pillar_id, script, caption, content_template_placements(social_channel_id, platform_format)",
-    )
+    .select("id, workspace_id, brand_id")
     .eq("id", parsed.data.templateId)
     .single();
   if (templateError || !template || template.workspace_id !== parsed.data.workspaceId) {
@@ -653,55 +653,79 @@ export async function createContentFromTemplateAction(
   if (!brandInScope(scope, template.brand_id)) {
     return fail("Brand template ini di luar scope Anda.");
   }
-  const { data, error } = await supabase.rpc("create_content_item_with_version", {
+  const { data: wsRow } = await supabase
+    .from("workspaces")
+    .select("timezone")
+    .eq("id", parsed.data.workspaceId)
+    .maybeSingle();
+  const workspaceTz = wsRow?.timezone ?? "Asia/Jakarta";
+  const { data: result, error } = await supabase.rpc("create_content_from_template", {
     p_workspace_id: parsed.data.workspaceId,
-    p_brand_id: template.brand_id,
+    p_template_id: parsed.data.templateId,
     p_title: parsed.data.title,
-    p_campaign_id: null,
-    p_pillar_id: template.pillar_id ?? null,
-    p_audience_id: null,
-    p_internal_description: null,
-    p_objective: null,
-    p_funnel_stage: null,
-    p_priority: null,
-    p_due_at: null,
-    p_timezone: "Asia/Jakarta",
-    p_origin_idea_id: null,
-    p_script: template.script || null,
-    p_caption: template.caption || null,
-    p_cta: null,
-    p_creative_notes: null,
-    p_brief_snapshot: {},
-    p_change_summary: `Dibuat dari template konten`,
+    p_timezone: workspaceTz,
   });
-  if (error) return fail(dbErrorMessage(error, "Gagal membuat konten dari template"));
-  const result = data as { ok: boolean; message?: string; content_item_id?: string } | null;
-  if (!result?.ok || !result.content_item_id) {
-    return fail(result?.message ?? "Gagal membuat konten dari template.");
+  if (error) {
+    return fail(dbErrorMessage(error, "Konten gagal dibuat dari template."));
   }
-  const channels = template.content_template_placements as Array<{
-    social_channel_id: string;
-    platform_format: string | null;
-  }>;
-  if (channels.length > 0) {
-    const { error: placementError } = await supabase.from("content_placements").insert(
-      channels.map((c) => ({
-        content_item_id: result.content_item_id,
-        social_channel_id: c.social_channel_id,
-        platform_format: c.platform_format ?? null,
-        scheduled_at: null,
-        timezone: "Asia/Jakarta",
-      })),
-    );
-    if (placementError) {
-      return fail(
-        dbErrorMessage(placementError, "Konten dibuat, tetapi placement template gagal dibuat"),
-      );
-    }
+  if (!result || result.ok !== true) {
+    return fail(result?.message ?? "Konten gagal dibuat dari template.");
   }
   revalidatePath("/konten");
   revalidatePath("/template");
   return ok("Konten dibuat dari template.", { contentItemId: result.content_item_id });
+}
+
+// Hapus template konten (S-5). Placement template ikut terhapus (ON DELETE CASCADE).
+export async function deleteContentTemplateAction(
+  _prev: CampaignActionResult,
+  formData: FormData,
+): Promise<CampaignActionResult> {
+  const workspaceId = String(formData.get("workspaceId") ?? "");
+  const templateId = String(formData.get("templateId") ?? "");
+  if (!workspaceId || !templateId) return fail("Data tidak lengkap.");
+  const { supabase, user } = await requireUser();
+  if (!supabase || !user) {
+    return fail(supabase ? "Anda harus masuk dulu." : SUPABASE_NOT_CONFIGURED_ID);
+  }
+  const role = await requireRole(workspaceId, user.id);
+  if (!role || !can(role, "create_edit_content")) {
+    return fail("Peran Anda tidak boleh menghapus template konten.");
+  }
+  const { error } = await supabase
+    .from("content_templates")
+    .delete()
+    .eq("id", templateId)
+    .eq("workspace_id", workspaceId);
+  if (error) return fail(dbErrorMessage(error, "Template konten gagal dihapus."));
+  revalidatePath("/template");
+  return ok("Template konten dihapus.");
+}
+
+// Hapus template campaign (S-5). Kaitan brand template ikut terhapus (ON DELETE CASCADE).
+export async function deleteCampaignTemplateAction(
+  _prev: CampaignActionResult,
+  formData: FormData,
+): Promise<CampaignActionResult> {
+  const workspaceId = String(formData.get("workspaceId") ?? "");
+  const templateId = String(formData.get("templateId") ?? "");
+  if (!workspaceId || !templateId) return fail("Data tidak lengkap.");
+  const { supabase, user } = await requireUser();
+  if (!supabase || !user) {
+    return fail(supabase ? "Anda harus masuk dulu." : SUPABASE_NOT_CONFIGURED_ID);
+  }
+  const role = await requireRole(workspaceId, user.id);
+  if (!role || !can(role, "manage_pillars_campaigns")) {
+    return fail("Peran Anda tidak boleh menghapus template campaign.");
+  }
+  const { error } = await supabase
+    .from("campaign_templates")
+    .delete()
+    .eq("id", templateId)
+    .eq("workspace_id", workspaceId);
+  if (error) return fail(dbErrorMessage(error, "Template campaign gagal dihapus."));
+  revalidatePath("/template");
+  return ok("Template campaign dihapus.");
 }
 
 /** Ekspor semua campaign workspace sebagai CSV (format tetap, ASUMSI-5.6). */

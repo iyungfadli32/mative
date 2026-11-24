@@ -91,6 +91,10 @@ export function CalendarClient({
     list.push(t);
     byDate.set(key, list);
   }
+  for (const list of byDate.values()) {
+    // S-4: urutkan tiap daftar harian berdasarkan jam jadwal.
+    list.sort((x, y) => (x.scheduledAt ?? "").localeCompare(y.scheduledAt ?? ""));
+  }
 
   const prevMonth = (() => {
     const m = monthNum === 1 ? 12 : monthNum - 1;
@@ -137,6 +141,26 @@ export function CalendarClient({
 
   function handleDrop(dateKey: string, e: React.DragEvent) {
     e.preventDefault();
+    // S-3: drop dari backlog (item belum terjadwal): pakai jam dari input jam baris backlog.
+    const backlogId = e.dataTransfer.getData("text/backlog-placement-id");
+    if (backlogId) {
+      const backlogTile = backlog.find((t) => t.placementId === backlogId);
+      if (backlogTile) {
+        const timeInput = document.getElementById(
+          `backlog-time-${backlogId}`,
+        ) as HTMLInputElement | null;
+        const time = timeInput?.value || "09:00";
+        const iso = wallTimeToUtcIso(dateKey, time, backlogTile.timezone);
+        void doReschedule(
+          backlogTile.placementId,
+          iso,
+          backlogTile.timezone,
+          false,
+          backlogTile.title,
+        );
+      }
+      return;
+    }
     const placementId = e.dataTransfer.getData("text/placement-id");
     if (!placementId || !canSchedule) return;
     const tile = tiles.find((t) => t.placementId === placementId);
@@ -352,6 +376,12 @@ export function CalendarClient({
               <li
                 key={t.placementId}
                 className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--mt-border)] p-3 text-sm"
+
+                draggable={canSchedule}
+                onDragStart={(e) => {
+                  e.dataTransfer.setData("text/backlog-placement-id", t.placementId);
+                  e.dataTransfer.effectAllowed = "copy";
+                }}
               >
                 <ChannelIcon platform={t.platform} />
                 <Link
@@ -376,6 +406,15 @@ export function CalendarClient({
                       defaultValue={month + "-01"}
                       className="h-9 rounded-[10px] border border-[var(--mt-border)] px-2 text-sm"
                     />
+                    <label className="sr-only" htmlFor={`backlog-time-${t.placementId}`}>
+                      Jam jadwal
+                    </label>
+                    <input
+                      id={`backlog-time-${t.placementId}`}
+                      type="time"
+                      defaultValue="09:00"
+                      className="h-9 rounded-[10px] border border-[var(--mt-border)] px-2 text-sm"
+                    />
                     <Button
                       size="sm"
                       disabled={pending}
@@ -385,11 +424,16 @@ export function CalendarClient({
                         ) as HTMLInputElement | null;
                         const dateKey = input?.value;
                         if (!dateKey) return;
-                        const iso = wallTimeToUtcIso(dateKey, "09:00", t.timezone);
+                        const timeInput = document.getElementById(
+                          `backlog-time-${t.placementId}`,
+                        ) as HTMLInputElement | null;
+                        // S-3: jam diambil dari input jam di baris backlog (default 09:00).
+                        const time = timeInput?.value || "09:00";
+                        const iso = wallTimeToUtcIso(dateKey, time, t.timezone);
                         void doReschedule(t.placementId, iso, t.timezone, false, t.title);
                       }}
                     >
-                      Jadwalkan 09:00
+                      Jadwalkan
                     </Button>
                   </span>
                 ) : null}
@@ -398,8 +442,8 @@ export function CalendarClient({
           </ul>
         )}
         <p className="mt-2 text-xs text-[var(--mt-text-muted)]">
-          Seret kartu antar tanggal untuk menjadwalkan ulang, atau pakai tombol di backlog. Jadwal
-          baru memakai jam yang sama di zona waktu placement ({timezoneLabel(timezone)}).
+          Seret kartu antar tanggal untuk menjadwalkan ulang, atau seret item backlog ke tanggal.
+          Jadwal baru memakai jam yang sama di zona waktu placement ({timezoneLabel(timezone)}).
         </p>
       </section>
 

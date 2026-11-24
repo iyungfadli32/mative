@@ -147,19 +147,31 @@ export type Placeable = {
 };
 
 /** Collision (P2-A5): placement lain di channel yang sama pada waktu yang sama persis. */
+/**
+ * Jendela bentrok antar placement di channel yang sama (menit).
+ * Durasi konten tidak dimodelkan, jadi dua jadwal dianggap bentrok bila
+ * selisih waktunya kurang dari jendela ini (S-1).
+ */
+export const COLLISION_WINDOW_MINUTES = 15;
+
 export function findCollision(
   placements: Placeable[],
   channelId: string,
   scheduledAt: string,
   excludePlacementId?: string,
+  windowMinutes: number = COLLISION_WINDOW_MINUTES,
 ): Placeable | null {
+  const target = Date.parse(scheduledAt);
   return (
-    placements.find(
-      (p) =>
-        p.id !== excludePlacementId &&
-        p.social_channel_id === channelId &&
-        p.scheduled_at === scheduledAt,
-    ) ?? null
+    placements.find((p) => {
+      if (p.id === excludePlacementId) return false;
+      if (p.social_channel_id !== channelId) return false;
+      if (p.scheduled_at == null) return false;
+      if (Number.isNaN(target)) return p.scheduled_at === scheduledAt;
+      const candidate = Date.parse(p.scheduled_at);
+      if (Number.isNaN(candidate)) return false;
+      return Math.abs(candidate - target) < windowMinutes * 60_000;
+    }) ?? null
   );
 }
 

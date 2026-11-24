@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import type { PlanningActionResult } from "../actions";
@@ -54,6 +54,11 @@ export function ContentForm({
   action: (prev: PlanningActionResult, formData: FormData) => Promise<PlanningActionResult>;
   submitLabel: string;
 }) {
+  // S-6: brand terpilih mengendalikan opsi pilar (pilar brand lain disembunyikan).
+  const [selectedBrandId, setSelectedBrandId] = useState(initial?.brand_id ?? "");
+  const visiblePillars = pillars.filter(
+    (p) => p.brand_id == null || p.brand_id === selectedBrandId, // S-6: pilar tanpa brand berlaku untuk semua; pilar ber-brand hanya untuk brand itu.
+  );
   const [state, formAction, pending] = useActionState(action, {
     ok: false,
     message: "",
@@ -75,6 +80,7 @@ export function ContentForm({
           defaultValue={initial?.brand_id ?? ""}
           required
           disabled={Boolean(initial)}
+          onChange={(e) => setSelectedBrandId(e.target.value)}
           className="h-10 rounded-[10px] border border-[var(--mt-border)] bg-[var(--mt-surface)] px-3 text-sm font-normal"
         >
           <option value="">— Pilih brand —</option>
@@ -134,12 +140,17 @@ export function ContentForm({
         <label className="flex flex-col gap-1.5 text-sm font-medium">
           Pilar (opsional)
           <select
+            key={selectedBrandId || "none"}
             name="pillarId"
-            defaultValue={initial?.pillar_id ?? ""}
+            defaultValue={
+              visiblePillars.some((p) => p.id === initial?.pillar_id)
+                ? (initial?.pillar_id ?? "")
+                : ""
+            }
             className="h-10 rounded-[10px] border border-[var(--mt-border)] bg-[var(--mt-surface)] px-3 text-sm font-normal"
           >
             <option value="">— Tanpa pilar —</option>
-            {pillars.map((p) => (
+            {visiblePillars.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
               </option>

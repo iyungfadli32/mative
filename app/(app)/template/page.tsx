@@ -17,6 +17,7 @@ import {
   CreateCampaignFromTemplateForm,
   CreateContentFromTemplateForm,
   SaveContentAsTemplateForm,
+  DeleteTemplateForm,
 } from "./TemplateForms";
 
 export default async function TemplatePage({
@@ -109,6 +110,12 @@ async function TemplateContent({
                       templateId={t.id}
                       templateName={t.name}
                     />
+                    <DeleteTemplateForm
+                      workspaceId={workspaceId}
+                      templateId={t.id}
+                      templateName={t.name}
+                      kind="campaign"
+                    />
                   </div>
                 ) : null}
               </li>
@@ -147,6 +154,12 @@ async function TemplateContent({
                       workspaceId={workspaceId}
                       templateId={t.id}
                       templateTitle={t.title}
+                    />
+                    <DeleteTemplateForm
+                      workspaceId={workspaceId}
+                      templateId={t.id}
+                      templateName={t.title}
+                      kind="content"
                     />
                   </div>
                 ) : null}

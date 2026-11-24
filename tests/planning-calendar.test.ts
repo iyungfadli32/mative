@@ -109,6 +109,14 @@ describe("Collision + backlog (P2-A5)", () => {
     // Placement yang sedang dipindah dikecualikan.
     expect(findCollision(placements, "ch1", "2026-11-19T02:00:00.000Z", "p1")).toBeNull();
   });
+  it("collision (S-1): selisih < 15 menit di channel yang sama bentrok", () => {
+    expect(findCollision(placements, "ch1", "2026-11-19T02:05:00.000Z")?.id).toBe("p1");
+    expect(findCollision(placements, "ch1", "2026-11-19T01:55:00.000Z")?.id).toBe("p1");
+  });
+  it("collision (S-1): selisih >= 15 menit tidak bentrok", () => {
+    expect(findCollision(placements, "ch1", "2026-11-19T02:15:00.000Z")).toBeNull();
+    expect(findCollision(placements, "ch1", "2026-11-19T02:16:00.000Z")).toBeNull();
+  });
 
   it("groupPlacementsByDate memakai timezone workspace", () => {
     const grouped = groupPlacementsByDate(placements, "Asia/Jakarta");

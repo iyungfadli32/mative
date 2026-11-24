@@ -37,12 +37,13 @@ import {
 import { getCallerBrandScope, getCallerRole, PLANNING_TABLES_UNAVAILABLE_ID } from "./context";
 import {
   canConvertIdea,
+  canTransitionIdeaStatus,
   canEditSpecificContent,
   isValidDistributionTransition,
   isValidProductionTransition,
   productionTransitionRequiresReason,
 } from "./transitions";
-import { findCollision } from "./calendar";
+import { COLLISION_WINDOW_MINUTES, findCollision } from "./calendar";
 import type { ContentPlacement } from "./types";
 import { wallClockToUtcIso } from "../publishing/utils";
 
@@ -517,7 +518,6 @@ export async function createIdeaAction(
           .map((s) => s.trim())
           .filter(Boolean),
       ),
-    status: formData.get("status") ?? "new",
   });
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Data tidak valid.");
   const { supabase, user } = await requireUser();
@@ -533,7 +533,7 @@ export async function createIdeaAction(
     source_type: parsed.data.sourceType,
     notes: parsed.data.notes || null,
     tags: parsed.data.tags,
-    status: parsed.data.status,
+    status: "new", // S-2: ide baru selalu "new"; status dari klien diabaikan.
     owner_user_id: user.id,
   });
   if (error) return fail(dbErrorMessage(error, "Gagal menyimpan ide"));
@@ -550,6 +550,14 @@ export async function updateIdeaStatusAction(formData: FormData): Promise<void> 
   if (!supabase || !user) return;
   const role = await requireRole(workspaceId, user.id);
   if (!role || !can(role, "create_ideas_briefs")) return;
+  // S-2: transisi yang diizinkan; "converted" terminal, "dropped" bisa dipulihkan ke "new".
+  const { data: currentIdea } = await supabase
+    .from("ideas")
+    .select("status")
+    .eq("id", ideaId)
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+  if (!currentIdea || !canTransitionIdeaStatus(currentIdea.status, status)) return;
   await supabase
     .from("ideas")
     .update({ status, updated_at: new Date().toISOString() })
@@ -997,7 +1005,7 @@ export async function createPlacementAction(
     const { data: siblings } = await supabase
       .from("content_placements")
       .select("id, social_channel_id, scheduled_at, content_item_id")
-      .eq("content_item_id", parsed.data.contentItemId);
+      .eq("social_channel_id", parsed.data.socialChannelId);
     const clash = findCollision(
       (siblings ?? []) as ContentPlacement[],
       parsed.data.socialChannelId,
@@ -1005,7 +1013,7 @@ export async function createPlacementAction(
     );
     if (clash) {
       return fail(
-        "Sudah ada placement lain di channel ini pada waktu yang sama persis. Pilih waktu lain.",
+        `Sudah ada placement lain di channel ini dalam ${COLLISION_WINDOW_MINUTES} menit dari waktu tersebut. Pilih waktu lain.`,
       );
     }
   }

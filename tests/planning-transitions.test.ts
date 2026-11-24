@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   canConvertIdea,
+  canTransitionIdeaStatus,
   canCreateEditContent,
   canEditSpecificContent,
   canManageBrandsChannels,
@@ -151,5 +152,26 @@ describe("Konversi ide — anti-ganda (P2-08)", () => {
     expect(canConvertIdea({ status: "considering", converted_content_item_id: null })).toBe(true);
     expect(canConvertIdea({ status: "converted", converted_content_item_id: "x" })).toBe(false);
     expect(canConvertIdea({ status: "new", converted_content_item_id: "x" })).toBe(false);
+  });
+});
+
+describe("Transisi status ide (S-2)", () => {
+  it("dropped bisa dipulihkan ke new; new/considering bisa dibatalkan", () => {
+    expect(canTransitionIdeaStatus("dropped", "new")).toBe(true);
+    expect(canTransitionIdeaStatus("new", "considering")).toBe(true);
+    expect(canTransitionIdeaStatus("new", "dropped")).toBe(true);
+    expect(canTransitionIdeaStatus("considering", "new")).toBe(true);
+    expect(canTransitionIdeaStatus("considering", "dropped")).toBe(true);
+  });
+  it("converted terminal; converted tidak bisa jadi target", () => {
+    expect(canTransitionIdeaStatus("converted", "new")).toBe(false);
+    expect(canTransitionIdeaStatus("converted", "considering")).toBe(false);
+    expect(canTransitionIdeaStatus("converted", "dropped")).toBe(false);
+    expect(canTransitionIdeaStatus("new", "converted")).toBe(false);
+    expect(canTransitionIdeaStatus("considering", "converted")).toBe(false);
+  });
+  it("dropped tidak bisa langsung ke considering; status tak dikenal ditolak", () => {
+    expect(canTransitionIdeaStatus("dropped", "considering")).toBe(false);
+    expect(canTransitionIdeaStatus("unknown", "new")).toBe(false);
   });
 });

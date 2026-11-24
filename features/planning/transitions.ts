@@ -162,3 +162,18 @@ export function canConvertIdea(idea: {
 }): boolean {
   return idea.status !== "converted" && idea.converted_content_item_id === null;
 }
+
+/**
+ * Transisi status ide yang diizinkan (S-2). "converted" terminal;
+ * "dropped" bisa dipulihkan ke "new".
+ */
+export const IDEA_STATUS_TRANSITIONS: Record<string, string[]> = {
+  new: ["considering", "dropped"],
+  considering: ["new", "dropped"],
+  dropped: ["new"],
+  converted: [],
+};
+
+export function canTransitionIdeaStatus(from: string, to: string): boolean {
+  return (IDEA_STATUS_TRANSITIONS[from] ?? []).includes(to);
+}

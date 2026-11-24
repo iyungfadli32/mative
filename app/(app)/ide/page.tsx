@@ -260,7 +260,20 @@ async function IdeContent({
                     <p className="mt-1 text-sm text-[var(--mt-text-muted)]">{idea.notes}</p>
                   ) : null}
                   <div className="mt-3 flex flex-wrap items-center gap-2">
-                    {canCreate ? (
+                    {idea.status === "converted" ? (
+                      idea.converted_content_item_id ? (
+                        <Link
+                          href={`/konten/${idea.converted_content_item_id}?workspace=${workspaceId}`}
+                          className="inline-flex items-center gap-1 text-sm font-medium text-[var(--mt-primary)] underline-offset-2 hover:underline"
+                        >
+                          Lihat konten hasil konversi →
+                        </Link>
+                      ) : (
+                        <span className="text-sm text-[var(--mt-text-muted)]">
+                          Ide ini sudah dikonversi.
+                        </span>
+                      )
+                    ) : canCreate ? (
                       <ConvertIdeaButton
                         ideaId={idea.id}
                         workspaceId={workspaceId}
@@ -268,19 +281,12 @@ async function IdeContent({
                         ideaBrandId={idea.brand_id}
                         convertedContentItemId={idea.converted_content_item_id}
                       />
-                    ) : idea.converted_content_item_id ? (
-                      <Link
-                        href={`/konten/${idea.converted_content_item_id}?workspace=${workspaceId}`}
-                        className="text-sm font-medium text-[var(--mt-teal-700)] underline"
-                      >
-                        Lihat konten hasil konversi →
-                      </Link>
                     ) : (
                       <span className="text-sm text-[var(--mt-text-muted)]">
-                        Sudah dikonversi / tidak bisa dikonversi ulang.
+                        Anda tidak memiliki izin untuk mengonversi ide ini.
                       </span>
                     )}
-                    {idea.status !== "converted" && canCreate ? (
+                    {idea.status !== "converted" && idea.status !== "dropped" && canCreate ? (
                       <form action={updateIdeaStatusAction}>
                         <input type="hidden" name="ideaId" value={idea.id} />
                         <input type="hidden" name="workspaceId" value={workspaceId} />
@@ -303,6 +309,16 @@ async function IdeContent({
                         <input type="hidden" name="status" value="dropped" />
                         <Button type="submit" size="sm" variant="ghost">
                           Batalkan ide
+                        </Button>
+                      </form>
+                    ) : null}
+                    {idea.status === "dropped" && canCreate ? (
+                      <form action={updateIdeaStatusAction}>
+                        <input type="hidden" name="ideaId" value={idea.id} />
+                        <input type="hidden" name="workspaceId" value={workspaceId} />
+                        <input type="hidden" name="status" value="new" />
+                        <Button type="submit" size="sm" variant="secondary">
+                          Pulihkan ide
                         </Button>
                       </form>
                     ) : null}
