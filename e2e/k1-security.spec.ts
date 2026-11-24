@@ -58,10 +58,22 @@ async function switchToWorkspace(
   await switcher.waitFor({ state: "attached", timeout: 10000 }).catch(() => undefined);
   if ((await switcher.count()) === 0) return null;
   await switcher.selectOption({ label: `${workspaceName} (owner)` });
+  const wsId = await switcher.inputValue();
+  // Switcher memicu router.push() (navigasi lunak Next.js) ke halaman yang
+  // sama dengan ?workspace=<uuid>. Teks "Workspace: <nama>" saja tidak
+  // membuktikan navigasi itu selesai: goto() berikutnya bisa balapan dan
+  // dibatalkan oleh navigasi yang masih berjalan (terlihat di WebKit HP).
+  // Tunggu sampai URL benar-benar mendarat di workspace baru DAN jaringan
+  // tenang (payload RSC sudah tiba), baru periksa teksnya.
+  await page.waitForURL(
+    (url) => new URL(url).searchParams.get("workspace") === wsId,
+    { timeout: 30000 },
+  );
+  await page.waitForLoadState("networkidle", { timeout: 30000 });
   await expect(page.getByText(`Workspace: ${workspaceName}`)).toBeVisible({
     timeout: 30000,
   });
-  return await switcher.inputValue();
+  return wsId;
 }
 
 /**
