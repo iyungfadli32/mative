@@ -78,6 +78,29 @@ async function walkToEditing(page: import("@playwright/test").Page) {
 }
 
 /** Setup org + workspace + brand + channel + konten (v1) — dipakai kedua tes. */
+// Workspace aktif untuk tes ini - dibaca dari cookie yang diset server
+// sesudah workspace dibuat (createWorkspaceAction -> ACTIVE_WORKSPACE_COOKIE).
+// Spesifikasi HARUS membawa `?workspace=` ke setiap navigasi: tanpa itu
+// halaman memakai workspaces[0] (workspace tertua, dipakai bersama run
+// sebelumnya) dan data tes - merek, channel, konten, placement, approval,
+// pengaturan approval - mendarat di workspace lama itu, sementara preflight
+// menegakkan gerbang workspace tempat konten berada. Itulah akar cacat #1
+// (preflight menuntut client review padahal gerbang di workspace baru mati)
+// dan cacat #2 (self-approval tersimpan di workspace lama, tapi
+// /persetujuan workspace baru menampilkan "Tidak diizinkan").
+// Cookie dibaca lewat konteks browser (termasuk HttpOnly).
+const ACTIVE_WORKSPACE_COOKIE = "mative-workspace-id";
+async function activeWorkspaceId(page: import("@playwright/test").Page): Promise<string> {
+  const found = (await page.context().cookies()).find((c) => c.name === ACTIVE_WORKSPACE_COOKIE);
+  if (!found?.value) {
+    throw new Error("Cookie workspace aktif tidak ditemukan sesudah membuat workspace.");
+  }
+  return found.value;
+}
+function withWorkspace(path: string, workspaceId: string): string {
+  const sep = path.includes("?") ? "&" : "?";
+  return `${path}${sep}workspace=${workspaceId}`;
+}
 async function setupContent(page: import("@playwright/test").Page, slug: string) {
   await page.goto("/pengaturan/organisasi");
   await page.getByLabel("Nama organisasi").fill(`Organisasi P6 ${slug}`);
@@ -88,16 +111,17 @@ async function setupContent(page: import("@playwright/test").Page, slug: string)
   await page.getByLabel("Slug", { exact: true }).fill(`ws-p6-${slug}`);
   await page.getByRole("button", { name: "Buat workspace" }).click();
   await expect(page.getByText("Workspace dibuat.")).toBeVisible({ timeout: 30000 });
+  const workspaceId = await activeWorkspaceId(page);
 
-  await page.goto("/merek");
-  await expect(page.getByRole("heading", { name: "Merek" })).toBeVisible();
+  await page.goto(withWorkspace("/merek", workspaceId));
+  await expect(page.getByRole("heading", { name: "Merek" })).toBeVisible({ timeout: 30000 });
   await page.locator("#brand-name-new").fill(`Brand P6 ${slug}`);
   await page.locator("#brand-slug-new").fill(`brand-p6-${slug}`);
   await page.getByRole("button", { name: "Buat brand" }).click();
   await expect(page.getByText("Brand dibuat.", { exact: true })).toBeVisible({ timeout: 30000 });
 
-  await page.goto("/channel");
-  await expect(page.getByRole("heading", { name: "Channel", exact: true })).toBeVisible();
+  await page.goto(withWorkspace("/channel", workspaceId));
+  await expect(page.getByRole("heading", { name: "Channel", exact: true })).toBeVisible({ timeout: 30000 });
   const channelSummary = page.getByText(`Tambah channel untuk Brand P6 ${slug}`);
   await channelSummary.waitFor({ state: "attached", timeout: 30000 });
   await channelSummary.click();
@@ -109,18 +133,19 @@ async function setupContent(page: import("@playwright/test").Page, slug: string)
     timeout: 30000,
   });
 
-  await page.goto("/konten/baru");
-  await expect(page.getByRole("heading", { name: "Buat konten" })).toBeVisible();
+  await page.goto(withWorkspace("/konten/baru", workspaceId));
+  await expect(page.getByRole("heading", { name: "Buat konten" })).toBeVisible({ timeout: 30000 });
   await page.getByLabel(/Brand/).selectOption({ label: `Brand P6 ${slug}` });
   await page.getByLabel("Judul konten").fill(`Konten P6 ${slug}`);
   await page.getByLabel("Ringkasan perubahan (wajib — tercatat di versi)").fill("Versi awal (v1)");
   await page.getByRole("button", { name: "Buat konten (v1)" }).click();
   await expect(page.getByText("Konten dibuat beserta versi v1.")).toBeVisible({ timeout: 30000 });
+  return workspaceId;
 }
 
 /** Buka halaman detail konten dari daftar /konten. */
-async function openContentDetail(page: import("@playwright/test").Page, slug: string) {
-  await page.goto("/konten");
+async function openContentDetail(page: import("@playwright/test").Page, slug: string, workspaceId: string) {
+  await page.goto(withWorkspace("/konten", workspaceId));
   await page.getByRole("link", { name: `Konten P6 ${slug}` }).click();
   // Timeout eksplisit (bukan andalkan expect.configure): navigasi pertama
   // sesudah server produksi baru start bisa lambat (cold start) — tanpa ini
@@ -141,8 +166,8 @@ async function openContentDetail(page: import("@playwright/test").Page, slug: st
  * self-approval belum diaktifkan. Workspace uji baru hanya punya satu
  * member (owner), jadi aktifkan dulu sebelum menugaskan owner.
  */
-async function enableSelfApproval(page: import("@playwright/test").Page) {
-  await page.goto("/persetujuan");
+async function enableSelfApproval(page: import("@playwright/test").Page, workspaceId: string) {
+  await page.goto(withWorkspace("/persetujuan", workspaceId));
   await expect(
     page.locator('select[name="allowSelfApproval"]'),
   ).toBeVisible({ timeout: 30000 });
@@ -155,11 +180,11 @@ async function enableSelfApproval(page: import("@playwright/test").Page) {
   });
 }
 
-async function approveV1(page: import("@playwright/test").Page, slug: string) {
+async function approveV1(page: import("@playwright/test").Page, slug: string, workspaceId: string) {
   // Self-approval harus aktif dulu: kalau tidak, penugasan owner sebagai
   // approver di bawah ditolak guard pemisahan tugas (Batch 7).
-  await enableSelfApproval(page);
-  await openContentDetail(page, slug);
+  await enableSelfApproval(page, workspaceId);
+  await openContentDetail(page, slug, workspaceId);
   await walkToEditing(page);
   await page.getByRole("tab", { name: "Approval" }).click();
   await expect(page.getByText("Belum ada request approval aktif")).toBeVisible({
@@ -216,21 +241,20 @@ test.describe("penerimaan Phase 6 — publishing manual @needs-db", () => {
     page,
   }) => {
     test.setTimeout(300000);
-    expect.configure({ timeout: 30000 });
-    await signIn(page);
+      await signIn(page);
     const slug = `p6-${Date.now().toString(36)}`;
 
-    await setupContent(page, slug);
+    const workspaceId = await setupContent(page, slug);
     // Placement SEBELUM approval (ASUMSI-4.6 — lihat header file).
-    await openContentDetail(page, slug);
+    await openContentDetail(page, slug, workspaceId);
     await addPlacement(page);
-    await approveV1(page, slug);
+    await approveV1(page, slug, workspaceId);
 
     // Buat job segera (jadwal dikosongkan → Ready) dari tautan placement
     // (tautan ada di kartu placement, tab Platform placements).
     await page.getByRole("tab", { name: "Platform placements" }).click();
     await page.getByRole("link", { name: "Jadwalkan publikasi" }).click();
-    await expect(page.getByRole("heading", { name: "Buat job publikasi" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Buat job publikasi" })).toBeVisible({ timeout: 30000 });
     await expect(page.getByText("Preflight lolos — job bisa dibuat.")).toBeVisible({
       timeout: 30000,
     });
@@ -241,15 +265,15 @@ test.describe("penerimaan Phase 6 — publishing manual @needs-db", () => {
 
     // Antrean memproses otomatis saat dimuat (worker lokal): job segera
     // jatuh tempo → diserahkan ke aksi manual.
-    await page.goto("/publishing");
-    await expect(page.getByRole("heading", { name: "Publishing" })).toBeVisible();
+    await page.goto(withWorkspace("/publishing", workspaceId));
+    await expect(page.getByRole("heading", { name: "Publishing" })).toBeVisible({ timeout: 30000 });
     await expect(page.getByText("Perlu perhatian")).toBeVisible();
     const card = page.locator("article", { hasText: `Konten P6 ${slug}` }).first();
     await expect(card.getByText("Needs manual action")).toBeVisible({ timeout: 30000 });
 
     // Detail job: riwayat handoff + konfirmasi manual.
     await card.getByRole("link", { name: `Konten P6 ${slug}` }).click();
-    await expect(page.getByRole("heading", { name: "Detail job publikasi" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Detail job publikasi" })).toBeVisible({ timeout: 30000 });
     await expect(page.getByText("Riwayat pemrosesan (1)")).toBeVisible({ timeout: 30000 });
     await expect(page.getByText("Diserahkan ke manual")).toBeVisible();
     await page.getByLabel("URL publikasi").fill("https://www.instagram.com/p/p6e2e123/");
@@ -270,7 +294,7 @@ test.describe("penerimaan Phase 6 — publishing manual @needs-db", () => {
     await expect(page.getByText("Bukti terbit (konfirmasi manual)")).toBeVisible();
 
     // Placement di halaman konten ikut menampilkan URL terbit.
-    await page.goto("/konten");
+    await page.goto(withWorkspace("/konten", workspaceId));
     await page.getByRole("link", { name: `Konten P6 ${slug}` }).click();
     await page.getByRole("tab", { name: "Platform placements" }).click();
     await expect(page.getByText("Terbit:")).toBeVisible({ timeout: 30000 });
@@ -282,26 +306,25 @@ test.describe("penerimaan Phase 6 — publishing manual @needs-db", () => {
   test("A6.2/A6.3/A6.5 terjadwal → Scheduled locally, tanpa status palsu; duplikat diblokir; batal aman", async ({
     page,
   }) => {
-    test.setTimeout(300000);
-    expect.configure({ timeout: 30000 });
-    await signIn(page);
+    test.setTimeout(600000);
+      await signIn(page);
     const slug = `p6b-${Date.now().toString(36)}`;
 
-    await setupContent(page, slug);
+    const workspaceId = await setupContent(page, slug);
     // Placement SEBELUM approval (ASUMSI-4.6 — lihat header file), dengan
     // jadwal wall-clock yang SAMA dengan job nanti — supaya write-back job
     // menjadi no-op dan approval bertahan sampai cek DUPLIKAT.
     const future = new Date(Date.now() + 7 * 24 * 3600 * 1000);
     const wall = future.toISOString().slice(0, 16);
-    await openContentDetail(page, slug);
+    await openContentDetail(page, slug, workspaceId);
     await addPlacement(page, wall);
-    await approveV1(page, slug);
+    await approveV1(page, slug, workspaceId);
 
     // Buat job terjadwal 7 hari ke depan (wall-clock yang sama; dibaca sebagai WIB).
     // Tautan "Jadwalkan publikasi" ada di kartu placement, tab Platform placements.
     await page.getByRole("tab", { name: "Platform placements" }).click();
     await page.getByRole("link", { name: "Jadwalkan publikasi" }).click();
-    await expect(page.getByRole("heading", { name: "Buat job publikasi" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Buat job publikasi" })).toBeVisible({ timeout: 30000 });
     await page.locator("#pub-scheduled-at").fill(wall);
     await page.getByRole("button", { name: "Buat job publikasi" }).click();
     await expect(
@@ -310,8 +333,8 @@ test.describe("penerimaan Phase 6 — publishing manual @needs-db", () => {
     const newJobUrl = page.url();
 
     // Antrean: Scheduled locally — dan TIDAK ADA status palsu.
-    await page.goto("/publishing");
-    await expect(page.getByRole("heading", { name: "Publishing" })).toBeVisible();
+    await page.goto(withWorkspace("/publishing", workspaceId));
+    await expect(page.getByRole("heading", { name: "Publishing" })).toBeVisible({ timeout: 30000 });
     const card = page.locator("article", { hasText: `Konten P6 ${slug}` }).first();
     await expect(card.getByText("Scheduled locally")).toBeVisible({ timeout: 30000 });
     await expect(card.getByText("Published")).toHaveCount(0);
@@ -332,9 +355,9 @@ test.describe("penerimaan Phase 6 — publishing manual @needs-db", () => {
     await expect(page.getByRole("button", { name: "Buat job publikasi" })).toBeDisabled();
 
     // Batal sebelum kirim: aman, tanpa efek — job jadi Cancelled.
-    await page.goto("/publishing");
+    await page.goto(withWorkspace("/publishing", workspaceId));
     await card.getByRole("link", { name: `Konten P6 ${slug}` }).click();
-    await expect(page.getByRole("heading", { name: "Detail job publikasi" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Detail job publikasi" })).toBeVisible({ timeout: 30000 });
     await page
       .getByLabel("Alasan pembatalan (wajib)")
       .fill("Jadwal berubah — dibatalkan untuk tes.");
@@ -353,15 +376,14 @@ test.describe("penerimaan Phase 6 — publishing manual @needs-db", () => {
     page,
   }) => {
     test.setTimeout(300000);
-    expect.configure({ timeout: 30000 });
-    await signIn(page);
+      await signIn(page);
     const slug = `p6f01-${Date.now().toString(36)}`;
 
-    await setupContent(page, slug);
+    const workspaceId = await setupContent(page, slug);
 
     // 0. Nyalakan gerbang client_review di Approval Center (default mati).
-    await page.goto("/persetujuan");
-    await expect(page.getByRole("heading", { name: "Approval Center" })).toBeVisible();
+    await page.goto(withWorkspace("/persetujuan", workspaceId));
+    await expect(page.getByRole("heading", { name: "Approval Center" })).toBeVisible({ timeout: 30000 });
     await page.locator('select[name="clientReviewEnabled"]').selectOption("true");
     await page.getByRole("button", { name: "Simpan pengaturan" }).click();
     await expect(page.getByText("Pengaturan approval disimpan.")).toBeVisible({
@@ -370,13 +392,13 @@ test.describe("penerimaan Phase 6 — publishing manual @needs-db", () => {
 
     // 1. Placement SEBELUM approval (ASUMSI-4.6 — lihat header file),
     //    lalu setujui v1 (internal).
-    await openContentDetail(page, slug);
+    await openContentDetail(page, slug, workspaceId);
     await addPlacement(page);
-    await approveV1(page, slug);
+    await approveV1(page, slug, workspaceId);
 
     // 2. Panel client review muncul (internal disetujui + gerbang aktif);
     //    ajukan konten untuk client review.
-    await openContentDetail(page, slug);
+    await openContentDetail(page, slug, workspaceId);
     await page.getByRole("tab", { name: "Approval" }).click();
     await expect(
       page.getByText("Review internal sudah disetujui dan gerbang client_review aktif"),
@@ -413,7 +435,7 @@ test.describe("penerimaan Phase 6 — publishing manual @needs-db", () => {
     //    dan tombol pembuatan dinonaktifkan — tidak ada job yang tercipta.
     await page.getByRole("tab", { name: "Platform placements" }).click();
     await page.getByRole("link", { name: "Jadwalkan publikasi" }).click();
-    await expect(page.getByRole("heading", { name: "Buat job publikasi" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Buat job publikasi" })).toBeVisible({ timeout: 30000 });
     await expect(
       page.getByText(
         "Preflight gagal: Review klien untuk versi terbaru (v1) minta revisi — konten belum bisa dijadwalkan sampai klien menyetujui versi terbaru.",

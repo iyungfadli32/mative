@@ -2,9 +2,12 @@
  * Konteks perencanaan — features/planning/context.ts
  * Menentukan workspace aktif + peran pemanggil dari sesi (BUKAN dari body).
  * Workspace diambil dari query `?workspace=<id>` bila pemanggil memang
- * member di sana; bila tidak, workspace pertama yang bisa diakses.
+ * member di sana; bila tidak, dari cookie workspace aktif (diset saat
+ * workspace dibuat); bila tidak ada, workspace pertama yang bisa diakses.
  */
+import { cookies } from "next/headers";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { ACTIVE_WORKSPACE_COOKIE } from "@/features/planning/active-workspace-cookie";
 import { listMyWorkspaces } from "@/features/tenancy/actions";
 import type { WorkspaceMembership } from "./types";
 
@@ -37,10 +40,18 @@ export async function getPlanningContext(
     timezone: w.workspace.timezone,
     role: w.role,
   }));
+  // Tanpa ?workspace=: pakai workspace aktif dari cookie (diset saat
+  // workspace dibuat) bila pemanggil memang member di sana; bila tidak
+  // ada / tidak valid, pakai workspace pertama (perilaku lama).
+  const cookieWorkspaceId = (await cookies()).get(ACTIVE_WORKSPACE_COOKIE)?.value;
   const workspace =
     (requestedWorkspaceId
       ? workspaces.find((w) => w.workspaceId === requestedWorkspaceId)
-      : undefined) ?? workspaces[0];
+      : undefined) ??
+    (cookieWorkspaceId
+      ? workspaces.find((w) => w.workspaceId === cookieWorkspaceId)
+      : undefined) ??
+    workspaces[0];
   if (!workspace) return null;
   const requestedWorkspaceNotMember =
     requestedWorkspaceId != null &&

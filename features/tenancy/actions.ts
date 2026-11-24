@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
+import { ACTIVE_WORKSPACE_COOKIE } from "@/features/planning/active-workspace-cookie";
 import { createHash, randomBytes } from "node:crypto";
 import { getSupabaseServerClient, getSupabaseAdminClient } from "@/lib/supabase/server";
 import {
@@ -115,9 +117,21 @@ export async function createWorkspaceAction(
     p_default_locale: parsed.data.defaultLocale,
   });
   if (error) return { ok: false, message: `Gagal membuat workspace: ${error.message}` };
-  const result = data as { ok: boolean; message: string } | null;
+  const result = data as { ok: boolean; message: string; workspace_id?: string } | null;
   if (!result?.ok) {
     return { ok: false, message: result?.message ?? "Gagal membuat workspace." };
+  }
+  // Workspace yang baru dibuat menjadi workspace aktif (lihat
+  // features/planning/active-workspace-cookie.ts): navigasi berikutnya tanpa
+  // `?workspace=` memakai workspace ini, bukan workspaces[0].
+  if (typeof result.workspace_id === "string" && result.workspace_id.length > 0) {
+    const cookieStore = await cookies();
+    cookieStore.set(ACTIVE_WORKSPACE_COOKIE, result.workspace_id, {
+      path: "/",
+      httpOnly: true,
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 365,
+    });
   }
   revalidatePath("/pengaturan/organisasi");
   return { ok: true, message: "Workspace dibuat." };
