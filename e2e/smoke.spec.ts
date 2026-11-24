@@ -98,14 +98,14 @@ test.describe("smoke — dashboard shell (belum masuk)", () => {
         : page.getByRole("button", { name: /Buat cepat/ });
     await quickCreate.click();
     const dialog = page.getByRole("dialog", { name: "Buat cepat" });
-    // Aksi dirender sebagai <Link> yang membungkus <Button> — peran yang
-    // terekspos di pohon aksesibilitas adalah button-nya, jadi asersi lewat
-    // button + href tautannya.
-    await expect(dialog.getByRole("button", { name: /Buat konten/ })).toBeVisible();
-    await expect(dialog.getByRole("button", { name: /Tangkap ide/ })).toBeVisible();
-    await expect(dialog.getByRole("button", { name: /Unggah aset/ })).toBeVisible();
+  // Aksi dirender lewat <Button href=...> yang merender <Link> (<a>), jadi
+  // peran yang terekspos di pohon aksesibilitas adalah link - asersi lewat
+  // link + href tautannya.
+    await expect(dialog.getByRole("link", { name: /Buat konten/ })).toBeVisible();
+    await expect(dialog.getByRole("link", { name: /Tangkap ide/ })).toBeVisible();
+    await expect(dialog.getByRole("link", { name: /Unggah aset/ })).toBeVisible();
     await expect(
-      dialog.getByRole("button", { name: /Buat organisasi \/ workspace/ }),
+      dialog.getByRole("link", { name: /Buat organisasi \/ workspace/ }),
     ).toBeVisible();
     await expect(dialog.locator("a[href='/konten/baru']")).toHaveCount(1);
     await expect(dialog.locator("a[href='/ide']")).toHaveCount(1);

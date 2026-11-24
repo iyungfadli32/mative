@@ -168,11 +168,11 @@ test.describe("quick-create + loading feedback (pengguna tanpa workspace)", () =
     await quickCreate.click();
     const dialog = page.getByRole("dialog", { name: "Buat cepat" });
     await expect(dialog).toBeVisible({ timeout: 10000 });
-    await expect(dialog.getByRole("button", { name: /Buat konten/ })).toBeVisible();
-    await expect(dialog.getByRole("button", { name: /Tangkap ide/ })).toBeVisible();
-    await expect(dialog.getByRole("button", { name: /Unggah aset/ })).toBeVisible();
+    await expect(dialog.getByRole("link", { name: /Buat konten/ })).toBeVisible();
+    await expect(dialog.getByRole("link", { name: /Tangkap ide/ })).toBeVisible();
+    await expect(dialog.getByRole("link", { name: /Unggah aset/ })).toBeVisible();
     await expect(
-      dialog.getByRole("button", { name: /Buat organisasi \/ workspace/ }),
+      dialog.getByRole("link", { name: /Buat organisasi \/ workspace/ }),
     ).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(dialog).toHaveCount(0);
